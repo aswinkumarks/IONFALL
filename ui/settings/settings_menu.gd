@@ -6,7 +6,11 @@ extends PanelContainer
 
 signal closed
 
-## [section, key, label key, kind, min, max, step]; kind: slider, percent, check, choice.
+## [section, key, label key, kind, min, max, step]; kind: slider, percent, check,
+## choice ([..., choices] where choices is an Array or the name of a Settings
+## method returning one; string choices are shown via "SETTING_VALUE_<X>" keys
+## or as-is for resolutions).
+const DESKTOP_ONLY := ["display_mode"]
 const SCHEMA := {
 	"SETTINGS_TAB_CONTROLS": [
 		["input", "sensitivity_x", "SETTING_SENS_X", "slider", 0.1, 5.0, 0.05],
@@ -18,6 +22,8 @@ const SCHEMA := {
 		["input", "aim_toggle", "SETTING_AIM_TOGGLE", "check"],
 	],
 	"SETTINGS_TAB_VIDEO": [
+		["video", "display_mode", "SETTING_DISPLAY_MODE", "choice", ["windowed", "fullscreen", "exclusive"]],
+		["video", "resolution", "SETTING_RESOLUTION", "choice", "resolution_options"],
 		["video", "fov", "SETTING_FOV", "slider", 55.0, 85.0, 1.0],
 		["video", "render_scale", "SETTING_RENDER_SCALE", "percent", 0.5, 1.0, 0.05],
 		["video", "fps_cap", "SETTING_FPS_CAP", "choice", [30, 60, 90, 120]],
@@ -40,6 +46,8 @@ const REMAPPABLE := ["move_forward", "move_back", "move_left", "move_right", "ju
 		"switch_weapon", "weapon_1", "weapon_2", "weapon_3", "scoreboard"]
 
 var _listening_action: String = ""
+var _resolution_button: OptionButton
+var _tabs: TabContainer
 var _key_buttons: Dictionary = {}  ## action -> Button
 
 
@@ -56,6 +64,7 @@ func _init() -> void:
 	add_child(root)
 	root.add_child(UiStyle.label("SETTINGS_TITLE", &"HeaderLabel"))
 	var tabs := TabContainer.new()
+	_tabs = tabs
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(tabs)
 	for tab in SCHEMA:
@@ -73,6 +82,9 @@ func _init() -> void:
 
 func open() -> void:
 	visible = true
+	var tab := Platform.get_user_arg("--settings-tab")  # dev: screenshots of a tab
+	if tab.is_valid_int():
+		_tabs.current_tab = clampi(tab.to_int(), 0, _tabs.get_tab_count() - 1)
 
 
 func close() -> void:
@@ -93,6 +105,8 @@ func _build_tab(tab_name: String, rows: Array) -> Control:
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(grid)
 	for row in rows:
+		if row[1] in DESKTOP_ONLY and not Settings.has_window_modes():
+			continue
 		var label := Label.new()
 		label.text = row[2]
 		label.custom_minimum_size.x = 340
@@ -113,11 +127,17 @@ func _control_for(row: Array) -> Control:
 			return check
 		"choice":
 			var opt := OptionButton.new()
-			var choices: Array = row[4]
+			opt.custom_minimum_size.x = 260
+			var choices: Array = row[4] if row[4] is Array else Settings.call(row[4])
 			for c in choices:
-				opt.add_item(str(c))
-			opt.selected = maxi(choices.find(int(value)), 0)
-			opt.item_selected.connect(func(i: int) -> void: Settings.set_value(section, key, choices[i]))
+				opt.add_item(_choice_label(c))
+			opt.selected = maxi(choices.find(value if value is String else int(value)), 0)
+			opt.item_selected.connect(func(i: int) -> void:
+				Settings.set_value(section, key, choices[i])
+				if key == "display_mode":
+					_rebuild_resolution_choices())
+			if key == "resolution":
+				_resolution_button = opt
 			return opt
 		_:
 			var box := HBoxContainer.new()
@@ -189,3 +209,31 @@ func _input(event: InputEvent) -> void:
 func _refresh_keys() -> void:
 	for action in _key_buttons:
 		_key_buttons[action].text = InputAdapter.key_name(action)
+
+
+static func _choice_label(c: Variant) -> String:
+	if c is String:
+		var r := Settings.parse_resolution(c)
+		if r != Vector2i.ZERO:
+			return "%d × %d" % [r.x, r.y]
+		return TranslationServer.translate("SETTING_VALUE_" + String(c).to_upper())
+	return str(c)
+
+
+## Windowed and fullscreen offer different resolutions (16:9 vs the screen's).
+func _rebuild_resolution_choices() -> void:
+	if _resolution_button == null:
+		return
+	var choices: Array = Settings.resolution_options()
+	_resolution_button.clear()
+	for c in choices:
+		_resolution_button.add_item(_choice_label(c))
+	var current: String = Settings.get_value("video", "resolution")
+	if not choices.has(current):
+		Settings.set_value("video", "resolution", "native")
+		current = "native"
+	_resolution_button.selected = maxi(choices.find(current), 0)
+	# Re-bind the handler to the new list.
+	for conn in _resolution_button.item_selected.get_connections():
+		_resolution_button.item_selected.disconnect(conn.callable)
+	_resolution_button.item_selected.connect(func(i: int) -> void: Settings.set_value("video", "resolution", choices[i]))

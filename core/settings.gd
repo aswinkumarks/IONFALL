@@ -10,6 +10,8 @@ const DEFAULTS := {
 		"uuid": "",
 	},
 	"video": {
+		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive
+		"resolution": "native",  ## "native" or "WxH" (window size, or 3D resolution when fullscreen)
 		"render_scale": 0.75,
 		"fps_cap": 60,
 		"fov": 68.0,  ## vertical degrees (≈ 100° horizontal at 16:9)
@@ -97,9 +99,66 @@ func apply_video() -> void:
 	if Platform.is_dedicated_server():
 		return
 	var root := get_tree().root
+	var mode: String = get_value("video", "display_mode")
+	var res := parse_resolution(get_value("video", "resolution"))
+	var desktop := has_window_modes()
+	if desktop and [mode, res] != _applied_window:
+		_applied_window = [mode, res]
+		match mode:
+			"fullscreen":
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+			"exclusive":
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+			_:
+				if DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED:
+					DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+				if res != Vector2i.ZERO:
+					var screen := DisplayServer.screen_get_usable_rect()
+					var size := Vector2i(mini(res.x, screen.size.x), mini(res.y, screen.size.y))
+					DisplayServer.window_set_size(size)
+					DisplayServer.window_set_position(screen.position + (screen.size - size) / 2)
+	# Fullscreen (and phones): the resolution picks the 3D render resolution.
+	var res_scale := 1.0
+	var windowed := desktop and mode == "windowed"
+	if not windowed and res != Vector2i.ZERO:
+		res_scale = clampf(float(res.y) / maxf(DisplayServer.window_get_size().y, 1.0), 0.25, 1.0)
 	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	root.scaling_3d_scale = clampf(float(get_value("video", "render_scale")), 0.5, 1.0)
+	root.scaling_3d_scale = clampf(float(get_value("video", "render_scale")) * res_scale, 0.25, 1.0)
 	Engine.max_fps = int(get_value("video", "fps_cap"))
+
+
+var _applied_window: Array = []
+
+
+## Desktop windows can change mode and size; phones, browsers and headless
+## runs can't.
+func has_window_modes() -> bool:
+	return not (Platform.is_mobile() or Platform.is_web()) and DisplayServer.get_name() != "headless"
+
+
+static func parse_resolution(v: Variant) -> Vector2i:
+	var parts := str(v).split("x")
+	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+		return Vector2i.ZERO
+	return Vector2i(parts[0].to_int(), parts[1].to_int())
+
+
+## Choices for the resolution setting: "native" plus standard heights up to
+## the screen's. Desktop windows use 16:9; fullscreen/phones follow the
+## screen's aspect ratio.
+func resolution_options() -> Array:
+	var screen := DisplayServer.screen_get_size()
+	var aspect := 16.0 / 9.0 if has_window_modes() and get_value("video", "display_mode") == "windowed" \
+			else float(screen.x) / maxf(screen.y, 1.0)
+	var out: Array = ["native"]
+	for h: int in [2160, 1440, 1080, 900, 720, 540]:
+		var w := roundi(h * aspect / 2.0) * 2
+		if h <= screen.y and w <= screen.x:
+			out.append("%dx%d" % [w, h])
+	var current: String = get_value("video", "resolution")
+	if not out.has(current):
+		out.append(current)
+	return out
 
 
 func get_value(section: String, key: String) -> Variant:
