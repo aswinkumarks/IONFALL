@@ -67,3 +67,16 @@ DEATH_KILLER_STATUS,"Their shield %d · health %d"
 DEATH_DAMAGE,"You dealt %d · took %d"
 DEATH_SUICIDE,You died
 TOUCH_SCORES,Scores
+RESULTS_XP,"+%d XP · Level %d (%d / %d)"
+MENU_PROFILE,Profile
+PROFILE_LEVEL,Level
+PROFILE_VS_PLAYERS,Vs players K / D / A:
+PROFILE_VS_BOTS,Vs bots K / D / A:
+PROFILE_WINS_MATCHES,Wins / matches:
+PROFILE_INCOMPLETE,incomplete
+PROFILE_ACCURACY,Accuracy
+PROFILE_HEADSHOT_KILLS,headshot kills
+PROFILE_BEST_STREAK,best streak
+PROFILE_TIME_PLAYED,Time played
+PROFILE_UNCONFIRMED,%d match(es) unconfirmed (host left before results)
+PROFILE_READ_ONLY,"This profile was saved by a newer version, progress isn't saved"

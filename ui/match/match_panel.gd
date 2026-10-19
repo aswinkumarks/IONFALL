@@ -6,6 +6,7 @@ extends PanelContainer
 var title: Label
 var table: ScoreTable
 var footer: Label
+var footer_extra: String = ""  ## e.g. XP gained, shown above the footer
 
 
 func _init() -> void:

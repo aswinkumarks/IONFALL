@@ -23,6 +23,7 @@ Platform="*res://core/platform.gd"
 Events="*res://core/events.gd"
 BuildInfo="*res://core/build_info.gd"
 Settings="*res://core/settings.gd"
+Profile="*res://core/profile.gd"
 Diagnostics="*res://core/diagnostics.gd"
 
 [display]

@@ -24,6 +24,7 @@ const HOST_DUMMIES := 2
 @onready var _game_list: VBoxContainer = %GameList
 
 var _browser: Discovery.Browser
+var _profile_panel := ProfilePanel.new()
 
 
 func _ready() -> void:
@@ -40,6 +41,9 @@ func _ready() -> void:
 	_join_button.pressed.connect(_show_join.bind(true))
 	_back_button.pressed.connect(_show_join.bind(false))
 	_connect_button.pressed.connect(_start.bind(MatchConfig.Mode.JOIN))
+	add_child(_profile_panel)
+	_profile_panel.closed.connect(func() -> void: %ProfileButton.grab_focus())
+	%ProfileButton.pressed.connect(func() -> void: _profile_panel.open(_name_edit.text))
 	_address_edit.text_submitted.connect(func(_t: String) -> void: _start(MatchConfig.Mode.JOIN))
 	# Web builds can't host or use ENet (PLAN §3.20); they get a WebSocket transport later.
 	_host_button.visible = not Platform.is_web()
@@ -89,7 +93,7 @@ func _show_join(show: bool) -> void:
 	elif not show and _browser != null:
 		_browser.queue_free()
 		_browser = null
-	for b: Control in [_play_button, _host_button, _join_button, %SettingsButton, _quit_button]:
+	for b: Control in [_play_button, _host_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
 		b.visible = not show and (b != _quit_button or not (Platform.is_web() or Platform.is_mobile()))
 	if show:
 		_address_edit.grab_focus()

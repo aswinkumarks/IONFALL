@@ -52,6 +52,11 @@ var _death_cam: Dictionary = {}
 var _life_dealt: float = 0.0
 var _life_taken: float = 0.0
 var _remote_cache: Dictionary = {}  ## client: latest remote render states
+## Our own tally of the current match, for partial results if the match
+## never sends RESULTS (we quit or the host vanished, PLAN §3.13).
+var _tally := MatchStats.new()
+var _tally_match: int = 0
+var _results_applied: bool = false
 var _perf_ms := FrameStats.new(7200)  ## frame times of the current minute
 var _perf_minute_start_ms: int = 0
 var _perf_frames: int = 0
@@ -340,6 +345,46 @@ func _log_perf(delta: float) -> void:
 	_perf_minute_start_ms = now
 
 
+# --- Profile: results and partial tallies ---
+
+func _track_tally(e: Dictionary) -> void:
+	var match_id: int = server.match_id if server != null else client.match_id
+	if match_id != _tally_match:
+		_tally = MatchStats.new()
+		_tally_match = match_id
+		_results_applied = false
+	for p in _roster():
+		if not _tally.lines.has(p.id):
+			_tally.add_player(p.id, p.name, p.bot, 0)
+	_tally.on_event(e)
+
+
+func _xp_line(gained: int) -> String:
+	if gained < 0:
+		return ""
+	var lv := ProfileData.level_for(Profile.data.xp())
+	return tr("RESULTS_XP") % [gained, lv.level, lv.into, lv.needed]
+
+
+## Leaving (or losing the host) before RESULTS: save what we saw ourselves
+## as an incomplete match; unconfirmed when the host vanished.
+func _save_partial(confirmed: bool) -> void:
+	var phase := server.phase if server != null else client.phase
+	if _results_applied or not (phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH):
+		return
+	var me := local_id()
+	var l: MatchStats.Line = _tally.lines.get(me)
+	if l == null:
+		return
+	var row := {"id": me, "bot": false, "name": l.name, "score": 0,
+			"ticks_played": roundi(_time * Sim.TICK_RATE), "weapon_kills": l.weapon_kills}
+	for k in Protocol.RESULT_COUNTERS:
+		row[k] = l.get(k)
+	var partial := {"result_id": "partial-%08x-%d" % [_tally_match, me], "winner": 0, "humans": 2, "players": [row]}
+	Profile.apply_results(partial, me, false, confirmed)
+	_results_applied = true
+
+
 # --- Match UI: kill feed, death cam, scoreboard, results, timer ---
 
 func _roster() -> Array:
@@ -403,7 +448,8 @@ func _update_match_ui(delta: float) -> void:
 		if phase != MatchPhase.POST_MATCH:
 			_results.visible = false
 		else:
-			_results.footer.text = tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
+			_results.footer.text = (_results.footer_extra + "\n" if not _results.footer_extra.is_empty() else "") \
+					+ tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
 	var want_scores := (Input.is_action_pressed("scoreboard") or _scores_button.button_pressed) and not _results.visible
 	if want_scores:
 		_scoreboard.show_scoreboard(_roster(), local_id(),
@@ -453,6 +499,7 @@ func _update_banner() -> void:
 func _handle_event(e: Dictionary) -> void:
 	if not effects.first_time(e):
 		return
+	_track_tally(e)
 	var me := local_id()
 	match e.type:
 		"fire":
@@ -487,6 +534,9 @@ func _handle_event(e: Dictionary) -> void:
 						"until": _time + DEATH_CAM_SECONDS, "suicide": e.suicide}
 		"results":
 			_results.show_results(e, me)
+			_results_applied = true
+			var gained := Profile.apply_results(e, me)
+			_results.footer_extra = _xp_line(gained)
 			_results_until = _time + MatchPhase.POST_MATCH_TICKS / float(Sim.TICK_RATE)
 		"spawn":
 			if e.player == me:
@@ -684,6 +734,7 @@ func _leave() -> void:
 	if _leaving:
 		return
 	_leaving = true
+	_save_partial(MatchConfig.last_error.is_empty())  # host gone: unconfirmed
 	if client != null:
 		client.leave()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
