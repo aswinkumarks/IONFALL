@@ -8,15 +8,17 @@ extends Node3D
 static var style: String = "skinned"
 
 var rig: CharacterRig
+var color := Color.WHITE
 var _label: Label3D
 var _height: float = 1.8
 var _last_time: float = -1.0
 
 
-func setup(display_name: String, is_bot: bool, color: Color) -> void:
+func setup(display_name: String, is_bot: bool, p_color: Color) -> void:
+	color = p_color
 	rig = CharacterRig.create(style)
 	add_child(rig)
-	rig.setup(color)
+	rig.setup(p_color)
 	_label = Label3D.new()
 	_label.text = ("[BOT] " if is_bot else "") + display_name
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -46,3 +48,8 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 	if cur.spawn_protection_ticks > 0:
 		shimmer = 0.6 + 0.6 * sin(time * 18.0)
 	rig.set_glow(shimmer)
+
+
+## Hit feedback: a white flash on the body (brighter when the shield breaks).
+func flash_hit(shield_broken: bool) -> void:
+	rig.flash(1.0 if shield_broken else 0.6)

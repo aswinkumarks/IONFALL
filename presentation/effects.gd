@@ -174,6 +174,42 @@ func explosion(at: Vector3, radius: float) -> void:
 	_fading.append([light, 0.0, 0.35, "light"])
 
 
+## A player's body breaks up into glowing fragments that rise and fade.
+func derez(feet: Vector3, color: Color) -> void:
+	var at := feet + Vector3(0.0, 0.9, 0.0)
+	_spark_flash(at, 1.6, color, 0.2)
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.amount = 28
+	p.lifetime = 0.9
+	p.explosiveness = 0.85
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(0.3, 0.85, 0.3)
+	p.direction = Vector3.UP
+	p.spread = 35.0
+	p.initial_velocity_min = 0.8
+	p.initial_velocity_max = 2.6
+	p.gravity = Vector3(0, 1.5, 0)
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.2
+	var frag := BoxMesh.new()
+	frag.size = Vector3(0.07, 0.07, 0.07)
+	frag.material = _glow(color, 3.0)
+	p.mesh = frag
+	add_child(p)
+	p.global_position = at
+	p.restart()
+	_fading.append([p, 0.0, 1.2, "none"])
+	var ring := MeshInstance3D.new()
+	ring.mesh = _ring_mesh
+	ring.material_override = _glow(color, 2.5, true)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ring)
+	ring.global_position = feet + Vector3(0.0, 0.05, 0.0)
+	ring.set_meta("radius", 1.4)
+	_fading.append([ring, 0.0, 0.5, "ring"])
+
+
 ## Rockets follow the simulation's projectile list, interpolated between ticks.
 ## Accepts SimWorld.Projectile objects (host) or snapshot dictionaries
 ## {id, position, velocity} already placed at render time (client, alpha 1).

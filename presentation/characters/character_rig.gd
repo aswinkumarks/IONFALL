@@ -30,3 +30,8 @@ func animate(_state: PlayerSimState, _delta: float, _height: float) -> void:
 ## Spawn-protection shimmer, 0 = off.
 func set_glow(_amount: float) -> void:
 	pass
+
+
+## Brief white hit flash, 0..1.
+func flash(_amount: float) -> void:
+	pass

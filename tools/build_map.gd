@@ -83,7 +83,7 @@ func _material(kind: int) -> StandardMaterial3D:
 		Kind.MODULE: return _panels(Color(0.88, 0.89, 0.92), 0.5, 0.6, 0.0)
 		Kind.PILLAR, Kind.RIB: return _panels(Color(0.62, 0.65, 0.7), 1.0, 0.5, 0.3)
 		Kind.BEAM: return _panels(Color(0.25, 0.28, 0.32), 1.0, 0.45, 0.5)
-		Kind.TRIM_CYAN: return _emissive(Color(0.35, 0.9, 1.0), 4.0)
+		Kind.TRIM_CYAN: return _emissive(Color(0.35, 0.9, 1.0), 2.6)
 		Kind.TRIM_ORANGE: return _emissive(Color(1.0, 0.6, 0.25), 3.0)
 		Kind.CORE_GLOW: return _emissive(Color(0.4, 0.92, 1.0), 6.0)
 		Kind.HAZARD:

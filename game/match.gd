@@ -66,6 +66,8 @@ var _perf_minute_start_ms: int = 0
 var _perf_frames: int = 0
 var _tick_ms := FrameStats.new(3600)  ## host: server tick times of the current minute
 var _sim_ms := FrameStats.new(3600)  ## host: of which simulation
+var _banner_phase: int = -1
+var _go_until: float = 0.0
 
 
 func _ready() -> void:
@@ -530,15 +532,30 @@ func _update_banner() -> void:
 	var phase := server.phase if server != null else client.phase
 	var ends := server.phase_ends_tick if server != null else client.phase_ends_tick
 	var now := float(server.world.tick) if server != null else client.clock.server_time()
+	var text := ""
 	match phase:
 		MatchPhase.WAITING:
-			_banner.text = tr("PHASE_WAITING")
+			text = tr("PHASE_WAITING")
 		MatchPhase.COUNTDOWN:
-			_banner.text = tr("PHASE_COUNTDOWN") % maxi(ceili((ends - now) / Sim.TICK_RATE), 1)
+			text = tr("PHASE_COUNTDOWN") % maxi(ceili((ends - now) / Sim.TICK_RATE), 1)
 		MatchPhase.POST_MATCH:
-			_banner.text = tr("PHASE_POST_MATCH")
-		_:
-			_banner.text = ""
+			text = tr("PHASE_POST_MATCH")
+		MatchPhase.PLAYING:
+			if _banner_phase == MatchPhase.COUNTDOWN:
+				_go_until = _time + 1.2
+			if _time < _go_until:
+				text = tr("PHASE_GO")
+	_banner_phase = phase
+	text = text.to_upper()
+	if text != _banner.text:
+		_banner.text = text
+		# Each new line (countdown numbers, FIGHT) pops in.
+		_banner.pivot_offset = _banner.size * 0.5
+		_banner.scale = Vector2(1.35, 1.35)
+		_banner.modulate = UiStyle.ACCENT if phase == MatchPhase.PLAYING else Color.WHITE
+		create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK).tween_property(_banner, "scale", Vector2.ONE, 0.3)
+		if phase == MatchPhase.COUNTDOWN or phase == MatchPhase.PLAYING:
+			audio.play_ui("kill_confirm" if phase == MatchPhase.PLAYING else "switch", -6.0)
 
 
 func _handle_event(e: Dictionary) -> void:
@@ -567,6 +584,8 @@ func _handle_event(e: Dictionary) -> void:
 			effects.explosion(e.position, 4.0)
 			audio.play_at("explosion", e.position, "World", 3)
 		"hit":
+			if _visuals.has(e.target) and e.target != me:
+				(_visuals[e.target] as PlayerVisual).flash_hit(e.shield_broken)
 			if e.attacker == me and e.target != me:
 				hud.on_hit_marker(true, e.killed)
 				audio.play_ui("kill_confirm" if e.killed else "hit_marker", -2.0)
@@ -582,6 +601,8 @@ func _handle_event(e: Dictionary) -> void:
 					audio.cue("shield_break", "CAPTION_SHIELD_BROKEN")
 		"death":
 			_kill_feed.add_death(e, _display_name, me)
+			if e.victim != me and _visuals.has(e.victim):
+				effects.derez(e.position, (_visuals[e.victim] as PlayerVisual).color)
 			if e.victim == me:
 				_death_cam = {"pos": e.position + Vector3(0.0, 1.6, 0.0), "killer": e.killer,
 						"until": _time + DEATH_CAM_SECONDS, "suicide": e.suicide}

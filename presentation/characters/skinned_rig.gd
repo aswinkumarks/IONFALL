@@ -26,6 +26,9 @@ var _model: Node3D
 var _anim: AnimationPlayer
 var _material := StandardMaterial3D.new()
 var _twist: float = 0.0
+var _color := Color.WHITE
+var _glow: float = 0.0
+var _flash: float = 0.0
 
 
 static func library() -> AnimationLibrary:
@@ -52,6 +55,7 @@ func setup(color: Color) -> void:
 	_material.metallic = 0.2
 	_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_material.emission_enabled = true
+	_color = color
 	_material.emission = color
 	_material.emission_texture = GLOW_MASK
 	_material.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
@@ -87,7 +91,23 @@ func animate(state: PlayerSimState, delta: float, height: float) -> void:
 	if _anim.current_animation != clip:
 		_anim.play(clip, BLEND)
 	_anim.speed_scale = rate
+	if _flash > 0.0:
+		_flash = maxf(_flash - delta * 8.0, 0.0)
+		_apply_emission()
 
 
 func set_glow(amount: float) -> void:
-	_material.emission_energy_multiplier = GLOW_ENERGY + amount * 4.0
+	_glow = amount
+	_apply_emission()
+
+
+func flash(amount: float) -> void:
+	_flash = maxf(_flash, amount)
+	_apply_emission()
+
+
+## The hit flash switches emission to the whole body (multiply op on a
+## white mask would need a second texture), so it lightens the albedo instead.
+func _apply_emission() -> void:
+	_material.emission_energy_multiplier = GLOW_ENERGY + _glow * 4.0 + _flash * 6.0
+	_material.albedo_color = Color.WHITE.lerp(_color, 0.12).lerp(Color(3, 3, 3), _flash * 0.5)
