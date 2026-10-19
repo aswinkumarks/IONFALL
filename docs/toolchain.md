@@ -46,6 +46,18 @@ godot --headless --export-release "Android" build/android/ionfall.aab
 tools/check_16kb.sh build/android/ionfall.aab
 ```
 
+## Android emulator (16 KB runtime check)
+
+- AVD `ionfall_api36_16k`: `system-images;android-36;google_apis_ps16k;x86_64` (Android 16, 16 KB pages, `PAGE_SIZE=16384`), Pixel 7 profile (2400×1080). Uses the **Android Test** build (includes x86_64).
+- Start: `~/Android/Sdk/emulator/emulator -avd ionfall_api36_16k -no-snapshot -gpu swiftshader_indirect`
+- **What it verifies:** the signed APK installs, its native libraries load on a 16 KB-page kernel, and Godot's main loop starts. That's the 16 KB runtime check (PLAN §3.18).
+- **What it can't verify on this dev machine:** rendering. The desktop runs over TigerVNC, so:
+  - `-gpu host` crashes the emulator (`kvm run failed Bad address`) when Vulkan starts.
+  - `-gpu swiftshader_indirect` + Vulkan: Godot starts, then stalls after `Couldn't present to Vulkan queue`.
+  - SwiftShader + OpenGL: Godot's scene shader exceeds `GL_MAX_FRAGMENT_UNIFORM_VECTORS (261)`.
+  Visual checks need a real device (Mi 11X), or possibly `-gpu host` from a local (non-VNC) desktop session.
+- Release builds ignore the `command_line_params` launch extra, so renderer overrides can't be passed at launch.
+
 ## Known engine quirks
 
 - **Dedicated-server exports and CSV translations:** with the `customized` / `strip` export mode, Godot 4.7.2 logs "Failed loading resource: res://locale/strings.csv" (multi-locale CSV imports have no single import path). Server presets therefore exclude `locale/*`, and `project.godot` sets `locale/translations.dedicated_server` to an empty list.
