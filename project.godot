@@ -10,6 +10,8 @@ config/version="0.0.1"
 run/main_scene="res://core/boot.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+; The Android back button opens the pause menu instead of quitting.
+config/quit_on_go_back=false
 
 [autoload]
 

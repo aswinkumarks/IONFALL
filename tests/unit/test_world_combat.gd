@@ -124,3 +124,10 @@ func test_cannot_fire_while_sprinting() -> void:
 		events2.append_array(world.drain_events())
 	assert_true(shooter.state.sprinting)
 	assert_eq(_of_type(events2, "fire").size(), 0)
+
+
+func test_tap_fires_one_shot_with_automatic_weapon() -> void:
+	_aim_at(1.2)
+	var events := _fire_ticks(1, 0, [Action.FIRE])  # press without holding
+	events.append_array(_fire_ticks(20, 0))
+	assert_eq(_of_type(events, "fire").size(), 1, "a tap fires exactly one shot")

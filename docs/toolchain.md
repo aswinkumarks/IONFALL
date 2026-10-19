@@ -51,7 +51,7 @@ tools/check_16kb.sh build/android/ionfall.aab
 1. Phone: Developer options → **Wireless debugging** on, **Install via USB** on (MIUI requires it even for wireless installs).
 2. Wireless debugging → *Pair device with pairing code*, then on the PC: `adb pair <ip>:<pairing-port> <code>` (once per PC).
 3. Connect: `adb mdns services` shows the `_adb-tls-connect` address; `adb connect <ip>:<port>`.
-4. Install the signed release AAB:
+4. Install the signed release AAB with one command: `tools/android_install.sh` (exports, signs with the upload key, installs and launches; `--no-export` reuses the last AAB). Manual equivalent:
    ```bash
    set -a; source ~/.local/share/ionfall-keys/upload-key.env; set +a
    PF=$(mktemp); chmod 600 $PF; printf '%s' "$GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD" > $PF
@@ -62,7 +62,7 @@ tools/check_16kb.sh build/android/ionfall.aab
    java -jar ~/.local/share/ionfall-toolchain/bundletool.jar install-apks --apks=build/android/ionfall.apks --device-id=<ip>:<port>
    ```
    Approve MIUI's install prompt on the phone. `INSTALL_FAILED_USER_RESTRICTED` means the prompt was declined or "Install via USB" is off.
-5. If the adb server restarts, the wireless connection drops: re-run step 3 (no re-pairing needed).
+5. If the adb server restarts, the wireless connection drops: re-run step 3 (no re-pairing needed). Godot kills adb after every export unless the editor setting `export/android/shutdown_adb_on_exit` is `false` (set on this machine).
 
 ## Android emulator (16 KB runtime check)
 

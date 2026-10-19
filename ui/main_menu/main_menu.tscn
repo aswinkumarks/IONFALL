@@ -43,9 +43,8 @@ text = "MENU_TITLE"
 horizontal_alignment = 1
 
 [node name="PlayButton" type="Button" parent="Center"]
+unique_name_in_owner = true
 layout_mode = 2
-disabled = true
-tooltip_text = "MENU_COMING_SOON"
 text = "MENU_PLAY"
 
 [node name="HostButton" type="Button" parent="Center"]

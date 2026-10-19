@@ -7,3 +7,16 @@ MENU_SETTINGS,Settings
 MENU_QUIT,Quit
 MENU_COMING_SOON,Coming in a later milestone
 MENU_PROFILE_NOT_SAVED,Your profile won't be saved on this device
+HUD_SCORE,Score %d
+HUD_RESPAWN_IN,Respawning in %d
+HUD_RELOADING,Reloading
+HUD_SPAWN_PROTECTED,Spawn protection
+PAUSE_TITLE,Paused
+PAUSE_RESUME,Resume
+PAUSE_LEAVE,Leave match
+PAUSE_CONTROLS_HINT,"WASD move · Shift sprint · Ctrl/C crouch, slide · Space jump, double jump, hold to mantle · R reload · Q / 1 / 2 switch · F3 diagnostics"
+TOUCH_FIRE,Fire
+TOUCH_JUMP,Jump
+TOUCH_CROUCH,Crouch
+TOUCH_RELOAD,Reload
+TOUCH_SWAP,Swap

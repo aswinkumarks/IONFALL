@@ -59,11 +59,11 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 				s.burst_left[w] = 0
 		return shots
 
-	var trigger := false
+	# A fresh press always fires (a tap can start and end within one tick);
+	# automatic weapons also keep firing while the trigger is held.
+	var trigger := ActionInput.has(executed, Action.FIRE)
 	if data.fire_mode == FireMode.AUTO:
-		trigger = cmd.is_held(PlayerCommand.Held.FIRE)
-	else:
-		trigger = ActionInput.has(executed, Action.FIRE)
+		trigger = trigger or cmd.is_held(PlayerCommand.Held.FIRE)
 	if not trigger:
 		return shots
 
