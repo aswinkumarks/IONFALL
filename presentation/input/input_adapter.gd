@@ -19,10 +19,17 @@ var _presses := PackedByteArray([0, 0, 0, 0, 0, 0, 0])
 var _mouse_fire: bool = false
 var _mouse_aim: bool = false
 var _slot_request: int = -1
+## Toggle modes (PLAN §3.16): the held state flips on each press.
+var _crouch_on: bool = false
+var _sprint_on: bool = false
 
 
 func _ready() -> void:
 	_ensure_actions()
+	apply_keymap()
+	Events.settings_changed.connect(func(section: String, key: String, _value: Variant) -> void:
+		if section == "input" and key == "keymap":
+			apply_keymap())
 
 
 func press(action: int) -> void:
@@ -38,6 +45,8 @@ func add_look(delta_yaw: float, delta_pitch: float) -> void:
 func reset_held() -> void:
 	_mouse_fire = false
 	_mouse_aim = false
+	_crouch_on = false
+	_sprint_on = false
 	touch_move = Vector2.ZERO
 	touch_held = 0
 
@@ -56,9 +65,11 @@ func build_command(tick: int) -> PlayerCommand:
 		held |= Held.FIRE
 	if _mouse_aim:
 		held |= Held.AIM
-	if Input.is_action_pressed("sprint"):
+	var sprint := _sprint_on if Settings.get_value("input", "sprint_toggle") else Input.is_action_pressed("sprint")
+	var crouch := _crouch_on if Settings.get_value("input", "crouch_toggle") else Input.is_action_pressed("crouch")
+	if sprint:
 		held |= Held.SPRINT
-	if Input.is_action_pressed("crouch"):
+	if crouch:
 		held |= Held.CROUCH
 	if Input.is_action_pressed("jump"):
 		held |= Held.JUMP
@@ -92,10 +103,19 @@ func _unhandled_input(event: InputEvent) -> void:
 				if event.pressed:
 					press(Action.FIRE)
 			MOUSE_BUTTON_RIGHT:
-				_mouse_aim = event.pressed
+				if Settings.get_value("input", "aim_toggle"):
+					if event.pressed:
+						_mouse_aim = not _mouse_aim
+				else:
+					_mouse_aim = event.pressed
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
 				if event.pressed:
 					press(Action.SWITCH)
+	elif event.is_action_pressed("crouch"):
+		_crouch_on = not _crouch_on
+	elif event.is_action_pressed("sprint"):
+		_sprint_on = not _sprint_on
+		_crouch_on = false
 	elif event.is_action_pressed("jump"):
 		press(Action.JUMP)
 	elif event.is_action_pressed("reload"):
@@ -112,8 +132,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Default bindings, created at runtime so they can be remapped later
 ## (PLAN §3.16) without hand-editing project.godot.
-static func _ensure_actions() -> void:
-	var keys := {
+## Remappable actions and their default keys (PLAN §3.16).
+const DEFAULT_KEYS := {
 		"move_forward": [KEY_W, KEY_UP],
 		"move_back": [KEY_S, KEY_DOWN],
 		"move_left": [KEY_A, KEY_LEFT],
@@ -127,12 +147,32 @@ static func _ensure_actions() -> void:
 		"weapon_2": [KEY_2],
 		"weapon_3": [KEY_3],
 		"scoreboard": [KEY_TAB],
-	}
-	for action in keys:
-		if InputMap.has_action(action):
-			continue
-		InputMap.add_action(action)
-		for key in keys[action]:
+}
+
+
+static func _ensure_actions() -> void:
+	for action in DEFAULT_KEYS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+
+
+## Default keys, with the player's overrides from settings (one key per
+## remapped action; the defaults' alternate keys are dropped then).
+static func apply_keymap() -> void:
+	_ensure_actions()
+	var overrides: Dictionary = Settings.get_value("input", "keymap")
+	for action in DEFAULT_KEYS:
+		InputMap.action_erase_events(action)
+		var keys: Array = [overrides[action]] if overrides.has(action) else DEFAULT_KEYS[action]
+		for key in keys:
 			var ev := InputEventKey.new()
-			ev.physical_keycode = key
+			ev.physical_keycode = int(key)
 			InputMap.action_add_event(action, ev)
+
+
+static func key_name(action: String) -> String:
+	var events := InputMap.action_get_events(action)
+	if events.is_empty():
+		return "-"
+	var ev := events[0] as InputEventKey
+	return OS.get_keycode_string(DisplayServer.keyboard_get_keycode_from_physical(ev.physical_keycode)) if ev else "-"

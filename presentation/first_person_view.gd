@@ -26,7 +26,10 @@ var _sway := Vector2.ZERO
 
 func _ready() -> void:
 	# Vertical FOV (Godot keeps height): 68° ≈ 100° horizontal at 16:9.
-	camera.fov = 68.0
+	camera.fov = float(Settings.get_value("video", "fov"))
+	Events.settings_changed.connect(func(section: String, key: String, value: Variant) -> void:
+		if section == "video" and key == "fov":
+			camera.fov = float(value))
 	camera.near = 0.05
 	add_child(camera)
 	camera.add_child(_viewmodel)
@@ -67,6 +70,8 @@ func muzzle_position() -> Vector3:
 
 
 func kick(strength: float = 1.0) -> void:
+	if Settings.get_value("accessibility", "reduce_screen_shake"):
+		strength *= 0.3
 	_kick = minf(_kick + 0.6 * strength, 1.5)
 	_flash_time = 0.04
 

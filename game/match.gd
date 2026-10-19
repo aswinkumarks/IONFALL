@@ -40,6 +40,7 @@ var _spawns: Array[Transform3D] = []
 var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended)
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
 var _confirm_panel: Control
+var _settings_menu: SettingsMenu
 var _autopilot: WanderInput
 var _kill_feed: KillFeed
 var _scoreboard: MatchPanel
@@ -69,7 +70,12 @@ func _ready() -> void:
 	MatchConfig.pending = null
 	var gameplay := ARENA_GAMEPLAY.instantiate()
 	add_child(gameplay)
-	add_child(ARENA_PRESENTATION.instantiate())
+	var presentation := ARENA_PRESENTATION.instantiate()
+	add_child(presentation)
+	_apply_shadows(presentation)
+	Events.settings_changed.connect(func(section: String, key: String, _value: Variant) -> void:
+		if section == "video" and key == "shadows":
+			_apply_shadows(presentation))
 	add_child(input)
 	add_child(view)
 	add_child(effects)
@@ -169,6 +175,13 @@ func _reconnect_step() -> void:
 	get_tree().create_timer(4.0).timeout.connect(func() -> void:
 		if _reconnect_until_ms != 0 and not _leaving and not client.is_predicting():
 			_reconnect_step())
+
+
+## The sun's realtime shadows (PLAN §3.10 scalable settings).
+func _apply_shadows(root: Node) -> void:
+	var on: bool = Settings.get_value("video", "shadows")
+	for light in root.find_children("*", "DirectionalLight3D", true, false):
+		(light as DirectionalLight3D).shadow_enabled = on
 
 
 func local_id() -> int:
@@ -622,6 +635,8 @@ func _build_ui() -> void:
 	layer.add_child(_pause_panel)
 	_confirm_panel = _make_confirm_panel()
 	layer.add_child(_confirm_panel)
+	_settings_menu = SettingsMenu.new()
+	layer.add_child(_settings_menu)
 
 
 func _make_label(font_size: int, color: Color) -> Label:
@@ -656,6 +671,11 @@ func _make_pause_panel() -> Control:
 	resume.custom_minimum_size = Vector2(0, 56)
 	resume.pressed.connect(_set_paused.bind(false))
 	box.add_child(resume)
+	var settings := Button.new()
+	settings.text = "MENU_SETTINGS"
+	settings.custom_minimum_size = Vector2(0, 56)
+	settings.pressed.connect(func() -> void: _settings_menu.open())
+	box.add_child(settings)
 	var leave := Button.new()
 	leave.text = "PAUSE_LEAVE"
 	leave.custom_minimum_size = Vector2(0, 56)

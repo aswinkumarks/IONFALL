@@ -96,7 +96,7 @@ func _on_drag(index: int, pos: Vector2, relative: Vector2) -> void:
 			else:
 				input.touch_held &= ~PlayerCommand.Held.SPRINT
 		Kind.LOOK, Kind.FIRE:
-			var sens: float = Settings.get_value("input", "sensitivity_x")
+			var sens: float = Settings.get_value("input", "touch_sensitivity")
 			input.add_look(-relative.x * LOOK_RADIANS_PER_PIXEL * sens,
 					-relative.y * LOOK_RADIANS_PER_PIXEL * sens)
 	queue_redraw()

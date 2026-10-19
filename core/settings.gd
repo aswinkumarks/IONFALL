@@ -12,15 +12,24 @@ const DEFAULTS := {
 	"video": {
 		"render_scale": 0.75,
 		"fps_cap": 60,
+		"fov": 68.0,  ## vertical degrees (≈ 100° horizontal at 16:9)
+		"shadows": true,
 	},
 	"input": {
 		"sensitivity_x": 1.0,
 		"sensitivity_y": 1.0,
+		"touch_sensitivity": 1.0,
 		"invert_y": false,
+		"crouch_toggle": false,
+		"sprint_toggle": false,
+		"aim_toggle": false,
+		"keymap": {},  ## action -> physical keycode overrides
 	},
 	"accessibility": {
 		"hud_scale": 1.0,
 		"reduce_screen_shake": false,
+		"vignette": 1.0,  ## low-health vignette intensity
+		"captions": true,
 	},
 	"audio": {
 		"master": 1.0,

@@ -35,6 +35,10 @@ var _slots_label: Label
 
 
 func _ready() -> void:
+	apply_text_scale()
+	Events.settings_changed.connect(func(section: String, key: String, _value: Variant) -> void:
+		if section == "accessibility" and key == "hud_scale":
+			apply_text_scale())
 	_pause_button.pressed.connect(pause_requested.emit)
 	_pause_button.visible = DisplayServer.is_touchscreen_available()
 	if DisplayServer.is_touchscreen_available():
@@ -60,6 +64,15 @@ func _enter_tree() -> void:
 	_slots_label.add_theme_font_size_override("font_size", 16)
 	_slots_label.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
 	add_child(_slots_label)
+
+
+## HUD and text scale 80–150% (PLAN §3.16): label sizes follow the setting.
+func apply_text_scale() -> void:
+	var scale: float = Settings.get_value("accessibility", "hud_scale")
+	for label in find_children("*", "Label", true, false):
+		if not label.has_meta("base_font_size"):
+			label.set_meta("base_font_size", label.get_theme_font_size("font_size"))
+		label.add_theme_font_size_override("font_size", roundi(label.get_meta("base_font_size") * scale))
 
 
 ## Optimistic markers (our own prediction) are drawn thinner and grey; the
@@ -149,8 +162,9 @@ func _draw() -> void:
 	var c := size * 0.5
 	var scale: float = Settings.get_value("accessibility", "hud_scale")
 	# Damage vignette: edges flash red when hit, stay tinted at low health.
-	var low := clampf(1.0 - _health / 40.0, 0.0, 1.0) * 0.35 if _alive else 0.0
-	var alpha := maxf(_damage_flash * 0.45, low)
+	var intensity: float = Settings.get_value("accessibility", "vignette")
+	var low := clampf(1.0 - _health / 40.0, 0.0, 1.0) * 0.35 * intensity if _alive else 0.0
+	var alpha := maxf(_damage_flash * 0.45 * intensity, low)
 	if alpha > 0.0:
 		var edge := size.y * 0.12
 		var col := Color(0.9, 0.1, 0.1, alpha)

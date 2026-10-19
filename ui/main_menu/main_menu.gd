@@ -25,6 +25,7 @@ const HOST_DUMMIES := 2
 
 var _browser: Discovery.Browser
 var _profile_panel := ProfilePanel.new()
+var _settings := SettingsMenu.new()
 
 
 func _ready() -> void:
@@ -42,6 +43,9 @@ func _ready() -> void:
 	_back_button.pressed.connect(_show_join.bind(false))
 	_connect_button.pressed.connect(_start.bind(MatchConfig.Mode.JOIN))
 	add_child(_profile_panel)
+	add_child(_settings)
+	%SettingsButton.pressed.connect(_settings.open)
+	_settings.closed.connect(func() -> void: %SettingsButton.grab_focus())
 	_profile_panel.closed.connect(func() -> void: %ProfileButton.grab_focus())
 	%ProfileButton.pressed.connect(func() -> void: _profile_panel.open(_name_edit.text))
 	_address_edit.text_submitted.connect(func(_t: String) -> void: _start(MatchConfig.Mode.JOIN))
@@ -55,7 +59,9 @@ func _ready() -> void:
 	_play_button.grab_focus()
 	if _try_join_link():
 		return
-	if Platform.user_args.has("--play"):
+	if Platform.user_args.has("--open-settings"):
+		_settings.open()
+	elif Platform.user_args.has("--play"):
 		_start.call_deferred(MatchConfig.Mode.OFFLINE)
 	elif Platform.user_args.has("--host"):
 		_start.call_deferred(MatchConfig.Mode.HOST)

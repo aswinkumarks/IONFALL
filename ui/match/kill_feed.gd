@@ -20,7 +20,7 @@ func _ready() -> void:
 func add_death(e: Dictionary, name_of: Callable, local_id: int) -> void:
 	var row := Label.new()
 	row.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_theme_font_size_override("font_size", 18)
+	row.add_theme_font_size_override("font_size", roundi(18 * float(Settings.get_value("accessibility", "hud_scale"))))
 	row.add_theme_constant_override("outline_size", 5)
 	row.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	var weapon: String = WEAPON_TAGS.get(e.weapon, String(e.weapon).to_upper())

@@ -80,3 +80,43 @@ PROFILE_BEST_STREAK,best streak
 PROFILE_TIME_PLAYED,Time played
 PROFILE_UNCONFIRMED,%d match(es) unconfirmed (host left before results)
 PROFILE_READ_ONLY,"This profile was saved by a newer version, progress isn't saved"
+SETTINGS_TITLE,Settings
+SETTINGS_DONE,Done
+SETTINGS_TAB_CONTROLS,Controls
+SETTINGS_TAB_VIDEO,Video
+SETTINGS_TAB_AUDIO,Audio
+SETTINGS_TAB_ACCESSIBILITY,Accessibility
+SETTINGS_TAB_KEYS,Keys
+SETTINGS_PRESS_KEY,Press a key… (Esc cancels)
+SETTINGS_RESET_KEYS,Reset to defaults
+SETTING_SENS_X,Look sensitivity (horizontal)
+SETTING_SENS_Y,Look sensitivity (vertical)
+SETTING_TOUCH_SENS,Touch look sensitivity
+SETTING_INVERT_Y,Invert vertical look
+SETTING_CROUCH_TOGGLE,Crouch: toggle instead of hold
+SETTING_SPRINT_TOGGLE,Sprint: toggle instead of hold
+SETTING_AIM_TOGGLE,Aim: toggle instead of hold
+SETTING_FOV,Field of view (vertical)
+SETTING_RENDER_SCALE,Render scale
+SETTING_FPS_CAP,Frame rate cap
+SETTING_SHADOWS,Sun shadows
+SETTING_VOL_MASTER,Master volume
+SETTING_VOL_MUSIC,Music volume
+SETTING_VOL_SFX,Effects volume
+SETTING_HUD_SCALE,HUD and text scale
+SETTING_VIGNETTE,Low-health vignette
+SETTING_REDUCE_SHAKE,Reduce screen shake
+SETTING_CAPTIONS,Captions for important sounds
+ACTION_MOVE_FORWARD,Move forward
+ACTION_MOVE_BACK,Move back
+ACTION_MOVE_LEFT,Move left
+ACTION_MOVE_RIGHT,Move right
+ACTION_JUMP,Jump / mantle
+ACTION_SPRINT,Sprint
+ACTION_CROUCH,Crouch / slide
+ACTION_RELOAD,Reload
+ACTION_SWITCH_WEAPON,Next weapon
+ACTION_WEAPON_1,Weapon 1
+ACTION_WEAPON_2,Weapon 2
+ACTION_WEAPON_3,Weapon 3
+ACTION_SCOREBOARD,Scoreboard
