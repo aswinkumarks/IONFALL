@@ -1,0 +1,279 @@
+class_name Protocol
+extends RefCounted
+## Message formats (PLAN §3.3). Every message starts with a u8 type. Clients
+## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
+## rejects anything else (PLAN §3.7 whitelist).
+
+const VERSION := 1
+const MAGIC := 0x464E4F49  ## "IONF"
+const DEFAULT_PORT := 47710
+const MAX_PEERS := 16
+
+enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24 }
+const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED]
+
+## Logical channels (PLAN §3.3.3).
+const CH_GAME := 0  ## unreliable: commands, snapshots, pings
+const CH_CONTROL := 1  ## reliable ordered: welcome, phases, roster, critical events
+const CH_CHAT := 2  ## reliable ordered: chat (later)
+
+const MAX_CLIENT_PACKET := 256
+const CMD_REDUNDANCY := 4
+const MAX_NAME_BYTES := 48
+
+## Weapon ids by wire index.
+const WEAPON_IDS: Array[StringName] = [&"pulse_rifle", &"arc_launcher", &"burst_rifle", &"mag_pistol", &"rail_sniper"]
+
+enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5 }
+
+
+static func weapon_index(id: StringName) -> int:
+	return maxi(WEAPON_IDS.find(id), 0)
+
+
+# --- Handshake (SceneMultiplayer auth payloads) ---
+
+static func encode_hello(compat: String, build: String, uuid: String, player_name: String) -> PackedByteArray:
+	return Wire.Writer.new().u32(MAGIC).u16(VERSION).str8(compat).str8(build).str8(uuid) \
+			.str8(player_name.left(MAX_NAME_BYTES)).data()
+
+
+## Returns {} if malformed.
+static func decode_hello(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	var out := {"magic": r.u32(), "version": r.u16(), "compat": r.str8(64), "build": r.str8(96),
+			"uuid": r.str8(64), "name": r.str8(MAX_NAME_BYTES)}
+	return out if r.ok and r.remaining() == 0 else {}
+
+
+static func encode_hello_reply(accepted: bool, reason: String) -> PackedByteArray:
+	return Wire.Writer.new().u32(MAGIC).u8(1 if accepted else 0).str8(reason).data()
+
+
+static func decode_hello_reply(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	var out := {"magic": r.u32(), "accepted": r.u8() == 1, "reason": r.str8()}
+	return out if r.ok and out.magic == MAGIC else {}
+
+
+# --- Commands (client -> server, unreliable, last 4 commands per packet) ---
+
+static func encode_commands(match_id: int, ack_snapshot: int, interp_ticks: int, cmds: Array[PlayerCommand]) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.CMD).u32(match_id).u32(ack_snapshot).u8(interp_ticks) \
+			.u8(cmds.size()).u32(cmds[0].tick if not cmds.is_empty() else 0)
+	for c in cmds:
+		w.i8(c.move_x).i8(c.move_y).u16(c.view_yaw).i16(c.view_pitch).u8(c.held)
+		w.bytes(c.presses).i8(c.weapon_slot).f32(c.view_tick)
+	return w.data()
+
+
+## Consecutive commands, oldest first. Returns {} if malformed or out of range.
+static func decode_commands(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	if r.u8() != Msg.CMD:
+		return {}
+	var out := {"match_id": r.u32(), "ack": r.u32(), "interp": r.u8(), "cmds": []}
+	var count := r.u8()
+	var base := r.u32()
+	if not r.ok or count < 1 or count > 8 or out.interp > 30:
+		return {}
+	for i in count:
+		var c := PlayerCommand.new()
+		c.tick = base + i
+		c.move_x = r.i8()
+		c.move_y = r.i8()
+		c.view_yaw = r.u16()
+		c.view_pitch = r.i16()
+		c.held = r.u8()
+		for a in PlayerCommand.ACTION_COUNT:
+			c.presses[a] = r.u8()
+		c.weapon_slot = r.i8()
+		c.view_tick = r.f32()
+		c.interp_ticks = out.interp
+		if c.move_x < -127 or c.move_y < -127 or c.held > 31 or c.weapon_slot < -1 or c.weapon_slot > 7 \
+				or c.view_tick < 0.0 or absi(c.view_pitch) > 32767:
+			return {}
+		out.cmds.append(c)
+	return out if r.ok and r.remaining() == 0 else {}
+
+
+# --- Clock sync ---
+
+static func encode_ping(time_ms: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.PING).u32(time_ms).data()
+
+
+static func encode_pong(echo_ms: int, server_tick: int, fraction: float) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.PONG).u32(echo_ms).u32(server_tick).f32(fraction).data()
+
+
+static func decode_ping(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	var out := {"type": r.u8(), "time": r.u32()}
+	return out if r.ok and r.remaining() == 0 and out.type == Msg.PING else {}
+
+
+static func decode_pong(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	var out := {"type": r.u8(), "echo": r.u32(), "tick": r.u32(), "fraction": r.f32()}
+	return out if r.ok and r.remaining() == 0 and out.type == Msg.PONG and out.fraction >= 0.0 and out.fraction <= 1.0 else {}
+
+
+# --- Control messages (server -> client, reliable) ---
+
+static func encode_welcome(your_id: int, match_id: int, phase: int, phase_seq: int, tick: int, seed_value: int, map_id: String) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.WELCOME).u16(your_id).u32(match_id).u8(phase).u8(phase_seq) \
+			.u32(tick).u32(seed_value).str8(map_id).data()
+
+
+static func decode_welcome(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var out := {"id": r.u16(), "match_id": r.u32(), "phase": r.u8(), "phase_seq": r.u8(),
+			"tick": r.u32(), "seed": r.u32(), "map": r.str8()}
+	return out if r.ok else {}
+
+
+static func encode_phase(match_id: int, phase_seq: int, phase: int, tick: int, ends_tick: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.PHASE).u32(match_id).u8(phase_seq).u8(phase).u32(tick).u32(ends_tick).data()
+
+
+static func decode_phase(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var out := {"match_id": r.u32(), "phase_seq": r.u8(), "phase": r.u8(), "tick": r.u32(), "ends": r.u32()}
+	return out if r.ok else {}
+
+
+## roster: Array of {id, name, bot, score}
+static func encode_roster(match_id: int, roster: Array) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.ROSTER).u32(match_id).u8(roster.size())
+	for p in roster:
+		w.u16(p.id).u8(1 if p.bot else 0).i16(p.score).str8(p.name)
+	return w.data()
+
+
+static func decode_roster(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var out := {"match_id": r.u32(), "players": []}
+	var n := r.u8()
+	for i in n:
+		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "score": r.i16(), "name": r.str8()})
+	return out if r.ok else {}
+
+
+static func encode_loaded(match_id: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.LOADED).u32(match_id).data()
+
+
+static func decode_loaded(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	var out := {"type": r.u8(), "match_id": r.u32()}
+	return out if r.ok and r.remaining() == 0 and out.type == Msg.LOADED else {}
+
+
+static func encode_event_message(match_id: int, event: Dictionary) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.EVENT).u32(match_id)
+	write_event(w, event)
+	return w.data()
+
+
+static func decode_event_message(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var match_id := r.u32()
+	var e := read_event(r)
+	if not r.ok or e.is_empty():
+		return {}
+	e["match_id"] = match_id
+	return e
+
+
+# --- Events: sim event dictionaries <-> wire ---
+
+## Writes a SimWorld event. Returns false for event types that aren't sent.
+static func write_event(w: Wire.Writer, e: Dictionary) -> bool:
+	match e.type:
+		"fire":
+			var parts: PackedStringArray = e.id.split(":")
+			var flags := (1 if e.has("end") else 0) | (2 if e.get("hit_world", false) else 0) | (4 if e.get("hit_player", false) else 0)
+			w.u8(Event.FIRE).u16(e.shooter).u8(int(parts[1])).u32(int(parts[2])).u8(weapon_index(e.weapon)).u8(flags)
+			w.pos(e.origin)
+			if e.has("end"):
+				w.pos(e.end)
+			else:
+				var d: Vector3 = e.direction
+				w.i16(roundi(d.x * 32767)).i16(roundi(d.y * 32767)).i16(roundi(d.z * 32767))
+		"explosion":
+			var parts: PackedStringArray = e.id.substr(2).split(":")
+			w.u8(Event.EXPLOSION).u16(int(parts[0])).u8(int(parts[1])).u32(int(parts[2])).pos(e.position)
+		"hit":
+			var parts: PackedStringArray = e.id.substr(2).split(":")
+			var flags := (1 if e.headshot else 0) | (2 if e.killed else 0) | (4 if e.shield_broken else 0)
+			w.u8(Event.HIT).u16(e.attacker).u32(int(parts[1])).u16(e.target).u32(e.tick).u8(clampi(roundi(e.amount), 0, 255)).u8(flags)
+		"death":
+			w.u8(Event.DEATH).u16(e.victim).u8(int(e.id.split(":")[2])).u16(e.killer).u8(1 if e.suicide else 0) \
+					.u8(weapon_index(e.weapon)).pos(e.position)
+		"spawn":
+			w.u8(Event.SPAWN).u16(e.player).u8(int(e.id.split(":")[2])).pos(e.position).u16(PlayerCommand.quantize_yaw(e.yaw))
+		_:
+			return false
+	return true
+
+
+## Reads one event back into the same dictionary shape SimWorld emits,
+## including the same `id`, so presentation de-duplication works across
+## predicted (local) and server (remote) copies.
+static func read_event(r: Wire.Reader) -> Dictionary:
+	var type := r.u8()
+	match type:
+		Event.FIRE:
+			var shooter := r.u16()
+			var gen := r.u8()
+			var action := r.u32()
+			var weapon: StringName = WEAPON_IDS[clampi(r.u8(), 0, WEAPON_IDS.size() - 1)]
+			var flags := r.u8()
+			var e := {"type": "fire", "id": "%d:%d:%d" % [shooter, gen, action], "shooter": shooter,
+					"weapon": weapon, "origin": r.pos()}
+			if flags & 1:
+				e["end"] = r.pos()
+				e["hit_world"] = (flags & 2) != 0
+				e["hit_player"] = (flags & 4) != 0
+			else:
+				e["direction"] = Vector3(r.i16(), r.i16(), r.i16()) / 32767.0
+			return e
+		Event.EXPLOSION:
+			var owner := r.u16()
+			var gen := r.u8()
+			var action := r.u32()
+			return {"type": "explosion", "id": "x:%d:%d:%d" % [owner, gen, action], "owner": owner, "position": r.pos()}
+		Event.HIT:
+			var attacker := r.u16()
+			var action := r.u32()
+			var target := r.u16()
+			var tick := r.u32()
+			var amount := r.u8()
+			var flags := r.u8()
+			return {"type": "hit", "id": "h:%d:%d:%d:%d" % [attacker, action, target, tick], "attacker": attacker,
+					"target": target, "amount": float(amount), "headshot": (flags & 1) != 0,
+					"killed": (flags & 2) != 0, "shield_broken": (flags & 4) != 0}
+		Event.DEATH:
+			var victim := r.u16()
+			var life := r.u8()
+			var killer := r.u16()
+			var suicide := r.u8() == 1
+			var weapon: StringName = WEAPON_IDS[clampi(r.u8(), 0, WEAPON_IDS.size() - 1)]
+			return {"type": "death", "id": "d:%d:%d" % [victim, life], "victim": victim, "killer": killer,
+					"suicide": suicide, "weapon": weapon, "position": r.pos()}
+		Event.SPAWN:
+			var player := r.u16()
+			var life := r.u8()
+			return {"type": "spawn", "id": "s:%d:%d" % [player, life], "player": player, "position": r.pos(),
+					"yaw": r.u16() * TAU / 65536.0}
+	r.ok = false
+	return {}
+
+
+static func message_type(data: PackedByteArray) -> int:
+	return data.decode_u8(0) if data.size() > 0 else -1

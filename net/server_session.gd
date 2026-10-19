@@ -1,0 +1,484 @@
+class_name ServerSession
+extends Node
+## Authoritative match server (PLAN §3.3, §3.4): dedicated server, listen host
+## and offline play all run this. Steps the simulation at 60 Hz, consumes one
+## command per client per tick, validates view ticks for lag compensation and
+## sends delta snapshots at 30 Hz.
+
+signal phase_changed(phase: int)
+## Emitted after every simulation step.
+signal stepped
+
+const SNAPSHOT_INTERVAL := 2
+const TARGET_BUFFER := 2
+const MAX_FUTURE_TICKS := 8
+const REPEAT_LIMIT := 6
+const VIEW_TOLERANCE_TICKS := 2.0
+## Largest steady per-client timing bias the validator will learn. Frame
+## quantization on both ends (and clock-sync error) gives every client a
+## stable offset between its claimed and our expected view time; validation is
+## ±VIEW_TOLERANCE around that learned bias, so a client can gain at most this
+## much extra rewind (still capped at 250 ms in total).
+const MAX_VIEW_BIAS_TICKS := 3.0
+## The first commands of a client only learn its bias (running mean); claims
+## are still bounded by tolerance + max bias meanwhile.
+const VIEW_BIAS_LEARN_SAMPLES := 60
+const MAX_PENDING_EVENTS := 32
+const PING_INTERVAL_TICKS := 60
+const BASELINE_HISTORY_TICKS := 64
+const MAP_ID := "test_arena"
+
+var transport := Transport.new()
+var world: SimWorld
+var movement: MovementConfig
+var loadout: Array[WeaponData] = []
+var match_id: int = 0
+var phase: int = MatchPhase.WAITING
+var phase_seq: int = 0
+var phase_ends_tick: int = 0
+var clients: Dictionary = {}  ## peer id -> Client
+var bots: Dictionary = {}  ## net id -> TargetDummyDriver
+## Listen host / offline: the local player's id and this tick's command.
+var local_player_id: int = 0
+var local_command: PlayerCommand
+var anomalies: int = 0
+var networked: bool = false
+## Recent (claimed - expected) view tick errors, for diagnostics and tests.
+var view_errors: Array[float] = []
+
+var _host_events: Array[Dictionary] = []
+var _next_player_id: int = 2
+var _rng := RandomNumberGenerator.new()
+
+
+class Client:
+	var id: int = 0  ## transport peer id
+	var player_id: int = 0  ## small server-assigned id used on the wire and in the world
+	var name: String = ""
+	var uuid: String = ""
+	var loaded: bool = false
+	var queue: Dictionary = {}  ## tick -> PlayerCommand
+	var arrival: Dictionary = {}  ## tick -> server time (ticks) of first arrival
+	var last_processed: int = -1
+	var last_cmd: PlayerCommand
+	var repeats: int = 0
+	var ack: int = 0
+	var rtt_ms: float = 100.0
+	var sent: Dictionary = {}  ## snapshot id -> {entity id -> NetEntity}
+	var pending: Array = []  ## [event bytes, first snapshot id or -1]
+	var buffer_avg: float = TARGET_BUFFER
+	var view_bias: float = 0.0
+	var view_samples: int = 0
+	var view_anomalies: int = 0
+	var synthesized: int = 0
+
+
+## `port` < 0 runs without networking (offline play).
+func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D]) -> Error:
+	movement = movement_config
+	loadout = weapons
+	_rng.randomize()
+	match_id = _rng.randi() | 1
+	world = SimWorld.new()
+	world.name = "ServerWorld"
+	world.lag_compensation = true
+	world.configure(_rng.randi(), movement, spawns)
+	add_child(world)
+	add_child(transport)
+	if port >= 0:
+		transport.auth_validator = _validate_hello
+		transport.peer_joined.connect(_on_peer_joined)
+		transport.peer_left.connect(_on_peer_left)
+		transport.message.connect(_on_message)
+		var err := transport.host(port)
+		if err != OK:
+			return err
+		networked = true
+	_set_phase(MatchPhase.WAITING, 0)
+	return OK
+
+
+func add_local_player(player_name: String) -> SimPlayer:
+	local_player_id = 1
+	var p := world.add_player(local_player_id, loadout, player_name, false)
+	_on_humans_changed()
+	return p
+
+
+func add_bot(bot_name: String, driver: TargetDummyDriver) -> SimPlayer:
+	var id := 1000 + bots.size()
+	bots[id] = driver
+	var p := world.add_player(id, loadout, bot_name, true)
+	_broadcast_roster()
+	return p
+
+
+func drain_host_events() -> Array[Dictionary]:
+	var out := _host_events
+	_host_events = []
+	return out
+
+
+## The last completed tick plus the fraction towards the next one. Snapshot
+## ids, pongs, lag-compensation history and view ticks all use this one time
+## domain: "tick T" means the state after step T (PLAN §3.3.4).
+func completed_tick() -> int:
+	return world.tick - 1
+
+
+func server_time() -> float:
+	return completed_tick() + Engine.get_physics_interpolation_fraction()
+
+
+func roster() -> Array:
+	var out := []
+	var ids := world.players.keys()
+	ids.sort()
+	for id in ids:
+		var p: SimPlayer = world.players[id]
+		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "score": world.scores.get(id, 0)})
+	return out
+
+
+# --- Tick ---
+
+func _physics_process(_delta: float) -> void:
+	if world == null:
+		return
+	var commands := {}
+	for c: Client in clients.values():
+		if c.loaded and world.players.has(c.player_id):
+			var cmd := _next_command(c)
+			if cmd != null:
+				commands[c.player_id] = cmd
+	if local_player_id != 0 and local_command != null:
+		commands[local_player_id] = local_command
+	for id in bots:
+		commands[id] = bots[id].command_for(world.tick, world.get_player(id))
+	world.step(commands)
+	var score_changed := false
+	for e in world.drain_events():
+		_host_events.append(e)
+		if e.type == "death" or e.type == "spawn":
+			score_changed = score_changed or e.type == "death"
+			_send_reliable_event(e)
+		else:
+			_queue_cosmetic(e)
+	if score_changed:
+		_broadcast_roster()
+	_update_phase()
+	stepped.emit()
+	if networked:
+		if world.tick % SNAPSHOT_INTERVAL == 0:
+			for c: Client in clients.values():
+				if c.loaded:
+					_send_snapshot(c)
+		if world.tick % PING_INTERVAL_TICKS == 0:
+			var ping := Protocol.encode_ping(Time.get_ticks_msec() & 0xFFFFFFFF)
+			for c: Client in clients.values():
+				transport.send(c.id, ping, Protocol.CH_GAME, false)
+
+
+## One command per client per tick (PLAN §3.3.2). Missing commands repeat the
+## last held input (no new presses) for up to 6 ticks, then go neutral.
+func _next_command(c: Client) -> PlayerCommand:
+	var next_tick := -1
+	for t in c.queue:
+		if t > c.last_processed and (next_tick < 0 or t < next_tick):
+			next_tick = t
+	c.buffer_avg = lerpf(c.buffer_avg, c.queue.size(), 0.05)
+	if next_tick < 0:
+		if c.last_cmd == null:
+			return null
+		c.synthesized += 1
+		var cmd: PlayerCommand
+		if c.repeats < REPEAT_LIMIT:
+			cmd = c.last_cmd.copy()
+			c.repeats += 1
+		else:
+			cmd = PlayerCommand.neutral_from(c.last_cmd, 0)
+		cmd.tick = c.last_processed + 1
+		cmd.view_tick = 0.0
+		c.last_processed = cmd.tick
+		return cmd
+	var cmd: PlayerCommand = c.queue[next_tick]
+	for t in c.queue.keys():
+		if t <= next_tick:
+			c.queue.erase(t)
+	var arrived: float = c.arrival.get(next_tick, server_time())
+	for t in c.arrival.keys():
+		if t <= next_tick:
+			c.arrival.erase(t)
+	c.last_processed = next_tick
+	c.last_cmd = cmd
+	c.repeats = 0
+	cmd.view_tick = validate_view_tick(cmd.view_tick, arrived, c.rtt_ms, cmd.interp_ticks, c)
+	return cmd
+
+
+## Lag-compensation timestamp check (PLAN §3.3.4): the client may only claim
+## the view time we expect from what the server knows (arrival time, measured
+## latency, interpolation delay), within ±2 ticks. Otherwise the expected
+## value is used and an anomaly is counted.
+func validate_view_tick(claimed: float, arrived: float, rtt_ms: float, interp_ticks: int, c: Client = null) -> float:
+	if claimed <= 0.0:
+		return 0.0
+	var one_way := rtt_ms * 0.5 / 1000.0 * Sim.TICK_RATE
+	var expected := arrived - one_way - clampi(interp_ticks, 3, 9)
+	var bias := c.view_bias if c != null else 0.0
+	var error := claimed - expected
+	view_errors.append(error)
+	if view_errors.size() > 600:
+		view_errors.pop_front()
+	if c != null and c.view_samples < VIEW_BIAS_LEARN_SAMPLES \
+			and absf(error) <= VIEW_TOLERANCE_TICKS + MAX_VIEW_BIAS_TICKS:
+		c.view_samples += 1
+		c.view_bias = clampf(lerpf(c.view_bias, error, 1.0 / c.view_samples), -MAX_VIEW_BIAS_TICKS, MAX_VIEW_BIAS_TICKS)
+		return claimed
+	if absf(error - bias) <= VIEW_TOLERANCE_TICKS:
+		if c != null:
+			c.view_bias = clampf(lerpf(c.view_bias, error, 0.05), -MAX_VIEW_BIAS_TICKS, MAX_VIEW_BIAS_TICKS)
+		return claimed
+	anomalies += 1
+	if c != null:
+		c.view_anomalies += 1
+		# Learn slowly from outliers too (bounded), so a real shift in the
+		# client's timing is adopted while a one-off forged claim is not.
+		c.view_bias = clampf(lerpf(c.view_bias, error, 0.01), -MAX_VIEW_BIAS_TICKS, MAX_VIEW_BIAS_TICKS)
+	return expected + bias
+
+
+# --- Phases (PLAN §3.4) ---
+
+func _set_phase(p: int, ends: int) -> void:
+	phase = p
+	phase_seq = (phase_seq + 1) & 0xFF
+	phase_ends_tick = ends
+	world.damage_enabled = MatchPhase.allows_damage(p)
+	if networked:
+		var msg := Protocol.encode_phase(match_id, phase_seq, phase, world.tick, ends)
+		for c: Client in clients.values():
+			transport.send(c.id, msg, Protocol.CH_CONTROL, true)
+	phase_changed.emit(p)
+
+
+func _humans() -> int:
+	var n := 1 if local_player_id != 0 else 0
+	for c: Client in clients.values():
+		if c.loaded:
+			n += 1
+	return n
+
+
+func _on_humans_changed() -> void:
+	if phase == MatchPhase.WAITING and _humans() > 0:
+		_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
+	elif _humans() == 0 and phase != MatchPhase.WAITING:
+		_set_phase(MatchPhase.WAITING, 0)
+
+
+func _update_phase() -> void:
+	match phase:
+		MatchPhase.COUNTDOWN:
+			if world.tick >= phase_ends_tick:
+				_set_phase(MatchPhase.PLAYING, world.tick + MatchPhase.FFA_TIME_LIMIT_TICKS)
+		MatchPhase.PLAYING:
+			var top := -999
+			for id in world.scores:
+				top = maxi(top, world.scores[id])
+			if top >= MatchPhase.FFA_SCORE_LIMIT or world.tick >= phase_ends_tick:
+				_set_phase(MatchPhase.POST_MATCH, world.tick + MatchPhase.POST_MATCH_TICKS)
+		MatchPhase.POST_MATCH:
+			if world.tick >= phase_ends_tick:
+				match_id = _rng.randi() | 1
+				phase_seq = 0
+				world.reset_match(_rng.randi())
+				_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
+				_broadcast_roster()
+
+
+# --- Networking ---
+
+func _validate_hello(id: int, hello: Dictionary) -> String:
+	if hello.magic != Protocol.MAGIC:
+		return "not an IONFALL client"
+	if hello.version != Protocol.VERSION:
+		return "protocol mismatch (server %d, client %d)" % [Protocol.VERSION, hello.version]
+	if hello.compat != BuildInfo.compat_hash:
+		return "version mismatch: server runs %s" % BuildInfo.display_string()
+	if clients.size() + (1 if local_player_id != 0 else 0) + bots.size() >= Protocol.MAX_PEERS:
+		return "server full"
+	var c := Client.new()
+	c.id = id
+	c.player_id = _allocate_player_id()
+	c.name = sanitize_name(hello.name)
+	c.uuid = hello.uuid
+	clients[id] = c
+	return ""
+
+
+## Player ids are allocated by the server, independent of the transport's
+## peer ids (PLAN §3.20 composite peer contract: one id space owned here).
+func _allocate_player_id() -> int:
+	for i in 998:
+		var candidate := _next_player_id
+		_next_player_id = 2 + (_next_player_id - 1) % 998
+		var used := world.players.has(candidate)
+		for c: Client in clients.values():
+			used = used or c.player_id == candidate
+		if not used:
+			return candidate
+	return 0
+
+
+## Player names: control characters removed, 3-16 characters (PLAN §3.7).
+static func sanitize_name(raw: String) -> String:
+	var out := ""
+	for ch in raw.strip_edges():
+		if ch.unicode_at(0) >= 32 and ch.unicode_at(0) != 127:
+			out += ch
+	out = out.left(16)
+	return out if out.length() >= 3 else "Player"
+
+
+func _on_peer_joined(id: int) -> void:
+	var c: Client = clients.get(id)
+	if c == null:
+		transport.kick(id)
+		return
+	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, MAP_ID),
+			Protocol.CH_CONTROL, true)
+	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick),
+			Protocol.CH_CONTROL, true)
+	transport.send(id, Protocol.encode_roster(match_id, roster()), Protocol.CH_CONTROL, true)
+
+
+func _on_peer_left(id: int) -> void:
+	var c: Client = clients.get(id)
+	clients.erase(id)
+	if c != null:
+		world.remove_player(c.player_id)
+	_broadcast_roster()
+	_on_humans_changed()
+
+
+func _on_message(id: int, data: PackedByteArray) -> void:
+	var c: Client = clients.get(id)
+	var type := Protocol.message_type(data)
+	if c == null or not type in Protocol.CLIENT_MESSAGES:
+		anomalies += 1
+		return
+	match type:
+		Protocol.Msg.CMD:
+			_on_commands(c, data)
+		Protocol.Msg.PING:
+			var ping := Protocol.decode_ping(data)
+			if not ping.is_empty():
+				transport.send(id, Protocol.encode_pong(ping.time, completed_tick(), Engine.get_physics_interpolation_fraction()),
+						Protocol.CH_GAME, false)
+		Protocol.Msg.PONG:
+			var pong := Protocol.decode_pong(data)
+			if not pong.is_empty():
+				var rtt := float((Time.get_ticks_msec() - pong.echo) & 0xFFFFFFFF)
+				if rtt < 5000.0:
+					c.rtt_ms = lerpf(c.rtt_ms, rtt, 0.3)
+		Protocol.Msg.LOADED:
+			var loaded := Protocol.decode_loaded(data)
+			if loaded.is_empty():
+				anomalies += 1
+			elif not c.loaded:
+				c.loaded = true
+				world.add_player(c.player_id, loadout, c.name, false)
+				_broadcast_roster()
+				_on_humans_changed()
+
+
+func _on_commands(c: Client, data: PackedByteArray) -> void:
+	var msg := Protocol.decode_commands(data)
+	if msg.is_empty():
+		anomalies += 1
+		return
+	if msg.match_id != match_id:
+		return  # stale match: drop (PLAN §3.3.3)
+	if msg.ack > c.ack and msg.ack <= world.tick:
+		c.ack = msg.ack
+		c.pending = c.pending.filter(func(p: Array) -> bool: return p[1] < 0 or p[1] > c.ack)
+	var now := server_time()
+	for cmd: PlayerCommand in msg.cmds:
+		if c.last_processed < 0:
+			c.last_processed = cmd.tick - 1
+		if cmd.tick <= c.last_processed or c.queue.has(cmd.tick):
+			continue  # duplicate or late: later commands carry its presses
+		if cmd.tick > c.last_processed + TARGET_BUFFER + MAX_FUTURE_TICKS:
+			anomalies += 1
+			continue
+		c.queue[cmd.tick] = cmd
+		c.arrival[cmd.tick] = now
+
+
+func _send_snapshot(c: Client) -> void:
+	var snap := Snapshot.new()
+	snap.id = completed_tick()
+	snap.match_id = match_id
+	snap.phase_seq = phase_seq
+	snap.baseline_id = c.ack if c.sent.has(c.ack) else 0
+	snap.last_cmd_tick = c.last_processed
+	snap.buffer_delta = clampi(roundi((c.buffer_avg - TARGET_BUFFER) * 10.0), -127, 127)
+	for id in world.players:
+		if id != c.player_id:
+			snap.entities[id] = NetEntity.from_player(world.players[id])
+	var me: SimPlayer = world.players.get(c.player_id)
+	if me != null:
+		snap.owner_state = me.state
+		snap.owner_gen = me.entity_gen & 0xFF
+	for proj in world.projectiles:
+		snap.projectiles.append({"owner": proj.owner_id, "gen": proj.owner_gen & 0xFF, "action": proj.action_seq,
+				"position": proj.position, "velocity": proj.velocity})
+	var events: Array[PackedByteArray] = []
+	for p in c.pending:
+		if events.size() >= Snapshot.MAX_EVENTS:
+			break
+		if p[1] < 0:
+			p[1] = snap.id
+		events.append(p[0])
+	var bytes := snap.encode(c.sent.get(snap.baseline_id, {}) if snap.baseline_id != 0 else {}, events)
+	c.sent[snap.id] = snap.entities
+	for t in c.sent.keys():
+		if t < snap.id - BASELINE_HISTORY_TICKS:
+			c.sent.erase(t)
+	transport.send(c.id, bytes, Protocol.CH_GAME, false)
+	transport.stats.on_snapshot(bytes.size())
+
+
+## Cosmetic events ride in snapshots until acked; the oldest are dropped
+## first on overflow (PLAN §3.3.3).
+func _queue_cosmetic(e: Dictionary) -> void:
+	if not networked:
+		return
+	var w := Wire.Writer.new()
+	if not Protocol.write_event(w, e):
+		return
+	for c: Client in clients.values():
+		if not c.loaded:
+			continue
+		c.pending.append([w.data(), -1])
+		while c.pending.size() > MAX_PENDING_EVENTS:
+			c.pending.pop_front()
+
+
+## Deaths and spawns can't be lost: reliable control channel.
+func _send_reliable_event(e: Dictionary) -> void:
+	if not networked:
+		return
+	var msg := Protocol.encode_event_message(match_id, e)
+	for c: Client in clients.values():
+		if c.loaded:
+			transport.send(c.id, msg, Protocol.CH_CONTROL, true)
+
+
+func _broadcast_roster() -> void:
+	if not networked:
+		return
+	var msg := Protocol.encode_roster(match_id, roster())
+	for c: Client in clients.values():
+		transport.send(c.id, msg, Protocol.CH_CONTROL, true)

@@ -19,6 +19,11 @@ var players: Dictionary = {}  ## net_id -> SimPlayer
 var projectiles: Array[Projectile] = []
 var spawn_points: Array[Transform3D] = []
 var scores: Dictionary = {}  ## net_id -> int
+## Off outside the PLAYING phase (PLAN §3.4: no damage in countdown/lobby).
+var damage_enabled: bool = true
+## Lag compensation (PLAN §3.3.4). Off in offline play.
+var lag_compensation: bool = false
+var history: Dictionary = {}  ## net_id -> HitboxHistory
 
 var _events: Array[Dictionary] = []
 var _recent_deaths: Array = []  ## [Vector3, tick]
@@ -60,6 +65,41 @@ func add_player(net_id: int, weapons: Array[WeaponData], player_name: String, bo
 	return p
 
 
+## Client-side prediction body: same entity, no local spawn. Its state comes
+## from the server's owner snapshot (PLAN §3.2 reconciliation).
+func add_predicted_player(net_id: int, entity_gen: int, weapons: Array[WeaponData]) -> SimPlayer:
+	var p := SimPlayer.new()
+	p.name = "Predicted%d" % net_id
+	add_child(p)
+	p.setup(net_id, entity_gen, movement_config, weapons)
+	players[net_id] = p
+	scores[net_id] = 0
+	return p
+
+
+## New match on the same map: scores reset, everyone respawns (PLAN §3.4).
+func reset_match(seed_value: int) -> void:
+	match_seed = seed_value
+	_rng.seed = seed_value
+	projectiles.clear()
+	_recent_deaths.clear()
+	var ids := players.keys()
+	ids.sort()
+	for id in ids:
+		scores[id] = 0
+		_spawn(players[id])
+
+
+func remove_player(net_id: int) -> void:
+	var p: SimPlayer = players.get(net_id)
+	if p == null:
+		return
+	players.erase(net_id)
+	scores.erase(net_id)
+	history.erase(net_id)
+	p.queue_free()
+
+
 func get_player(net_id: int) -> SimPlayer:
 	return players.get(net_id)
 
@@ -95,6 +135,10 @@ func step(commands: Dictionary) -> void:
 		Health.tick_regen(s)
 		if s.spawn_protection_ticks > 0:
 			s.spawn_protection_ticks -= 1
+		if lag_compensation:
+			if not history.has(id):
+				history[id] = HitboxHistory.new()
+			history[id].record(tick, s)
 	tick += 1
 
 
@@ -123,10 +167,19 @@ func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
 		normal = world_hit.normal
 	var target: SimPlayer = null
 	var best: Hitbox.Hit = null
+	var rewind := _rewind_tick(p)
 	for other: SimPlayer in players.values():
 		if other == p or not other.state.alive:
 			continue
-		var hit := Hitbox.intersect(other.state.position, other.state.stance, shot.origin, shot.direction, max_dist)
+		var feet := other.state.position
+		var stance := other.state.stance
+		if rewind >= 0.0:
+			var pose := (history[other.net_id] as HitboxHistory).sample(rewind) if history.has(other.net_id) else null
+			if pose == null or pose.life_gen != other.state.life_gen:
+				continue  # wasn't there (or was a previous life) at that moment
+			feet = pose.position
+			stance = pose.stance
+		var hit := Hitbox.intersect(feet, stance, shot.origin, shot.direction, max_dist)
 		if hit != null and (best == null or hit.distance < best.distance):
 			best = hit
 			target = other
@@ -138,6 +191,14 @@ func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
 	})
 	if target != null:
 		_damage(target, p.net_id, w.damage_at(best.distance), best.part == Hitbox.Part.HEAD, w, shot.action_seq)
+
+
+## The (already validated) view tick to rewind targets to, or -1 for "now".
+## The current tick hasn't been recorded yet, so the newest pose is tick - 1.
+func _rewind_tick(p: SimPlayer) -> float:
+	if not lag_compensation or p.last_command == null or p.last_command.view_tick <= 0.0:
+		return -1.0
+	return clampf(p.last_command.view_tick, float(tick - HitboxHistory.MAX_REWIND_TICKS), float(tick - 1))
 
 
 func _step_projectiles() -> void:
@@ -196,6 +257,8 @@ func _explode(proj: Projectile, at: Vector3, direct: SimPlayer) -> void:
 
 
 func _damage(target: SimPlayer, attacker_id: int, amount: float, headshot: bool, w: WeaponData, action_seq: int) -> void:
+	if not damage_enabled:
+		return
 	var s := target.state
 	var r := Health.apply(s, amount, headshot, w.headshot_multiplier, w.precision)
 	if r.blocked or (r.shield_damage <= 0.0 and r.health_damage <= 0.0 and not r.killed):
