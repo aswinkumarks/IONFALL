@@ -27,6 +27,7 @@ const MAX_PENDING_EVENTS := 32
 const PING_INTERVAL_TICKS := 60
 const BASELINE_HISTORY_TICKS := 64
 const MAP_ID := "test_arena"
+const LOCAL_PLAYER_ID := 1
 
 var transport := Transport.new()
 var world: SimWorld
@@ -45,6 +46,8 @@ var anomalies: int = 0
 var networked: bool = false
 ## Recent (claimed - expected) view tick errors, for diagnostics and tests.
 var view_errors: Array[float] = []
+## Wall time of the last tick (simulation + snapshots), in microseconds.
+var last_step_usec: int = 0
 
 var _host_events: Array[Dictionary] = []
 var _next_player_id: int = 2
@@ -99,7 +102,7 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 
 
 func add_local_player(player_name: String) -> SimPlayer:
-	local_player_id = 1
+	local_player_id = LOCAL_PLAYER_ID
 	var p := world.add_player(local_player_id, loadout, player_name, false)
 	_on_humans_changed()
 	return p
@@ -145,6 +148,7 @@ func roster() -> Array:
 func _physics_process(_delta: float) -> void:
 	if world == null:
 		return
+	var t0 := Time.get_ticks_usec()
 	var commands := {}
 	for c: Client in clients.values():
 		if c.loaded and world.players.has(c.player_id):
@@ -177,6 +181,7 @@ func _physics_process(_delta: float) -> void:
 			var ping := Protocol.encode_ping(Time.get_ticks_msec() & 0xFFFFFFFF)
 			for c: Client in clients.values():
 				transport.send(c.id, ping, Protocol.CH_GAME, false)
+	last_step_usec = Time.get_ticks_usec() - t0
 
 
 ## One command per client per tick (PLAN §3.3.2). Missing commands repeat the

@@ -33,6 +33,9 @@ var interpolator := RemoteInterpolator.new()
 var interp_ticks: int = 4
 var pred: SimPlayer
 var pred_tick: int = 0
+## Predicted state one tick before `pred.state`, for render interpolation.
+## Shifted along with reconciliation so corrections stay invisible.
+var prev_state: PlayerSimState
 var latest_snapshot: Snapshot
 var server_state: PlayerSimState  ## latest authoritative owner state
 var projectiles: Array = []
@@ -95,6 +98,18 @@ func alpha() -> float:
 	return clampf(_acc / Sim.TICK_DT, 0.0, 1.0)
 
 
+## Current time-dilation rate (PLAN §3.3.2), for diagnostics.
+func rate() -> float:
+	return _rate
+
+
+func score_of(id: int) -> int:
+	for p in roster:
+		if p.id == id:
+			return p.score
+	return 0
+
+
 func drain_events() -> Array[Dictionary]:
 	var out := _events
 	_events = []
@@ -143,6 +158,7 @@ func _predict_tick() -> void:
 	cmd.view_tick = maxf(render_tick(), 0.001)
 	cmd.interp_ticks = interp_ticks
 	_commands[pred_tick] = cmd
+	prev_state = pred.state.copy()
 	var recent: Array[PlayerCommand] = []
 	for t in range(pred_tick - Protocol.CMD_REDUNDANCY + 1, pred_tick + 1):
 		if _commands.has(t):
@@ -254,6 +270,7 @@ func _reconcile(snap: Snapshot) -> void:
 	if pred == null:
 		pred = world.add_predicted_player(local_id, snap.owner_gen, loadout)
 		pred.restore(snap.owner_state)
+		prev_state = pred.state.copy()
 		pred_tick = ceili(clock.server_time() + clock.one_way_ticks()) + ServerSession.TARGET_BUFFER + 1
 		_ready_to_predict = true
 		return
@@ -264,6 +281,7 @@ func _reconcile(snap: Snapshot) -> void:
 	var ahead := pred_tick - c
 	if ahead < 0 or ahead > HISTORY_TICKS - 10:
 		pred.restore(server)
+		prev_state = pred.state.copy()
 		pred_tick = maxi(pred_tick, c + 1 + ServerSession.TARGET_BUFFER)
 		_commands.clear()
 		_predicted.clear()
@@ -286,8 +304,10 @@ func _reconcile(snap: Snapshot) -> void:
 		if before_disc == pred.state.discontinuity_gen:
 			snaps += 1
 		correction_offset = Vector3.ZERO
+		prev_state = pred.state.copy()
 	else:
 		correction_offset += before - pred.state.position
+		prev_state.position += pred.state.position - before
 		if error > VISIBLE_CORRECTION_M:
 			visible_corrections += 1
 

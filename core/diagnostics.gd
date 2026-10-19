@@ -6,6 +6,8 @@ extends Node
 const OVERLAY_SCENE := preload("res://ui/diagnostics/diagnostics_overlay.tscn")
 
 var frame_stats := FrameStats.new(600)
+## Set by the active match: func() -> String with network rows for the overlay.
+var net_info: Callable
 var _overlay: CanvasLayer
 var _touches: Dictionary = {}
 

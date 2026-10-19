@@ -4,6 +4,10 @@ extends Node
 const PATH := "user://settings.cfg"
 
 const DEFAULTS := {
+	"profile": {
+		"name": "",
+		"last_address": "",
+	},
 	"video": {
 		"render_scale": 0.75,
 		"fps_cap": 60,

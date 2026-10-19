@@ -4,7 +4,7 @@ extends Node3D
 ## explosions. Every event is shown once, keyed by its unique ID, so
 ## prediction replays (M1b) can never duplicate an effect (PLAN §3.1).
 
-var _seen: Dictionary = {}  ## event id -> tick
+var _seen: Dictionary = {}  ## event id -> local time first seen (ms)
 var _fading: Array = []  ## [node, age, lifetime, kind]
 var _rockets: Dictionary = {}  ## projectile id -> [node, prev_pos, cur_pos]
 var _tracer_mat := _unshaded(Color(0.6, 0.95, 1.0))
@@ -22,9 +22,11 @@ func _ready() -> void:
 func first_time(event: Dictionary) -> bool:
 	if _seen.has(event.id):
 		return false
-	_seen[event.id] = event.tick
+	var now := Time.get_ticks_msec()
+	_seen[event.id] = now
 	if _seen.size() > 2000:
-		var cutoff: int = event.tick - 600
+		# Server copies of an event arrive within a second of the local one.
+		var cutoff := now - 10000
 		for id in _seen.keys():
 			if _seen[id] < cutoff:
 				_seen.erase(id)
@@ -81,10 +83,12 @@ func explosion(at: Vector3, radius: float) -> void:
 
 
 ## Rockets follow the simulation's projectile list, interpolated between ticks.
+## Accepts SimWorld.Projectile objects (host) or snapshot dictionaries
+## {id, position, velocity} already placed at render time (client, alpha 1).
 func sync_projectiles(projectiles: Array, alpha: float) -> void:
 	var alive := {}
 	for proj in projectiles:
-		var id: String = proj.id()
+		var id: String = proj.id if proj is Dictionary else proj.id()
 		alive[id] = true
 		var entry: Array = _rockets.get(id, [])
 		if entry.is_empty():

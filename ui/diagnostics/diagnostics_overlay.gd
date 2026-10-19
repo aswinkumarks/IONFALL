@@ -1,10 +1,28 @@
 extends CanvasLayer
 ## Debug overlay showing frame-time percentiles and build info (PLAN §3.15).
-## Network and server rows are added in M1b.
+## The active match adds network rows through `Diagnostics.net_info`.
 
 @onready var _label: Label = %StatsLabel
 
 var _refresh_timer := 0.0
+var _replay_result: String = ""
+
+
+func _ready() -> void:
+	# Cross-platform determinism check (PLAN §3.2): results go to the log
+	# (`adb logcat -s godot` on Android) and are summarized here.
+	var button := Button.new()
+	button.text = "Replay check"
+	button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 8)
+	button.pressed.connect(func() -> void:
+		button.disabled = true
+		_replay_result = "replay check running…"
+		var check := ReplayCheck.new()
+		check.finished.connect(func(summary: String) -> void:
+			_replay_result = summary
+			button.disabled = false)
+		get_tree().root.add_child(check))
+	add_child(button)
 
 
 func _process(delta: float) -> void:
@@ -27,3 +45,7 @@ func _process(delta: float) -> void:
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 	]
+	if not _replay_result.is_empty():
+		_label.text += "\n" + _replay_result
+	if Diagnostics.net_info.is_valid():
+		_label.text += "\n" + str(Diagnostics.net_info.call())

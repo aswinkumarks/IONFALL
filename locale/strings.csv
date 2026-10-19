@@ -20,3 +20,17 @@ TOUCH_JUMP,Jump
 TOUCH_CROUCH,Crouch
 TOUCH_RELOAD,Reload
 TOUCH_SWAP,Swap
+MENU_NAME_PLACEHOLDER,Your name
+MENU_ADDRESS_PLACEHOLDER,Host address (e.g. 192.168.0.10)
+MENU_CONNECT,Connect
+MENU_BAD_ADDRESS,Enter the host's IP address
+PHASE_WAITING,Waiting for players
+PHASE_COUNTDOWN,Match starts in %d
+PHASE_PLAYING,
+PHASE_POST_MATCH,Match over
+NET_CONNECTING,Connecting to %s…
+NET_HOSTING,"Hosting on %s, port %d"
+NET_DISCONNECTED,Disconnected from the host
+NET_CONNECT_ERROR,Could not connect (%s)
+NET_HOST_ERROR,"Could not host on port %d (%s)"
+MENU_BACK,Back
