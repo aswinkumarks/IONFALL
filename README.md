@@ -4,7 +4,7 @@ A fast sci-fi arena FPS for Android, Linux and Windows with LAN cross-play, buil
 
 - **Plan:** [PLAN.md](PLAN.md) (design, architecture, milestones)
 - **Toolchain:** [docs/toolchain.md](docs/toolchain.md) (pinned versions and common commands)
-- **Status:** M0 (foundations & pipelines)
+- **Status:** M0 complete (foundations & pipelines). Next: M1a (simulation & feel)
 
 ## Quick start
 
