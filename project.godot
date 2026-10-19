@@ -51,3 +51,7 @@ renderer/rendering_method.web="gl_compatibility"
 rendering_device/fallback_to_opengl3=false
 textures/vram_compression/import_s3tc_bptc=true
 textures/vram_compression/import_etc2_astc=true
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/ionfall_android/plugin.cfg")

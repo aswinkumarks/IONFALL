@@ -28,7 +28,7 @@ func test_offline_match_runs_with_dummies() -> void:
 
 
 func test_host_and_client_see_each_other() -> void:
-	var host_cfg := MatchConfig.make(MatchConfig.Mode.HOST, "Hoster", 1)
+	var host_cfg := MatchConfig.make(MatchConfig.Mode.HOST, "Hoster", 2)
 	host_cfg.port = 43000 + randi() % 5000
 	var host := _spawn(host_cfg)
 	await wait_seconds(0.3)
@@ -39,7 +39,7 @@ func test_host_and_client_see_each_other() -> void:
 	await wait_until(func() -> bool: return joiner.client != null and joiner.client.is_predicting(), 5.0)
 	assert_true(joiner.client.is_predicting(), "client joined and predicts")
 	await wait_seconds(1.0)
-	assert_eq(host.server.world.players.size(), 3, "host + dummy + client")
+	assert_eq(host.server.world.players.size(), 3, "host + client + one dummy (the other gave way)")
 	assert_eq(host._visuals.size(), 2, "host sees the dummy and the client")
 	assert_eq(joiner._visuals.size(), 2, "client sees the host and the dummy")
 	var names := []

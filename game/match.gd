@@ -13,6 +13,9 @@ const ARENA_PRESENTATION := preload("res://maps/test_arena/presentation.tscn")
 const HUD_SCENE := preload("res://ui/hud/hud.tscn")
 const MAIN_MENU := "res://ui/main_menu/main_menu.tscn"
 const BOT_COLOR := Color(0.95, 0.5, 0.2)
+## A client suspended this long reconnects instead of waiting for the old
+## connection (the server times it out after 10 s).
+const RECONNECT_AFTER_MS := 5000
 const PLAYER_COLORS := [Color(0.55, 0.45, 1.0), Color(0.3, 0.85, 0.5), Color(0.95, 0.4, 0.6), Color(0.9, 0.85, 0.3)]
 
 var config: MatchConfig
@@ -33,6 +36,16 @@ var _pause_panel: Control
 var _banner: Label
 var _info: Label
 var _time: float = 0.0
+var _loadout: Array[WeaponData] = []
+var _spawns: Array[Transform3D] = []
+var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended)
+var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
+var _confirm_panel: Control
+var _autopilot: WanderInput
+var _perf_ms := FrameStats.new(7200)  ## frame times of the current minute
+var _perf_minute_start_ms: int = 0
+var _perf_frames: int = 0
+var _tick_ms := FrameStats.new(3600)  ## host: server tick times of the current minute
 
 
 func _ready() -> void:
@@ -51,17 +64,10 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	var loadout: Array[WeaponData] = [PULSE, ARC]
 	var spawns: Array[Transform3D] = gameplay.spawn_points()
+	_loadout = loadout
+	_spawns = spawns
 	if config.mode == MatchConfig.Mode.JOIN:
-		client = ClientSession.new()
-		client.name = "Client"
-		client.player_name = config.player_name
-		client.input_source = input.build_command
-		add_child(client)
-		client.failed.connect(_fail)
-		client.left.connect(func(_reason: String) -> void: _fail("NET_DISCONNECTED"))
-		var err := client.join(config.address, config.port, MOVEMENT, loadout, spawns)
-		if err != OK:
-			_fail(tr("NET_CONNECT_ERROR") % error_string(err))
+		if not _start_client(0):
 			return
 		_info.text = tr("NET_CONNECTING") % config.address
 	else:
@@ -73,21 +79,74 @@ func _ready() -> void:
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
 			return
+		server.max_combatants = config.max_combatants()
+		server.bot_fill = 1 + config.bots
 		var me := server.add_local_player(config.player_name)
 		input.look_yaw = me.state.yaw
-		for i in config.bots:
-			server.add_bot("Dummy %d" % (i + 1), TargetDummyDriver.new(i * 50))
 		if config.mode == MatchConfig.Mode.HOST:
 			_info.text = tr("NET_HOSTING") % [", ".join(lan_addresses()), config.port]
+			var advertiser := Discovery.Advertiser.new()
+			advertiser.beacon_source = server.beacon.bind(tr("NET_GAME_OF") % config.player_name, false, config.port)
+			add_child(advertiser)
 		_snapshot_prev()
+	if config.mode != MatchConfig.Mode.OFFLINE:
+		Platform.set_low_latency_network(true)
 	if not Platform.is_mobile():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_started = true
 
 
 func _exit_tree() -> void:
+	Platform.set_low_latency_network(false)
 	if Diagnostics.net_info == _net_info:
 		Diagnostics.net_info = Callable()
+
+
+## Creates the ClientSession and starts joining. `token` != 0 reconnects as
+## the same player (PLAN §3.4).
+func _start_client(token: int) -> bool:
+	if client != null:
+		client.leave()
+		client.queue_free()
+	client = ClientSession.new()
+	client.name = "Client"
+	client.player_name = config.player_name
+	client.uuid = MatchConfig.profile_uuid()
+	client.reconnect_token = token
+	client.input_source = _local_command
+	add_child(client)
+	client.failed.connect(_on_client_lost)
+	client.left.connect(_on_client_lost)
+	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns)
+	if err != OK:
+		_fail(tr("NET_CONNECT_ERROR") % error_string(err))
+		return false
+	return true
+
+
+func _on_client_lost(reason: String) -> void:
+	if _reconnect_until_ms != 0:
+		return  # the reconnect loop retries
+	match reason:
+		"disconnected":
+			_fail("NET_DISCONNECTED")
+		"connection failed":
+			_fail("NET_UNREACHABLE")
+		_:
+			_fail(reason)
+
+
+## After the app was suspended: rejoin with our token until the window closes.
+func _reconnect_step() -> void:
+	if Time.get_ticks_msec() > _reconnect_until_ms:
+		_reconnect_until_ms = 0
+		_fail("NET_RECONNECT_FAILED")
+		return
+	var token := client.reconnect_token
+	_start_client(token)
+	get_tree().create_timer(4.0).timeout.connect(func() -> void:
+		if _reconnect_until_ms != 0 and not _leaving and not client.is_predicting():
+			_reconnect_step())
 
 
 func local_id() -> int:
@@ -114,7 +173,21 @@ func _physics_process(_delta: float) -> void:
 	if not _started or server == null:
 		return
 	_snapshot_prev()
-	server.local_command = input.build_command(server.world.tick)
+	if server.last_step_usec > 0:
+		_tick_ms.add(server.last_step_usec / 1000.0)  # the previous tick
+	server.local_command = _local_command(server.world.tick)
+
+
+## The local player's command: from input, or from a bot while the overlay's
+## autopilot is on (soak tests).
+func _local_command(tick: int) -> PlayerCommand:
+	if not Diagnostics.autopilot:
+		return input.build_command(tick)
+	if _autopilot == null:
+		_autopilot = WanderInput.new(randi())
+	var cmd := _autopilot.command_for(tick)
+	input.look_yaw = cmd.yaw_radians()
+	return cmd
 
 
 func _snapshot_prev() -> void:
@@ -128,14 +201,38 @@ func _process(delta: float) -> void:
 	if not _started:
 		return
 	_time += delta
+	_log_perf(delta)
 	var events: Array[Dictionary] = server.drain_host_events() if server != null else client.drain_events()
 	for e in events:
 		_handle_event(e)
 	if server != null:
 		_render_host(delta)
-	elif client.is_predicting():
-		_render_client(delta)
+	else:
+		_watch_connection()
+		if client.is_predicting():
+			_render_client(delta)
 	_update_banner()
+
+
+## Host-loss detection on the client (PLAN §3.5.1): 3 s without packets shows
+## a warning, 10 s goes back to the menu. Not while reconnecting.
+func _watch_connection() -> void:
+	if _reconnect_until_ms != 0:
+		if client.is_predicting():
+			_reconnect_until_ms = 0
+			_info.text = ""
+		else:
+			_info.text = tr("NET_RECONNECTING") % ceili((_reconnect_until_ms - Time.get_ticks_msec()) / 1000.0)
+		return
+	if client.local_id == 0:
+		return  # still connecting: ENet reports failure
+	var silent := client.seconds_silent()
+	if silent >= 10.0:
+		_fail("NET_HOST_LOST")
+	elif silent >= 3.0:
+		_info.text = tr("NET_HOST_PAUSED") if client.host_paused else tr("NET_HOST_NOT_RESPONDING")
+	elif client.is_predicting():
+		_info.text = ""
 
 
 func _render_host(delta: float) -> void:
@@ -160,7 +257,6 @@ func _render_host(delta: float) -> void:
 
 
 func _render_client(delta: float) -> void:
-	_info.text = ""
 	var me := client.pred
 	var s := me.state
 	var prev := client.prev_state
@@ -192,6 +288,35 @@ func _render_client(delta: float) -> void:
 	shown.spawn_protection_ticks = server_state.spawn_protection_ticks
 	hud.update_state(shown, me.current_weapon(), client.score_of(client.local_id),
 			ceili(server_state.respawn_tick - client.clock.server_time()))
+
+
+## One line per minute in the log (`adb logcat -s godot`) for sustained
+## tests against PLAN §3.10: frame-time percentiles, minute average fps,
+## host tick time, network health and thermal status.
+func _log_perf(delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	if _perf_minute_start_ms == 0:
+		_perf_minute_start_ms = now
+	_perf_ms.add(delta * 1000.0)
+	_perf_frames += 1
+	if now - _perf_minute_start_ms < 60000:
+		return
+	var seconds := (now - _perf_minute_start_ms) / 1000.0
+	var line := "PERF mode=%s fps_avg=%.1f p50=%.1f p95=%.1f p99=%.1f" % [
+		["offline", "host", "client"][config.mode], _perf_frames / seconds,
+		_perf_ms.percentile(50.0), _perf_ms.percentile(95.0), _perf_ms.percentile(99.0)]
+	if server != null:
+		line += " tick_p50=%.2f tick_p99=%.2f players=%d clients=%d" % [_tick_ms.percentile(50.0),
+				_tick_ms.percentile(99.0), server.world.players.size(), server.clients.size()]
+		_tick_ms = FrameStats.new(3600)
+	if client != null:
+		line += " rtt=%.0f corrections=%d visible=%d snaps=%d" % [client.clock.rtt_ms, client.corrections,
+				client.visible_corrections, client.snaps]
+	line += " thermal=%d autopilot=%s" % [Platform.thermal_status(), Diagnostics.autopilot]
+	print(line)
+	_perf_ms = FrameStats.new(7200)
+	_perf_frames = 0
+	_perf_minute_start_ms = now
 
 
 func _visual_for(id: int, display_name: String, is_bot: bool) -> PlayerVisual:
@@ -298,6 +423,8 @@ func _build_ui() -> void:
 	layer.add_child(touch)
 	_pause_panel = _make_pause_panel()
 	layer.add_child(_pause_panel)
+	_confirm_panel = _make_confirm_panel()
+	layer.add_child(_confirm_panel)
 
 
 func _make_label(font_size: int, color: Color) -> Label:
@@ -335,7 +462,7 @@ func _make_pause_panel() -> Control:
 	var leave := Button.new()
 	leave.text = "PAUSE_LEAVE"
 	leave.custom_minimum_size = Vector2(0, 56)
-	leave.pressed.connect(_leave)
+	leave.pressed.connect(_ask_leave)
 	box.add_child(leave)
 	var hint := Label.new()
 	hint.text = "PAUSE_CONTROLS_HINT"
@@ -347,11 +474,54 @@ func _make_pause_panel() -> Control:
 	return root
 
 
+## Leaving an online match asks first (PLAN §3.5.1); offline just leaves.
+func _ask_leave() -> void:
+	if config.mode == MatchConfig.Mode.OFFLINE:
+		_leave()
+		return
+	var label: Label = _confirm_panel.get_node("Box/Text")
+	label.text = tr("LEAVE_CONFIRM_HOST") if config.mode == MatchConfig.Mode.HOST else tr("LEAVE_CONFIRM_CLIENT")
+	_confirm_panel.visible = true
+
+
+func _make_confirm_panel() -> Control:
+	var root := ColorRect.new()
+	root.color = Color(0.02, 0.03, 0.05, 0.85)
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.visible = false
+	var box := VBoxContainer.new()
+	box.name = "Box"
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.custom_minimum_size = Vector2(520, 0)
+	box.position = Vector2(-260, -100)
+	box.add_theme_constant_override("separation", 14)
+	root.add_child(box)
+	var text := Label.new()
+	text.name = "Text"
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD
+	text.add_theme_font_size_override("font_size", 28)
+	box.add_child(text)
+	var yes := Button.new()
+	yes.text = "LEAVE_CONFIRM_YES"
+	yes.custom_minimum_size = Vector2(0, 56)
+	yes.pressed.connect(_leave)
+	box.add_child(yes)
+	var no := Button.new()
+	no.text = "LEAVE_CONFIRM_NO"
+	no.custom_minimum_size = Vector2(0, 56)
+	no.pressed.connect(func() -> void: root.visible = false)
+	box.add_child(no)
+	return root
+
+
 ## Offline, pausing stops the simulation. Online matches can't pause: the
 ## panel only stops local input (PLAN §3.5.1).
 func _set_paused(paused: bool) -> void:
 	_paused = paused
 	_pause_panel.visible = paused
+	if not paused:
+		_confirm_panel.visible = false
 	input.enabled = not paused
 	input.reset_held()
 	touch.release_all()
@@ -390,8 +560,26 @@ func _notification(what: int) -> void:
 		NOTIFICATION_WM_GO_BACK_REQUEST:
 			_set_paused(not _paused)
 		NOTIFICATION_APPLICATION_PAUSED:
+			_paused_at_ms = Time.get_ticks_msec()
+			if server != null:
+				server.notify_clients(Protocol.Notice.HOST_PAUSED)
 			if _started:
 				_set_paused(true)
+		NOTIFICATION_APPLICATION_RESUMED:
+			_on_resumed()
+
+
+## Best effort after a suspension (PLAN §3.5.1): a host tells its clients it
+## is back; a client away long enough for the server to drop it rejoins with
+## its reconnect token for up to 60 s.
+func _on_resumed() -> void:
+	var away_ms := Time.get_ticks_msec() - _paused_at_ms if _paused_at_ms != 0 else 0
+	_paused_at_ms = 0
+	if server != null:
+		server.notify_clients(Protocol.Notice.HOST_RESUMED)
+	elif client != null and _started and not _leaving and away_ms > RECONNECT_AFTER_MS:
+		_reconnect_until_ms = Time.get_ticks_msec() + ServerSession.RECONNECT_WINDOW_MS - away_ms
+		_reconnect_step()
 
 
 func _on_focus_lost() -> void:

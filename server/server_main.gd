@@ -2,8 +2,9 @@ extends Node
 ## Dedicated server (PLAN §3.5.2): one ServerSession in the test arena, no
 ## local player.
 ##
-## Arguments (after `--`): `--port N` (default 47710), `--bots N` training
-## dummies, `--status-interval S` seconds between status lines, `--smoke-test`
+## Arguments (after `--`): `--port N` (default 47710), `--bots N` fills the match
+## with training dummies up to N combatants, `--status-interval S` seconds between status lines,
+## `--name NAME` shown in LAN server lists, `--no-discovery` stops beacons, `--smoke-test`
 ## exits right after startup so CI can verify that the exported server boots.
 ## Logs go to stderr; stdout is reserved for the managed-mode JSON protocol.
 
@@ -39,8 +40,9 @@ func _ready() -> void:
 		printerr("IONFALL server: could not listen on UDP port %d: %s" % [port, error_string(err)])
 		get_tree().quit(1)
 		return
-	for i in bots:
-		server.add_bot("Dummy %d" % (i + 1), TargetDummyDriver.new(i * 50))
+	# `--bots N`: dummies fill the match up to N combatants and leave as humans join.
+	server.bot_fill = bots
+	server.update_bot_fill()
 	server.stepped.connect(func() -> void: _step_ms.add(server.last_step_usec / 1000.0))
 	server.phase_changed.connect(func(p: int) -> void:
 		printerr("IONFALL server: phase %s (match %08x)" % [MatchPhase.label_key(p), server.match_id]))
@@ -49,6 +51,11 @@ func _ready() -> void:
 		printerr("IONFALL server: player joined: %s (id %d)" % [c.name if c else "?", c.player_id if c else 0]))
 	server.transport.peer_left.connect(func(id: int) -> void:
 		printerr("IONFALL server: peer %d left" % id))
+	var server_name := Platform.get_user_arg("--name", "IONFALL server")
+	if not Platform.user_args.has("--no-discovery"):
+		var advertiser := Discovery.Advertiser.new()
+		advertiser.beacon_source = server.beacon.bind(server_name, true, port)
+		add_child(advertiser)
 	_started_ms = Time.get_ticks_msec()
 	printerr("IONFALL server listening on UDP port %d with %d bots" % [port, bots])
 	if Platform.user_args.has("--smoke-test"):

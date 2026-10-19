@@ -34,3 +34,18 @@ NET_DISCONNECTED,Disconnected from the host
 NET_CONNECT_ERROR,Could not connect (%s)
 NET_HOST_ERROR,"Could not host on port %d (%s)"
 MENU_BACK,Back
+NET_RECONNECTING,Connection lost: reconnecting (%d s)
+NET_RECONNECT_FAILED,Couldn't reconnect to the match
+NET_HOST_PAUSED,The host paused the game
+NET_HOST_NOT_RESPONDING,Host not responding…
+NET_HOST_LOST,Host disconnected
+LEAVE_CONFIRM_HOST,Leaving ends the match for everyone.
+LEAVE_CONFIRM_CLIENT,You'll leave the match.
+LEAVE_CONFIRM_YES,Leave
+LEAVE_CONFIRM_NO,Stay
+NET_GAME_OF,%s's game
+MENU_LAN_SEARCHING,Looking for games on this network…
+MENU_LAN_GAMES,Games on this network
+MENU_LAN_UNAVAILABLE,"Can't search this network, enter an address"
+MENU_LAN_OTHER_VERSION,different version (%s)
+NET_UNREACHABLE,"Couldn't reach the host. Both devices must be on the same network; guest Wi-Fi and access-point isolation block LAN games."

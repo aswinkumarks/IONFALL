@@ -20,6 +20,11 @@ var loadout: Array[WeaponData] = []
 ## func(tick: int) -> PlayerCommand. Set by the presentation (InputAdapter) or a test bot.
 var input_source: Callable
 var player_name: String = "Player"
+## Reconnect token from the server's WELCOME; pass it to join() to get the
+## same player and score back within 60 s (PLAN §3.4).
+var reconnect_token: int = 0
+var uuid: String = "anonymous"  ## stable per-install id, set by the caller
+var host_paused: bool = false
 
 var local_id: int = 0
 var match_id: int = 0
@@ -59,6 +64,7 @@ var _ping_timer: float = 0.0
 var _pings_sent: int = 0
 var _arrival_jitter := FrameStats.new(60)
 var _metrics_start_ms: int = 0
+var _last_packet_ms: int = 0
 
 
 func join(address: String, port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D]) -> Error:
@@ -72,8 +78,15 @@ func join(address: String, port: int, movement_config: MovementConfig, weapons: 
 	transport.connection_failed.connect(func(reason: String) -> void: failed.emit(reason))
 	transport.disconnected.connect(func() -> void: left.emit("disconnected"))
 	transport.message.connect(_on_message)
-	var uuid := "%08x-test" % (randi() & 0xFFFFFFFF)
-	return transport.join(address, port, Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id, uuid, player_name))
+	_last_packet_ms = Time.get_ticks_msec()
+	return transport.join(address, port, Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
+			uuid, player_name, reconnect_token))
+
+
+## Seconds since the last packet from the server (host-loss detection,
+## PLAN §3.5.1).
+func seconds_silent() -> float:
+	return (Time.get_ticks_msec() - _last_packet_ms) / 1000.0
 
 
 func leave() -> void:
@@ -198,8 +211,16 @@ func _predicted_fire_event(shot: WeaponSim.Shot) -> Dictionary:
 # --- Messages ---
 
 func _on_message(_id: int, data: PackedByteArray) -> void:
+	_last_packet_ms = Time.get_ticks_msec()
 	match Protocol.message_type(data):
+		Protocol.Msg.NOTICE:
+			var code := Protocol.decode_notice(data)
+			if code == Protocol.Notice.HOST_PAUSED:
+				host_paused = true
+			elif code == Protocol.Notice.HOST_RESUMED:
+				host_paused = false
 		Protocol.Msg.SNAPSHOT:
+			host_paused = false
 			_on_snapshot(data)
 		Protocol.Msg.PONG:
 			var pong := Protocol.decode_pong(data)
@@ -218,6 +239,7 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 				phase = w.phase
 				phase_seq = w.phase_seq
 				match_seed = w.seed
+				reconnect_token = w.token
 				_metrics_start_ms = Time.get_ticks_msec()
 				joined.emit()
 		Protocol.Msg.PHASE:

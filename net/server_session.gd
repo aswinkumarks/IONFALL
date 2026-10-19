@@ -32,6 +32,9 @@ const PING_INTERVAL_TICKS := 60
 const BASELINE_HISTORY_TICKS := 64
 const MAP_ID := "test_arena"
 const LOCAL_PLAYER_ID := 1
+## A client that drops can come back with its reconnect token within this
+## time and gets its player id and score back (PLAN §3.4).
+const RECONNECT_WINDOW_MS := 60000
 
 var transport := Transport.new()
 var world: SimWorld
@@ -48,6 +51,11 @@ var local_player_id: int = 0
 var local_command: PlayerCommand
 var anomalies: int = 0
 var networked: bool = false
+## Most combatants (humans + bots) this session admits: 16 dedicated,
+## 8 PC listen host, 4 phone host (PLAN §3.5.1).
+var max_combatants: int = Protocol.MAX_PEERS
+## Bots fill the match up to this many combatants and leave as humans join.
+var bot_fill: int = 0
 ## Recent (claimed - expected) view tick errors, for diagnostics and tests.
 var view_errors: Array[float] = []
 ## Wall time of the last tick (simulation + snapshots), in microseconds.
@@ -55,6 +63,8 @@ var last_step_usec: int = 0
 
 var _host_events: Array[Dictionary] = []
 var _next_player_id: int = 2
+var _departed: Dictionary = {}  ## reconnect token -> {player_id, score, expires_ms}
+var _bot_seq: int = 0
 var _rng := RandomNumberGenerator.new()
 
 
@@ -80,6 +90,8 @@ class Client:
 	var view_samples: int = 0
 	var view_anomalies: int = 0
 	var synthesized: int = 0
+	var token: int = 0
+	var restored_score: int = 0
 
 
 ## `port` < 0 runs without networking (offline play).
@@ -110,16 +122,57 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 func add_local_player(player_name: String) -> SimPlayer:
 	local_player_id = LOCAL_PLAYER_ID
 	var p := world.add_player(local_player_id, loadout, player_name, false)
+	update_bot_fill()
 	_on_humans_changed()
 	return p
 
 
 func add_bot(bot_name: String, driver: TargetDummyDriver) -> SimPlayer:
-	var id := 1000 + bots.size()
+	var id := 1000 + _bot_seq
+	_bot_seq += 1
 	bots[id] = driver
 	var p := world.add_player(id, loadout, bot_name, true)
 	_broadcast_roster()
 	return p
+
+
+func combatants() -> int:
+	return _humans() + bots.size()
+
+
+## Adds or removes training dummies so the match has `bot_fill` combatants.
+func update_bot_fill() -> void:
+	while bots.size() > 0 and combatants() > maxi(bot_fill, _humans()):
+		var id: int = bots.keys().max()
+		bots.erase(id)
+		world.remove_player(id)
+	while combatants() < mini(bot_fill, max_combatants):
+		add_bot("Dummy %d" % (_bot_seq + 1), TargetDummyDriver.new(_bot_seq * 50))
+	_broadcast_roster()
+
+
+## LAN discovery beacon describing this session (PLAN §3.6).
+func beacon(display_name: String, dedicated: bool, port: int) -> Discovery.Beacon:
+	var b := Discovery.Beacon.new()
+	b.build = BuildInfo.display_string()
+	b.compat_prefix = BuildInfo.compat_hash.left(8)
+	b.name = display_name
+	b.map = MAP_ID
+	b.combatants = _humans()
+	b.max_combatants = max_combatants
+	b.flags = Discovery.FLAG_DEDICATED if dedicated else 0
+	b.game_port = port
+	return b
+
+
+## Best-effort hint to clients when the listen host is suspended or resumed
+## (PLAN §3.5.1).
+func notify_clients(code: int) -> void:
+	if not networked:
+		return
+	var msg := Protocol.encode_notice(code)
+	for c: Client in clients.values():
+		transport.send(c.id, msg, Protocol.CH_CONTROL, true)
 
 
 func drain_host_events() -> Array[Dictionary]:
@@ -312,6 +365,8 @@ func _update_phase() -> void:
 				match_id = _rng.randi() | 1
 				phase_seq = 0
 				world.reset_match(_rng.randi())
+				for d: Dictionary in _departed.values():
+					d.score = 0  # scores belong to the finished match
 				_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
 				_broadcast_roster()
 
@@ -325,13 +380,31 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 		return "protocol mismatch (server %d, client %d)" % [Protocol.VERSION, hello.version]
 	if hello.compat != BuildInfo.compat_hash:
 		return "version mismatch: server runs %s" % BuildInfo.display_string()
-	if clients.size() + (1 if local_player_id != 0 else 0) + bots.size() >= Protocol.MAX_PEERS:
+	# A client back from suspension before its old connection timed out:
+	# drop the stale connection and hand its player over.
+	if hello.token != 0:
+		for old: Client in clients.values():
+			if old.token == hello.token and old.id != id:
+				_on_peer_left(old.id)
+				transport.kick(old.id)
+				break
+	# Bots give way to humans, so only humans count against the limit.
+	if clients.size() + (1 if local_player_id != 0 else 0) >= max_combatants:
 		return "server full"
 	var c := Client.new()
 	c.id = id
-	c.player_id = _allocate_player_id()
 	c.name = sanitize_name(hello.name)
 	c.uuid = hello.uuid
+	_expire_departed()
+	var back: Dictionary = _departed.get(hello.token, {})
+	if not back.is_empty() and _player_id_free(back.player_id):
+		_departed.erase(hello.token)
+		c.player_id = back.player_id
+		c.restored_score = back.score
+		c.token = hello.token
+	else:
+		c.player_id = _allocate_player_id()
+		c.token = ((_rng.randi() & 0x3FFFFFFF) << 32) | _rng.randi() | 1
 	clients[id] = c
 	return ""
 
@@ -342,12 +415,28 @@ func _allocate_player_id() -> int:
 	for i in 998:
 		var candidate := _next_player_id
 		_next_player_id = 2 + (_next_player_id - 1) % 998
-		var used := world.players.has(candidate)
-		for c: Client in clients.values():
-			used = used or c.player_id == candidate
-		if not used:
+		var reserved := false
+		for d: Dictionary in _departed.values():
+			reserved = reserved or d.player_id == candidate
+		if _player_id_free(candidate) and not reserved:
 			return candidate
 	return 0
+
+
+func _player_id_free(candidate: int) -> bool:
+	if world.players.has(candidate):
+		return false
+	for c: Client in clients.values():
+		if c.player_id == candidate:
+			return false
+	return true
+
+
+func _expire_departed() -> void:
+	var now := Time.get_ticks_msec()
+	for t in _departed.keys():
+		if now > _departed[t].expires_ms:
+			_departed.erase(t)
 
 
 ## Player names: control characters removed, 3-16 characters (PLAN §3.7).
@@ -365,7 +454,7 @@ func _on_peer_joined(id: int) -> void:
 	if c == null:
 		transport.kick(id)
 		return
-	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, MAP_ID),
+	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, MAP_ID, c.token),
 			Protocol.CH_CONTROL, true)
 	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick),
 			Protocol.CH_CONTROL, true)
@@ -376,8 +465,11 @@ func _on_peer_left(id: int) -> void:
 	var c: Client = clients.get(id)
 	clients.erase(id)
 	if c != null:
+		if c.loaded:
+			_departed[c.token] = {"player_id": c.player_id, "score": world.scores.get(c.player_id, 0),
+					"expires_ms": Time.get_ticks_msec() + RECONNECT_WINDOW_MS}
 		world.remove_player(c.player_id)
-	_broadcast_roster()
+	update_bot_fill()
 	_on_humans_changed()
 
 
@@ -408,7 +500,9 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			elif not c.loaded:
 				c.loaded = true
 				world.add_player(c.player_id, loadout, c.name, false)
-				_broadcast_roster()
+				if c.restored_score != 0:
+					world.scores[c.player_id] = c.restored_score
+				update_bot_fill()
 				_on_humans_changed()
 
 

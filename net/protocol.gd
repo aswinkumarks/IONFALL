@@ -4,12 +4,14 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 1
+const VERSION := 2
 const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
 
-enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24 }
+enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25 }
+## NOTICE codes: host lifecycle hints (PLAN §3.5.1, best effort).
+enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2 }
 const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED]
 
 ## Logical channels (PLAN §3.3.3).
@@ -33,16 +35,20 @@ static func weapon_index(id: StringName) -> int:
 
 # --- Handshake (SceneMultiplayer auth payloads) ---
 
-static func encode_hello(compat: String, build: String, uuid: String, player_name: String) -> PackedByteArray:
+## `token`: the reconnect token from an earlier WELCOME, or 0 for a new join.
+static func encode_hello(compat: String, build: String, uuid: String, player_name: String, token: int = 0) -> PackedByteArray:
 	return Wire.Writer.new().u32(MAGIC).u16(VERSION).str8(compat).str8(build).str8(uuid) \
-			.str8(player_name.left(MAX_NAME_BYTES)).data()
+			.str8(player_name.left(MAX_NAME_BYTES)).u32(token >> 32).u32(token & 0xFFFFFFFF).data()
 
 
 ## Returns {} if malformed.
 static func decode_hello(data: PackedByteArray) -> Dictionary:
 	var r := Wire.Reader.new(data)
-	var out := {"magic": r.u32(), "version": r.u16(), "compat": r.str8(64), "build": r.str8(96),
-			"uuid": r.str8(64), "name": r.str8(MAX_NAME_BYTES)}
+	var out := {"magic": r.u32(), "version": r.u16()}
+	if not r.ok or out.version != VERSION:
+		return out if r.ok else {}  # other versions: only magic and version are comparable
+	out.merge({"compat": r.str8(64), "build": r.str8(96), "uuid": r.str8(64), "name": r.str8(MAX_NAME_BYTES)})
+	out["token"] = (r.u32() << 32) | r.u32()
 	return out if r.ok and r.remaining() == 0 else {}
 
 
@@ -121,9 +127,9 @@ static func decode_pong(data: PackedByteArray) -> Dictionary:
 
 # --- Control messages (server -> client, reliable) ---
 
-static func encode_welcome(your_id: int, match_id: int, phase: int, phase_seq: int, tick: int, seed_value: int, map_id: String) -> PackedByteArray:
+static func encode_welcome(your_id: int, match_id: int, phase: int, phase_seq: int, tick: int, seed_value: int, map_id: String, token: int) -> PackedByteArray:
 	return Wire.Writer.new().u8(Msg.WELCOME).u16(your_id).u32(match_id).u8(phase).u8(phase_seq) \
-			.u32(tick).u32(seed_value).str8(map_id).data()
+			.u32(tick).u32(seed_value).str8(map_id).u32(token >> 32).u32(token & 0xFFFFFFFF).data()
 
 
 static func decode_welcome(data: PackedByteArray) -> Dictionary:
@@ -131,6 +137,7 @@ static func decode_welcome(data: PackedByteArray) -> Dictionary:
 	r.u8()
 	var out := {"id": r.u16(), "match_id": r.u32(), "phase": r.u8(), "phase_seq": r.u8(),
 			"tick": r.u32(), "seed": r.u32(), "map": r.str8()}
+	out["token"] = (r.u32() << 32) | r.u32()
 	return out if r.ok else {}
 
 
@@ -161,6 +168,17 @@ static func decode_roster(data: PackedByteArray) -> Dictionary:
 	for i in n:
 		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "score": r.i16(), "name": r.str8()})
 	return out if r.ok else {}
+
+
+static func encode_notice(code: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.NOTICE).u8(code).data()
+
+
+static func decode_notice(data: PackedByteArray) -> int:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var code := r.u8()
+	return code if r.ok else 0
 
 
 static func encode_loaded(match_id: int) -> PackedByteArray:

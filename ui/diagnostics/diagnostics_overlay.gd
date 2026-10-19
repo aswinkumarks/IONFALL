@@ -23,6 +23,14 @@ func _ready() -> void:
 			button.disabled = false)
 		get_tree().root.add_child(check))
 	add_child(button)
+	var pilot := Button.new()
+	pilot.text = "Autopilot: off"
+	pilot.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 8)
+	pilot.position.x += 190
+	pilot.pressed.connect(func() -> void:
+		Diagnostics.autopilot = not Diagnostics.autopilot
+		pilot.text = "Autopilot: " + ("on" if Diagnostics.autopilot else "off"))
+	add_child(pilot)
 
 
 func _process(delta: float) -> void:

@@ -16,6 +16,7 @@ const CHANNELS := 3
 const MAX_PACKETS_PER_S := 120
 const MAX_BYTES_PER_S := 16000
 const VIOLATION_SECONDS_TO_KICK := 5
+const TIMEOUT_MS := 10000
 
 var api := SceneMultiplayer.new()
 var stats := NetStats.new()
@@ -120,7 +121,7 @@ func _process(_delta: float) -> void:
 # --- Handshake ---
 
 func _on_peer_authenticating(id: int) -> void:
-	_disable_enet_throttle(id)
+	_configure_peer(id)
 	if not is_server:
 		api.send_auth(id, _hello)
 
@@ -129,7 +130,8 @@ func _on_peer_authenticating(id: int) -> void:
 ## during frame hitches or Wi-Fi spikes. Our protocol has its own rate control
 ## (fixed send rates, command redundancy, time dilation), so ENet's throttle
 ## must not drop commands or snapshots. The config is also sent to the remote.
-func _disable_enet_throttle(id: int) -> void:
+## Peers time out after 10 s of silence (PLAN §3.5.1).
+func _configure_peer(id: int) -> void:
 	var enet := api.multiplayer_peer as ENetMultiplayerPeer
 	if enet == null or enet.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 		return
@@ -137,6 +139,7 @@ func _disable_enet_throttle(id: int) -> void:
 	if peer != null:
 		# Full throttle, never decelerate.
 		peer.throttle_configure(100, 32, 0)
+		peer.set_timeout(32, TIMEOUT_MS, TIMEOUT_MS)
 
 
 func _on_auth(id: int, data: PackedByteArray) -> void:
@@ -162,7 +165,7 @@ func _on_auth(id: int, data: PackedByteArray) -> void:
 
 
 func _on_peer_connected(id: int) -> void:
-	_disable_enet_throttle(id)
+	_configure_peer(id)
 	if is_server:
 		_limits[id] = [Time.get_ticks_msec(), 0, 0, 0]
 		peer_joined.emit(id)

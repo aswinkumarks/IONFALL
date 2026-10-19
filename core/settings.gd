@@ -7,6 +7,7 @@ const DEFAULTS := {
 	"profile": {
 		"name": "",
 		"last_address": "",
+		"uuid": "",
 	},
 	"video": {
 		"render_scale": 0.75,

@@ -13,7 +13,13 @@ var mode: int = Mode.OFFLINE
 var address: String = "127.0.0.1"
 var port: int = Protocol.DEFAULT_PORT
 var player_name: String = "Player"
-var bots: int = 3
+var bots: int = 3  ## dummies alongside the local player; they leave as humans join
+
+
+## PLAN §3.5.1: a phone host is limited to 4 combatants until it passes the
+## 20-minute 8-combatant host test; a PC host takes 8.
+func max_combatants() -> int:
+	return 4 if Platform.is_mobile() else 8
 
 
 static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String = "") -> MatchConfig:
@@ -35,3 +41,17 @@ static func profile_name() -> String:
 		Settings.set_value("profile", "name", n)
 		Settings.save_settings()
 	return n
+
+
+## Stable per-install id sent in the handshake (identifies the player across
+## sessions; never personal data).
+static func profile_uuid() -> String:
+	var v: Variant = Settings.get_value("profile", "uuid")
+	var id: String = v if v is String else ""
+	if id.length() < 16:
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		id = "%08x%08x" % [rng.randi(), rng.randi()]
+		Settings.set_value("profile", "uuid", id)
+		Settings.save_settings()
+	return id
