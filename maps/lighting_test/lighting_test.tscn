@@ -164,7 +164,7 @@ anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
 offset_top = -76.0
-offset_right = 700.0
+offset_right = 1300.0
 offset_bottom = -16.0
 theme_override_constants/separation = 12
 
@@ -179,6 +179,24 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 56)
 layout_mode = 2
 text = "Toggle lightmap"
+
+[node name="BicubicButton" type="Button" parent="UI/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 56)
+layout_mode = 2
+text = "Bicubic"
+
+[node name="MaskButton" type="Button" parent="UI/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 56)
+layout_mode = 2
+text = "Shadowmask"
+
+[node name="ScaleButton" type="Button" parent="UI/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 56)
+layout_mode = 2
+text = "Scale"
 
 [node name="BackButton" type="Button" parent="UI/Buttons" unique_id=578634785]
 unique_name_in_owner = true

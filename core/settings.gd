@@ -34,6 +34,20 @@ var _cfg := ConfigFile.new()
 
 func _ready() -> void:
 	load_settings()
+	apply_video()
+	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
+		if section == "video":
+			apply_video())
+
+
+## Render scale (bilinear on the Mobile renderer, PLAN §3.9) and fps cap.
+func apply_video() -> void:
+	if Platform.is_dedicated_server():
+		return
+	var root := get_tree().root
+	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	root.scaling_3d_scale = clampf(float(get_value("video", "render_scale")), 0.5, 1.0)
+	Engine.max_fps = int(get_value("video", "fps_cap"))
 
 
 func get_value(section: String, key: String) -> Variant:

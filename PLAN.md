@@ -373,6 +373,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
   - **Forward+ "High" preset** on PC adds SSAO, SSR, volumetric fog and FSR2
   - **Compatibility renderer** (WebGL 2 / GLES3) is used only by the future web client and a possible non-Vulkan Android preset (§3.20)
 - **Resolution scaling**: the Mobile renderer gets **bilinear** render-scale only, since FSR1/FSR2 are Forward+ only. Forward+ offers FSR2
+- **Lightmap filtering**: bicubic lightmap sampling is **off on mobile** (`use_bicubic_filter.mobile = false`); on the Mi 11X it cost ~3.3 ms GPU (M1c)
 - **Non-Vulkan Android devices are excluded** in v1.0, filtered via a required-Vulkan `uses-feature` in the manifest
 - **Used on Mobile**: LightmapGI, glow, height/depth fog, decals, ReflectionProbes, tonemapping, per-map color grading LUT. **Not used on Mobile**: SSAO, SSR, volumetric fog
 - **Lighting configuration** (per light):

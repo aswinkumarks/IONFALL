@@ -122,10 +122,29 @@ func test_jittery_link_grows_command_buffer() -> void:
 	var synth_before := c.synthesized
 	client.reset_metrics()
 	await wait_seconds(5.0)
-	gut.p("target buffer %.2f, avg %.2f, synthesized in 5 s: %d, visible corrections %d" % [
-			c.target_buffer, c.buffer_avg, c.synthesized - synth_before, client.visible_corrections])
+	gut.p("target buffer %.2f, avg %.2f, synthesized in 5 s: %d, stalled %d, corrections %d, visible %d" % [
+			c.target_buffer, c.buffer_avg, c.synthesized - synth_before, c.stalled, client.corrections, client.visible_corrections])
 	assert_gt(c.target_buffer, float(ServerSession.TARGET_BUFFER), "buffer target grew")
 	assert_lt(c.synthesized - synth_before, 15, "few synthesized commands once adapted")
+	assert_eq(client.visible_corrections, 0, "late commands wait instead of being guessed")
+
+
+## Wi-Fi power saving holds packets and releases them in a burst: the server
+## waits for the late commands instead of guessing (found on the Mi 11X).
+func test_command_bursts_cause_no_visible_corrections() -> void:
+	client.transport.conditioner.burst_every_ms = 2000
+	client.transport.conditioner.burst_hold_ms = 120
+	await wait_seconds(4.0)
+	var c: ServerSession.Client = server.clients.values()[0]
+	var synth_before := c.synthesized
+	client.reset_metrics()
+	await wait_seconds(10.0)
+	gut.p("bursts: stalled %d, synthesized %d, corrections %d, visible %d, target buffer %.1f" % [
+			c.stalled, c.synthesized - synth_before, client.corrections, client.visible_corrections, c.target_buffer])
+	assert_gt(c.stalled, 0, "the server waited for late commands")
+	assert_eq(client.visible_corrections, 0)
+	assert_lte(client.corrections, 2, "no guessing, so (almost) nothing to correct")
+	assert_lte(c.view_anomalies, 2, "bursts don't trip view-tick validation")
 
 
 func test_snapshots_keep_decoding_under_heavy_loss() -> void:

@@ -10,6 +10,10 @@ var jitter_ms: float = 0.0
 var loss: float = 0.0  ## 0..1, unreliable packets only
 ## Forces the next N unreliable outgoing packets to drop (loss tests).
 var drop_next_outgoing: int = 0
+## Wi-Fi power-save bursts: every `burst_every_ms`, outgoing packets are held
+## for `burst_hold_ms` and then released together.
+var burst_every_ms: int = 0
+var burst_hold_ms: int = 0
 
 var _rng := RandomNumberGenerator.new()
 var _queue: Array = []  ## [release_ms, kind, peer, data, reliable, channel]
@@ -21,7 +25,7 @@ func _init(seed_value: int = 1) -> void:
 
 
 func is_active() -> bool:
-	return rtt_ms > 0.0 or jitter_ms > 0.0 or loss > 0.0 or drop_next_outgoing > 0
+	return rtt_ms > 0.0 or jitter_ms > 0.0 or loss > 0.0 or drop_next_outgoing > 0 or burst_every_ms > 0
 
 
 ## Returns false if the packet is dropped; otherwise it's queued for later.
@@ -33,7 +37,12 @@ func push(kind: String, peer: int, data: PackedByteArray, reliable: bool, channe
 		if _rng.randf() < loss:
 			return false
 	var delay := rtt_ms * 0.5 + _rng.randf_range(-jitter_ms, jitter_ms)
-	var release := Time.get_ticks_msec() + maxf(delay, 0.0)
+	var now := Time.get_ticks_msec()
+	var release := now + maxf(delay, 0.0)
+	if kind == "out" and burst_every_ms > 0:
+		var phase := now % burst_every_ms
+		if phase < burst_hold_ms:
+			release = maxf(release, now - phase + burst_hold_ms)
 	if reliable:
 		release = maxf(release, _last_reliable_release)
 		_last_reliable_release = release

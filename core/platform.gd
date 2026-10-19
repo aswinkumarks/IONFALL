@@ -33,6 +33,13 @@ func _ready() -> void:
 		push_warning("Platform: user:// is not writable; the profile won't be saved.")
 
 
+## Android drops immersive fullscreen after calls and some system dialogs:
+## restore it whenever the app gets focus back.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_android():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+
 func is_dedicated_server() -> bool:
 	return role == Role.DEDICATED_SERVER
 

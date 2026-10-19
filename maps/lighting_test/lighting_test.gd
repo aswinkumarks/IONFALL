@@ -18,17 +18,35 @@ const RUNNERS := 4
 var _runners: Array[PlayerVisual] = []
 var _time: float = 0.0
 var _stats := FrameStats.new(600)
-var _base_texture_mem: float = -1.0
+var _gpu_ms := FrameStats.new(300)
+var _bicubic: bool = ProjectSettings.get_setting_with_override("rendering/lightmapping/lightmap_gi/use_bicubic_filter")
 
 
 func _ready() -> void:
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	for i in RUNNERS:
 		var v := PlayerVisual.new()
 		add_child(v)
 		v.setup("Runner %d" % (i + 1), false, [Color(0.55, 0.45, 1.0), Color(0.3, 0.85, 0.5), Color(0.95, 0.4, 0.6), Color(0.95, 0.5, 0.2)][i])
 		_runners.append(v)
-	%ShadowsButton.pressed.connect(func() -> void: _sun.shadow_enabled = not _sun.shadow_enabled)
-	%LightmapButton.pressed.connect(func() -> void: _lightmap.visible = not _lightmap.visible)
+	%ShadowsButton.pressed.connect(func() -> void:
+		_sun.shadow_enabled = not _sun.shadow_enabled
+		_gpu_ms.clear())
+	%LightmapButton.pressed.connect(func() -> void:
+		_lightmap.visible = not _lightmap.visible
+		_gpu_ms.clear())
+	%BicubicButton.pressed.connect(func() -> void:
+		_bicubic = not _bicubic
+		RenderingServer.lightmaps_set_bicubic_filter(_bicubic)
+		_gpu_ms.clear())
+	%MaskButton.pressed.connect(func() -> void:
+		_lightmap.shadowmask_mode = LightmapGIData.SHADOWMASK_MODE_OVERLAY \
+				if _lightmap.shadowmask_mode == LightmapGIData.SHADOWMASK_MODE_NONE else LightmapGIData.SHADOWMASK_MODE_NONE
+		_gpu_ms.clear())
+	%ScaleButton.pressed.connect(func() -> void:
+		var root := get_tree().root
+		root.scaling_3d_scale = 1.0 if root.scaling_3d_scale < 0.99 else 0.75
+		_gpu_ms.clear())
 	%BackButton.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://ui/main_menu/main_menu.tscn"))
 	print("LIGHTING %s" % lightmap_report())
 	var shot := Platform.get_user_arg("--shot")
@@ -42,6 +60,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_time += delta
 	_stats.add(delta * 1000.0)
+	_gpu_ms.add(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
 	for i in _runners.size():
 		var a := _time * 0.6 + i * TAU / _runners.size()
 		var r := 4.0 + 2.0 * (i % 2)
@@ -52,9 +71,11 @@ func _process(delta: float) -> void:
 		_runners[i].update_from(null, s, 1.0, _time)
 	_camera.position = Vector3(sin(_time * 0.1) * 9.0, 5.0, cos(_time * 0.1) * 9.0)
 	_camera.look_at(Vector3(0, 1, 0))
-	_label.text = "LIGHTING TEST  fps %d  frame p50 %.1f p95 %.1f ms\nsun shadows %s  lightmap %s  draw calls %d\n%s" % [
+	_label.text = "LIGHTING TEST  fps %d  frame p50 %.1f p95 %.1f ms  GPU p50 %.2f p95 %.2f ms\nsun shadows %s  lightmap %s  bicubic %s  shadowmask %s  scale %.2f  draw calls %d\n%s" % [
 		Engine.get_frames_per_second(), _stats.percentile(50.0), _stats.percentile(95.0),
-		"on" if _sun.shadow_enabled else "off", "on" if _lightmap.visible else "off",
+		_gpu_ms.percentile(50.0), _gpu_ms.percentile(95.0),
+		"on" if _sun.shadow_enabled else "off", "on" if _lightmap.visible else "off", "on" if _bicubic else "off",
+		"on" if _lightmap.shadowmask_mode != LightmapGIData.SHADOWMASK_MODE_NONE else "off", get_tree().root.scaling_3d_scale,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), lightmap_report()]
 
 

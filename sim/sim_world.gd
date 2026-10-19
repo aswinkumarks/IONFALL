@@ -112,11 +112,16 @@ func drain_events() -> Array[Dictionary]:
 
 ## Advances the simulation one tick. `commands` maps net_id -> PlayerCommand;
 ## players without a command get a neutral one.
-func step(commands: Dictionary) -> void:
+## `stalled`: ids of players whose command hasn't arrived yet. They skip
+## movement and actions this tick (the server waits for the real command
+## instead of guessing, so the owner's prediction stays exact).
+func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 	var ids := players.keys()
 	ids.sort()
 	for id in ids:
 		var p: SimPlayer = players[id]
+		if stalled.has(id) and p.state.alive:
+			continue
 		var cmd: PlayerCommand = commands.get(id)
 		if cmd == null:
 			cmd = PlayerCommand.neutral_from(p.last_command, tick)

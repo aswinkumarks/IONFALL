@@ -17,6 +17,9 @@ const TARGET_BUFFER := 2
 const MAX_TARGET_BUFFER := 6.0
 const MAX_FUTURE_TICKS := 8
 const REPEAT_LIMIT := 6
+## A client's player waits this many ticks for a late command (Wi-Fi bursts)
+## before the server starts guessing it (PLAN §3.3.2).
+const MAX_STALL_TICKS := 8
 const VIEW_TOLERANCE_TICKS := 2.0
 ## Largest steady per-client timing bias the validator will learn. Frame
 ## quantization on both ends (and clock-sync error) gives every client a
@@ -86,11 +89,14 @@ class Client:
 	var pending: Array = []  ## [event bytes, first snapshot id or -1]
 	var buffer_avg: float = TARGET_BUFFER
 	var target_buffer: float = TARGET_BUFFER
+	var arrival_median: float = NAN  ## median (arrival - command tick), refreshed every 30 ticks
 	var arrival_offsets := FrameStats.new(120)  ## (arrival time - command tick) of new commands
 	var view_bias: float = 0.0
 	var view_samples: int = 0
 	var view_anomalies: int = 0
 	var synthesized: int = 0
+	var stalled: int = 0  ## ticks spent waiting for late commands (total)
+	var stall_run: int = 0
 	var token: int = 0
 	var restored_score: int = 0
 
@@ -210,17 +216,20 @@ func _physics_process(_delta: float) -> void:
 		return
 	var t0 := Time.get_ticks_usec()
 	var commands := {}
+	var stalled := {}
 	for c: Client in clients.values():
 		if c.loaded and world.players.has(c.player_id):
 			var cmd := _next_command(c)
 			if cmd != null:
 				commands[c.player_id] = cmd
+			elif c.stall_run > 0:
+				stalled[c.player_id] = true
 	if local_player_id != 0 and local_command != null:
 		commands[local_player_id] = local_command
 	for id in bots:
 		commands[id] = bots[id].command_for(world.tick, world.get_player(id))
 	var t_sim := Time.get_ticks_usec()
-	world.step(commands)
+	world.step(commands, stalled)
 	last_sim_usec = Time.get_ticks_usec() - t_sim
 	var score_changed := false
 	for e in world.drain_events():
@@ -251,8 +260,11 @@ func _physics_process(_delta: float) -> void:
 	last_step_usec = Time.get_ticks_usec() - t0
 
 
-## One command per client per tick (PLAN §3.3.2). Missing commands repeat the
-## last held input (no new presses) for up to 6 ticks, then go neutral.
+## One command per client per tick (PLAN §3.3.2). A missing command first
+## stalls the player for up to MAX_STALL_TICKS (returns null with stall_run
+## > 0): the late command is then used as sent, so prediction stays exact
+## and the client's time dilation drains the extra buffer. After that the
+## last held input repeats (no new presses) for up to 6 ticks, then neutral.
 func _next_command(c: Client) -> PlayerCommand:
 	var next_tick := -1
 	for t in c.queue:
@@ -260,12 +272,17 @@ func _next_command(c: Client) -> PlayerCommand:
 			next_tick = t
 	c.buffer_avg = lerpf(c.buffer_avg, c.queue.size(), 0.05)
 	if world.tick % 30 == 0 and c.arrival_offsets.count() >= 30:
+		c.arrival_median = c.arrival_offsets.percentile(50.0)
 		var jitter := c.arrival_offsets.percentile(95.0) - c.arrival_offsets.percentile(5.0)
 		var wanted := clampf(TARGET_BUFFER + jitter, TARGET_BUFFER, MAX_TARGET_BUFFER)
 		# Grow at once, shrink slowly.
 		c.target_buffer = wanted if wanted > c.target_buffer else lerpf(c.target_buffer, wanted, 0.1)
 	if next_tick < 0:
 		if c.last_cmd == null:
+			return null
+		if c.stall_run < MAX_STALL_TICKS:
+			c.stall_run += 1
+			c.stalled += 1
 			return null
 		c.synthesized += 1
 		var cmd: PlayerCommand
@@ -282,13 +299,17 @@ func _next_command(c: Client) -> PlayerCommand:
 	for t in c.queue.keys():
 		if t <= next_tick:
 			c.queue.erase(t)
-	var arrived: float = c.arrival.get(next_tick, server_time())
+	# Where this command would arrive without packet bunching: its tick plus
+	# the client's typical offset. Bursts (Wi-Fi) don't skew view validation.
+	var arrived: float = next_tick + c.arrival_median if not is_nan(c.arrival_median) \
+			else c.arrival.get(next_tick, server_time())
 	for t in c.arrival.keys():
 		if t <= next_tick:
 			c.arrival.erase(t)
 	c.last_processed = next_tick
 	c.last_cmd = cmd
 	c.repeats = 0
+	c.stall_run = 0
 	cmd.view_tick = validate_view_tick(cmd.view_tick, arrived, c.rtt_ms, cmd.interp_ticks, c)
 	return cmd
 

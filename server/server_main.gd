@@ -81,7 +81,7 @@ func status_line() -> String:
 	var st := server.transport.stats
 	var per_client := PackedStringArray()
 	for c: ServerSession.Client in server.clients.values():
-		per_client.append("%s rtt %.0f buf %.1f/%.1f synth %d view_anom %d" % [c.name, c.rtt_ms, c.buffer_avg, c.target_buffer, c.synthesized, c.view_anomalies])
+		per_client.append("%s rtt %.0f buf %.1f/%.1f stalled %d synth %d view_anom %d" % [c.name, c.rtt_ms, c.buffer_avg, c.target_buffer, c.stalled, c.synthesized, c.view_anomalies])
 	return "IONFALL status: up %ds tick %d phase %s clients %d players %d | out %.1f kB/s in %.1f kB/s | snapshot max %d B | anomalies %d ingress_drops %d | step p50 %.2f p99 %.2f ms (sim p50 %.2f p99 %.2f) | rss %.0f MiB" % [
 		(Time.get_ticks_msec() - _started_ms) / 1000, server.world.tick, MatchPhase.label_key(server.phase),
 		server.clients.size(), server.world.players.size(), st.wire_bytes_out_per_s() / 1000.0,
