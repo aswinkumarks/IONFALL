@@ -65,3 +65,11 @@ their bones in one mesh with two surfaces (armour in the player's colour,
 visor). An AnimationTree layers upper-body aim (blended by pitch) and a
 shoot one-shot over lower-body locomotion. Cost: 3 draws per character
 (body, armour, visor) plus the held weapon.
+
+## Update 3 (2026-10-19): superhero body
+
+The undersuit body is now the Quaternius Universal Base Characters
+"Superhero" male (CC0, same 65-bone skeleton as the animation library) for
+a bulkier silhouette. Animation-library clips are retargeted at load
+(rotation tracks only; the pelvis position is scaled to this body's hip
+height) and the armour plates are sized up to match.

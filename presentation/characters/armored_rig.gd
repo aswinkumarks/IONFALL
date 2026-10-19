@@ -1,14 +1,19 @@
 class_name ArmoredRig
 extends CharacterRig
-## Armoured soldier (default): the Quaternius Universal Animation Library
-## mannequin (CC0) as a dark undersuit, plus armour plates generated here
+## Armoured soldier (default): the Quaternius Universal Base Characters
+## "Superhero" body (CC0) as a dark undersuit, animated with the Universal
+## Animation Library clips (CC0, same skeleton; rotations retargeted, pelvis
+## height scaled), plus armour plates generated here
 ## from the skeleton's rest pose (helmet with visor, chest, pauldrons,
 ## gauntlets, thigh/shin plates, boots, backpack) and skinned rigidly to
 ## their bones in one mesh (2 surfaces: armour in the player's colour, gold
 ## visor). Animation: an AnimationTree layers upper-body aiming (blended by
 ## look pitch) and a shoot one-shot over lower-body locomotion.
 
-const SCENE := "res://art/characters/ual/UAL1_Standard.glb"
+const SCENE := "res://art/characters/ubc/Superhero_Male_FullBody.gltf"
+const ANIM_SOURCE := "res://art/characters/ual/UAL1_Standard.glb"
+const CLIPS := ["Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Pistol_Aim_Down",
+		"Pistol_Aim_Neutral", "Pistol_Aim_Up", "Pistol_Shoot"]
 const UPPER_BONES := ["spine_02", "spine_03", "neck_01", "Head", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
 		"clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"]
 const LOOPING := ["Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Pistol_Idle",
@@ -16,6 +21,7 @@ const LOOPING := ["Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fw
 const MAX_LEG_TWIST := deg_to_rad(50.0)
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
+static var _library: AnimationLibrary
 
 var _model: Node3D
 var _skeleton: Skeleton3D
@@ -39,10 +45,12 @@ func setup(color: Color) -> void:
 	_model.rotation.y = PI  # faces +Z; Godot forward is -Z
 	add_child(_model)
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0]
-	# Undersuit: the mannequin, dark matte.
-	_body_mat.albedo_color = Color(0.09, 0.1, 0.12)
-	_body_mat.roughness = 0.8
+	# Undersuit: the body, dark matte; face details sit under the helmet.
+	_body_mat.albedo_color = Color(0.08, 0.09, 0.11)
+	_body_mat.roughness = 0.75
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		if mi.name in ["Eyes", "Eyebrows"]:
+			mi.visible = false
 		mi.material_override = _body_mat
 	# Armour in the player's colour (desaturated, metallic) and a gold visor.
 	_armor_mat.albedo_color = Color.from_hsv(color.h, color.s * 0.55, clampf(color.v * 0.8, 0.35, 0.85))
@@ -105,24 +113,34 @@ func _armor() -> Dictionary:
 	chest.rings = 7
 	chest.radius = 0.5
 	chest.height = 1.0
-	pieces.append(["spine_03", Transform3D(Basis.looking_at(-fwd).scaled(Vector3(0.48, 0.36, 0.34)), chest_c + fwd * 0.035), chest, 0])
+	pieces.append(["spine_03", Transform3D(Basis.looking_at(-fwd).scaled(Vector3(0.54, 0.4, 0.38)), chest_c + fwd * 0.04), chest, 0])
 	var collar := BoxMesh.new()
-	collar.size = Vector3(0.3, 0.06, 0.24)
+	collar.size = Vector3(0.34, 0.07, 0.27)
 	pieces.append(["spine_03", Transform3D(Basis.looking_at(-fwd), chest_c + Vector3(0, 0.17, 0)), collar, 0])
-	var abs_box := BoxMesh.new()
-	abs_box.size = Vector3(0.3, 0.16, 0.22)
-	pieces.append(["spine_01", Transform3D(Basis.looking_at(-fwd), pos.call("spine_01") + fwd * 0.02), abs_box, 0])
-	var belt := BoxMesh.new()
-	belt.size = Vector3(0.36, 0.08, 0.25)
-	pieces.append(["pelvis", Transform3D(Basis.looking_at(-fwd), pos.call("pelvis") + Vector3(0, 0.02, 0)), belt, 0])
+	var abs_shell := SphereMesh.new()
+	abs_shell.radius = 0.5
+	abs_shell.height = 1.0
+	abs_shell.radial_segments = 12
+	abs_shell.rings = 6
+	pieces.append(["spine_01", Transform3D(Basis.looking_at(-fwd).scaled(Vector3(0.36, 0.22, 0.28)), pos.call("spine_01") + fwd * 0.02), abs_shell, 0])
+	var belt := CylinderMesh.new()
+	belt.top_radius = 0.5
+	belt.bottom_radius = 0.5
+	belt.height = 1.0
+	belt.radial_segments = 14
+	belt.rings = 1
+	pieces.append(["pelvis", Transform3D(Basis.looking_at(-fwd).scaled(Vector3(0.38, 0.08, 0.29)), pos.call("pelvis") + Vector3(0, 0.03, 0)), belt, 0])
+	var cod := BoxMesh.new()
+	cod.size = Vector3(0.12, 0.12, 0.06)
+	pieces.append(["pelvis", Transform3D(Basis.looking_at(-fwd), pos.call("pelvis") + fwd * 0.12 - Vector3(0, 0.05, 0)), cod, 0])
 	var pack := BoxMesh.new()
-	pack.size = Vector3(0.28, 0.3, 0.09)
+	pack.size = Vector3(0.32, 0.34, 0.1)
 	pieces.append(["spine_03", Transform3D(Basis.looking_at(-fwd), chest_c - fwd * 0.17 - Vector3(0, 0.02, 0)), pack, 0])
 	# Helmet: rounded shell and a wraparound visor.
 	var head_c: Vector3 = pos.call("Head") + Vector3(0, 0.1, 0) + fwd * 0.015
 	var helmet := SphereMesh.new()
-	helmet.radius = 0.15
-	helmet.height = 0.32
+	helmet.radius = 0.16
+	helmet.height = 0.34
 	helmet.radial_segments = 12
 	helmet.rings = 6
 	pieces.append(["Head", Transform3D(Basis.looking_at(-fwd).scaled(Vector3(1.0, 1.0, 1.1)), head_c), helmet, 0])
@@ -144,14 +162,14 @@ func _armor() -> Dictionary:
 		pauldron.radial_segments = 10
 		pauldron.rings = 5
 		pauldron.is_hemisphere = true
-		pieces.append(["upperarm_" + s, Transform3D(Basis.looking_at(-fwd).scaled(Vector3(0.22, 0.2, 0.24)), sh + Vector3(0, 0.02, 0)), pauldron, 0])
-		limb.call("upperarm_" + s, "upperarm_" + s, "lowerarm_" + s, 0.1, 0.1, 0.6, 0.55, 0.0)
-		limb.call("lowerarm_" + s, "lowerarm_" + s, "hand_" + s, 0.11, 0.11, 0.7, 0.55, 0.0)
-		limb.call("thigh_" + s, "thigh_" + s, "calf_" + s, 0.17, 0.17, 0.7, 0.45, 0.02)
-		limb.call("calf_" + s, "calf_" + s, "foot_" + s, 0.13, 0.13, 0.62, 0.5, 0.025)
+		pieces.append(["upperarm_" + s, Transform3D(Basis.looking_at(-fwd).scaled(Vector3(0.27, 0.24, 0.28)), sh + Vector3(0, 0.03, 0)), pauldron, 0])
+		limb.call("upperarm_" + s, "upperarm_" + s, "lowerarm_" + s, 0.13, 0.13, 0.6, 0.55, 0.0)
+		limb.call("lowerarm_" + s, "lowerarm_" + s, "hand_" + s, 0.13, 0.13, 0.7, 0.55, 0.0)
+		limb.call("thigh_" + s, "thigh_" + s, "calf_" + s, 0.2, 0.2, 0.7, 0.45, 0.02)
+		limb.call("calf_" + s, "calf_" + s, "foot_" + s, 0.15, 0.15, 0.62, 0.5, 0.025)
 		var foot: Vector3 = pos.call("foot_" + s)
 		var boot := BoxMesh.new()
-		boot.size = Vector3(0.13, 0.11, 0.27)
+		boot.size = Vector3(0.15, 0.12, 0.29)
 		pieces.append(["foot_" + s, Transform3D(Basis.looking_at(-fwd), Vector3(foot.x, 0.06, foot.z) + fwd * 0.06), boot, 0])
 	# One mesh, rigid weights: each piece follows its bone.
 	var skin := Skin.new()
@@ -187,10 +205,9 @@ func _armor() -> Dictionary:
 # --- Animation ---
 
 func _build_tree() -> void:
-	var player: AnimationPlayer = _model.find_children("*", "AnimationPlayer", true, false)[0]
-	for clip: String in LOOPING:
-		if player.has_animation(clip):
-			player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
+	var player := AnimationPlayer.new()
+	_model.add_child(player)
+	player.add_animation_library("", _retargeted(_skeleton))
 	var bt := AnimationNodeBlendTree.new()
 	var loco := AnimationNodeBlendSpace1D.new()
 	for pt in [["Idle", 0.0], ["Walk", 1.8], ["Jog_Fwd", 4.6], ["Sprint", 7.5]]:
@@ -247,6 +264,37 @@ func _build_tree() -> void:
 	_tree.anim_player = _tree.get_path_to(player)
 	_tree.set("parameters/upper/blend_amount", 1.0)
 	_tree.active = true
+
+
+## The animation-library clips for this body: rotations only, except the
+## pelvis position, scaled to this body's hip height (keeps its proportions).
+static func _retargeted(target: Skeleton3D) -> AnimationLibrary:
+	if _library != null:
+		return _library
+	var src: Node = (load(ANIM_SOURCE) as PackedScene).instantiate()
+	var src_player: AnimationPlayer = src.find_children("*", "AnimationPlayer", true, false)[0]
+	var src_skel: Skeleton3D = src.find_children("*", "Skeleton3D", true, false)[0]
+	var hips_src := src_skel.get_bone_global_rest(src_skel.find_bone("pelvis")).origin.y
+	var hips_dst := target.get_bone_global_rest(target.find_bone("pelvis")).origin.y
+	var ratio := hips_dst / maxf(hips_src, 0.01)
+	_library = AnimationLibrary.new()
+	for clip: String in CLIPS:
+		if not src_player.has_animation(clip):
+			continue
+		var a: Animation = src_player.get_animation(clip).duplicate(true)
+		for t in range(a.get_track_count() - 1, -1, -1):
+			var type := a.track_get_type(t)
+			var bone := String(a.track_get_path(t).get_concatenated_subnames())
+			if type == Animation.TYPE_SCALE_3D or (type == Animation.TYPE_POSITION_3D and bone != "pelvis"):
+				a.remove_track(t)
+			elif type == Animation.TYPE_POSITION_3D:
+				for k in a.track_get_key_count(t):
+					a.track_set_key_value(t, k, (a.track_get_key_value(t, k) as Vector3) * ratio)
+		if clip in LOOPING:
+			a.loop_mode = Animation.LOOP_LINEAR
+		_library.add_animation(clip, a)
+	src.free()
+	return _library
 
 
 static func _clip(name: String) -> AnimationNodeAnimation:
