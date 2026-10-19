@@ -12,6 +12,7 @@ const DEFAULTS := {
 	"video": {
 		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive
 		"resolution": "native",  ## "native" or "WxH" (window size, or 3D resolution when fullscreen)
+		"quality": "",  ## low / medium / high / ultra / custom; "" = platform default
 		"render_scale": 0.75,
 		"fps_cap": 60,
 		"fov": 68.0,  ## vertical degrees (≈ 100° horizontal at 16:9)
@@ -122,8 +123,21 @@ func apply_video() -> void:
 	var windowed := desktop and mode == "windowed"
 	if not windowed and res != Vector2i.ZERO:
 		res_scale = clampf(float(res.y) / maxf(DisplayServer.window_get_size().y, 1.0), 0.25, 1.0)
-	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	root.scaling_3d_scale = clampf(float(get_value("video", "render_scale")) * res_scale, 0.25, 1.0)
+	var preset := quality_preset()
+	var scale := clampf(float(get_value("video", "render_scale")) * res_scale, 0.25, 1.0)
+	# FSR only helps when actually upscaling; it also sharpens.
+	if preset.upscale == "fsr" and scale < 0.99 and not Platform.is_web():
+		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+		root.fsr_sharpness = 0.35
+	else:
+		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	root.scaling_3d_scale = scale
+	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][preset.msaa]
+	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if preset.fxaa else Viewport.SCREEN_SPACE_AA_DISABLED
+	root.anisotropic_filtering_level = preset.aniso
+	RenderingServer.directional_shadow_atlas_set_size(preset.shadow_size, true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(preset.soft_shadows)
+	RenderingServer.positional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	Engine.max_fps = int(get_value("video", "fps_cap"))
 
 
@@ -162,12 +176,63 @@ func resolution_options() -> Array:
 
 
 func get_value(section: String, key: String) -> Variant:
+	if section == "video" and not _cfg.has_section_key(section, key):
+		# Video defaults follow the platform's quality preset.
+		var q := default_quality()
+		if key == "quality":
+			return q
+		if QUALITY[q].has(key):
+			return QUALITY[q][key]
 	return _cfg.get_value(section, key, DEFAULTS.get(section, {}).get(key))
 
 
 func set_value(section: String, key: String, value: Variant) -> void:
 	_cfg.set_value(section, key, value)
+	if section == "video" and not _applying_preset:
+		if key == "quality" and QUALITY.has(value):
+			# A preset writes the values it controls (the screen shows them).
+			_applying_preset = true
+			for k: String in QUALITY[value]:
+				if DEFAULTS.video.has(k):
+					set_value("video", k, QUALITY[value][k])
+			_applying_preset = false
+		elif key in PRESET_KEYS and get_value("video", "quality") != "custom":
+			_cfg.set_value("video", "quality", "custom")
+			Events.settings_changed.emit("video", "quality", "custom")
 	Events.settings_changed.emit(section, key, value)
+
+
+## Graphics presets. render_scale and shadows are also individual settings
+## (changing them by hand switches the preset to "custom"); the rest is
+## applied from the preset ("custom" keeps the last preset's extras).
+const QUALITY := {
+	"low": {"render_scale": 0.6, "shadows": false, "upscale": "bilinear", "msaa": 0, "fxaa": false,
+			"shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "glow": false},
+	"medium": {"render_scale": 0.85, "shadows": true, "upscale": "fsr", "msaa": 0, "fxaa": true,
+			"shadow_size": 2048, "soft_shadows": 1, "aniso": 2, "glow": true},
+	"high": {"render_scale": 1.0, "shadows": true, "upscale": "bilinear", "msaa": 1, "fxaa": false,
+			"shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "glow": true},
+	"ultra": {"render_scale": 1.0, "shadows": true, "upscale": "bilinear", "msaa": 2, "fxaa": false,
+			"shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "glow": true},
+}
+const QUALITY_NAMES := ["low", "medium", "high", "ultra", "custom"]
+const PRESET_KEYS := ["render_scale", "shadows"]
+
+var _applying_preset: bool = false
+
+
+## Phones start on Medium (Mi 11X budget), browsers on Low, desktops on High.
+func default_quality() -> String:
+	if Platform.is_web():
+		return "low"
+	return "medium" if Platform.is_mobile() else "high"
+
+
+## The preset whose extras apply: the chosen one, or for "custom" the
+## platform default.
+func quality_preset() -> Dictionary:
+	var q: String = get_value("video", "quality")
+	return QUALITY.get(q, QUALITY[default_quality()])
 
 
 func load_settings() -> void:
@@ -182,3 +247,16 @@ func save_settings() -> Error:
 	if not Platform.storage_available:
 		return ERR_UNAVAILABLE
 	return AtomicFile.write_text(PATH, _cfg.encode_to_text())
+
+
+## Applies the quality preset's environment parts (glow) and a little colour
+## grading (contrast, saturation) to a scene's WorldEnvironment.
+func apply_environment(root: Node) -> void:
+	for we in root.find_children("*", "WorldEnvironment", true, false):
+		var env: Environment = (we as WorldEnvironment).environment
+		if env == null:
+			continue
+		env.glow_enabled = quality_preset().glow
+		env.adjustment_enabled = true
+		env.adjustment_contrast = 1.08
+		env.adjustment_saturation = 1.12

@@ -22,6 +22,7 @@ const SCHEMA := {
 		["input", "aim_toggle", "SETTING_AIM_TOGGLE", "check"],
 	],
 	"SETTINGS_TAB_VIDEO": [
+		["video", "quality", "SETTING_QUALITY", "choice", ["low", "medium", "high", "ultra", "custom"]],
 		["video", "display_mode", "SETTING_DISPLAY_MODE", "choice", ["windowed", "fullscreen", "exclusive"]],
 		["video", "resolution", "SETTING_RESOLUTION", "choice", "resolution_options"],
 		["video", "fov", "SETTING_FOV", "slider", 55.0, 85.0, 1.0],
@@ -48,6 +49,7 @@ const REMAPPABLE := ["move_forward", "move_back", "move_left", "move_right", "ju
 var _listening_action: String = ""
 var _resolution_button: OptionButton
 var _tabs: TabContainer
+var _controls: Dictionary = {}  ## "section/key" -> control, refreshed when a preset changes values
 var _key_buttons: Dictionary = {}  ## action -> Button
 
 
@@ -71,6 +73,7 @@ func _init() -> void:
 		tabs.add_child(_build_tab(tab, SCHEMA[tab]))
 	if not Platform.is_mobile():
 		tabs.add_child(_build_keys_tab())
+	Events.settings_changed.connect(_refresh_control)
 	var done := UiStyle.menu_button("SETTINGS_DONE", &"PrimaryButton")
 	done.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	done.custom_minimum_size.x = 260
@@ -111,7 +114,9 @@ func _build_tab(tab_name: String, rows: Array) -> Control:
 		label.text = row[2]
 		label.custom_minimum_size.x = 340
 		grid.add_child(label)
-		grid.add_child(_control_for(row))
+		var control := _control_for(row)
+		_controls[row[0] + "/" + row[1]] = control
+		grid.add_child(control)
 	return scroll
 
 
@@ -154,6 +159,7 @@ func _control_for(row: Array) -> Control:
 			var show := func(v: float) -> void:
 				readout.text = "%d%%" % roundi(v * 100.0) if percent else ("%.2f" % v if row[6] < 1.0 else "%d" % v)
 			show.call(slider.value)
+			box.set_meta("show", show)
 			slider.value_changed.connect(func(v: float) -> void:
 				show.call(v)
 				Settings.set_value(section, key, v))
@@ -237,3 +243,22 @@ func _rebuild_resolution_choices() -> void:
 	for conn in _resolution_button.item_selected.get_connections():
 		_resolution_button.item_selected.disconnect(conn.callable)
 	_resolution_button.item_selected.connect(func(i: int) -> void: Settings.set_value("video", "resolution", choices[i]))
+
+
+## Keeps a control in step when its value changes elsewhere (presets).
+func _refresh_control(section: String, key: String, value: Variant) -> void:
+	var c: Control = _controls.get(section + "/" + key)
+	if c == null:
+		return
+	if c is CheckButton:
+		(c as CheckButton).set_pressed_no_signal(bool(value))
+	elif c is OptionButton:
+		var opt := c as OptionButton
+		for i in opt.item_count:
+			if opt.get_item_text(i) == _choice_label(value):
+				opt.select(i)
+	elif c is HBoxContainer:
+		var slider := c.get_child(0) as HSlider
+		if slider != null and not is_equal_approx(slider.value, float(value)):
+			slider.set_value_no_signal(float(value))
+			(c.get_meta("show") as Callable).call(float(value))

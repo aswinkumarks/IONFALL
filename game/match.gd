@@ -80,9 +80,11 @@ func _ready() -> void:
 	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
-	Events.settings_changed.connect(func(section: String, key: String, _value: Variant) -> void:
-		if section == "video" and key == "shadows":
-			_apply_shadows(presentation))
+	Settings.apply_environment(presentation)
+	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
+		if section == "video":
+			_apply_shadows(presentation)
+			Settings.apply_environment(presentation))
 	add_child(input)
 	add_child(view)
 	add_child(effects)
