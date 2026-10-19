@@ -1,16 +1,19 @@
 class_name CharacterRig
 extends Node3D
 ## Third-person body of a player (presentation only; hitboxes come from the
-## simulation). Subclasses: AstronautRig (default: Quaternius astronauts),
+## simulation). Subclasses: ArmoredRig (default: armoured soldier on the
+## Quaternius animation-library mannequin), AstronautRig (Quaternius astronauts),
 ## SkinnedRig (Kenney character in a painted suit), PartsRig (rigid parts)
 ## and CapsuleRig (greybox). Skinned won the on-device comparison
 ## (docs/decisions/0003-character-rig.md).
 
-const STYLES := ["astronaut", "skinned", "parts", "capsule"]
+const STYLES := ["armored", "astronaut", "skinned", "parts", "capsule"]
 
 
 static func create(style: String, variant: int = 0) -> CharacterRig:
 	match style:
+		"armored":
+			return ArmoredRig.new()
 		"astronaut":
 			var a := AstronautRig.new()
 			a.variant = variant
@@ -21,7 +24,7 @@ static func create(style: String, variant: int = 0) -> CharacterRig:
 			return PartsRig.new()
 		"capsule":
 			return CapsuleRig.new()
-	return AstronautRig.new()
+	return ArmoredRig.new()
 
 
 func setup(_color: Color) -> void:
@@ -46,4 +49,9 @@ func flash(_amount: float) -> void:
 
 ## The weapon shown in the character's hands (rigs without hands ignore it).
 func set_weapon(_id: StringName) -> void:
+	pass
+
+
+## The character fired (upper-body recoil where supported).
+func on_fire() -> void:
 	pass

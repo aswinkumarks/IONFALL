@@ -53,3 +53,15 @@ variants, one skinned mesh each) with gun-ready clips (Idle_Gun, Walk_Gun,
 Run_Gun, Jump_Idle, Duck), as `AstronautRig`. The player's weapon model is
 attached to the right-hand bone. Same approach (one skinned mesh per
 character), so the measurement above still applies.
+
+## Update 2 (2026-10-19): armoured soldier
+
+Feedback: the animal astronauts read too cute; the target is a Halo-like
+armoured soldier. The default is now `ArmoredRig`: the Quaternius Universal
+Animation Library mannequin (CC0, 43 clips) as a dark undersuit plus armour
+plates generated from the skeleton rest pose (helmet with gold visor, chest,
+pauldrons, gauntlets, thigh/shin plates, boots, backpack), skinned rigidly to
+their bones in one mesh with two surfaces (armour in the player's colour,
+visor). An AnimationTree layers upper-body aim (blended by pitch) and a
+shoot one-shot over lower-body locomotion. Cost: 3 draws per character
+(body, armour, visor) plus the held weapon.

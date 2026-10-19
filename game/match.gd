@@ -570,6 +570,8 @@ func _handle_event(e: Dictionary) -> void:
 			audio.play_at(sound, e.origin, "Weapons", 2 if local else 4, -4.0 if local else 0.0)
 			if not local and e.origin.distance_to(view.global_position) < 25.0:
 				hud.on_gunfire_from(e.origin)
+			if not local and _visuals.has(e.shooter):
+				(_visuals[e.shooter] as PlayerVisual).on_fire()
 			if local:
 				view.kick(2.0 if e.weapon == &"arc_launcher" else 1.0)
 				hud.on_fired(2.0 if e.weapon == &"arc_launcher" else 1.0)

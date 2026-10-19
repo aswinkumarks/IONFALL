@@ -5,7 +5,7 @@ extends Node3D
 
 ## Body style for new visuals (CharacterRig.STYLES); set by the character
 ## comparison bench and the diagnostics overlay.
-static var style: String = "astronaut"
+static var style: String = "armored"
 
 var rig: CharacterRig
 var color := Color.WHITE
@@ -59,3 +59,7 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 ## Hit feedback: a white flash on the body (brighter when the shield breaks).
 func flash_hit(shield_broken: bool) -> void:
 	rig.flash(1.0 if shield_broken else 0.6)
+
+
+func on_fire() -> void:
+	rig.on_fire()

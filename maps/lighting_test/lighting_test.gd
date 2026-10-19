@@ -126,7 +126,7 @@ func _process(delta: float) -> void:
 	_time += delta
 	_stats.add(delta * 1000.0)
 	_gpu_ms.add(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
-	for i in _runners.size():
+	for i in (_runners.size() if _runner_count > 1 else 0):
 		# Alternate rings run in opposite directions; every third runner
 		# backpedals and every fourth jumps, to exercise all clips.
 		var dir := 1.0 if i % 2 == 0 else -1.0
@@ -141,8 +141,23 @@ func _process(delta: float) -> void:
 		s.position.y = sin(fmod(_time + i, 3.0) / 0.6 * PI) * 0.9 if s.move_state == PlayerSimState.Move.AIR else 0.0
 		s.alive = true
 		_runners[i].update_from(null, s, 1.0, _time)
-	_camera.position = Vector3(sin(_time * 0.1) * 9.0, 5.0, cos(_time * 0.1) * 9.0)
-	_camera.look_at(Vector3(0, 1, 0))
+	if _runner_count == 1:
+		# Character close-up: one figure idling (or jogging with --jog), slow orbit.
+		var spot := Vector3(-4.0, 0.0, 2.5)
+		var s1 := PlayerSimState.new()
+		s1.position = spot
+		s1.alive = true
+		s1.move_state = PlayerSimState.Move.GROUND
+		s1.yaw = 0.0
+		if Platform.user_args.has("--jog"):
+			s1.velocity = Vector3(0, 0, -4.5)
+		_runners[0].update_from(null, s1, 1.0, _time)
+		var a := _time * 0.25 + float(Platform.get_user_arg("--angle", "0.6"))
+		_camera.position = spot + Vector3(sin(a) * 2.2, 1.45, -cos(a) * 2.2)
+		_camera.look_at(spot + Vector3(0, 1.05, 0))
+	else:
+		_camera.position = Vector3(sin(_time * 0.1) * 9.0, 5.0, cos(_time * 0.1) * 9.0)
+		_camera.look_at(Vector3(0, 1, 0))
 	_label.text = "LIGHTING TEST  fps %d  frame p50 %.1f p95 %.1f ms  GPU p50 %.2f p95 %.2f ms\nrig %s x%d  sun shadows %s  lightmap %s  bicubic %s  shadowmask %s  scale %.2f  draw calls %d\n%s" % [
 		Engine.get_frames_per_second(), _stats.percentile(50.0), _stats.percentile(95.0),
 		_gpu_ms.percentile(50.0), _gpu_ms.percentile(95.0), PlayerVisual.style, _runners.size(),
