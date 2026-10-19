@@ -80,6 +80,30 @@ def version_code(version: str, build: int) -> int:
     return major * 1_000_000 + minor * 10_000 + patch * 100 + build
 
 
+def sync_android_version_code(code: int) -> None:
+    """Sets `version/code` in every Android export preset to `code`.
+
+    Godot reads the Android versionCode from the preset, so it's kept in sync
+    with the versioning scheme here. The value is deterministic (version +
+    IONFALL_BUILD_NUMBER), so re-running this doesn't change the file.
+    """
+    path = ROOT / "export_presets.cfg"
+    text = path.read_text(encoding="utf-8")
+    # Each chunk holds one `[preset.N]` block followed by its `[preset.N.options]`.
+    sections = re.split(r"(?m)^(?=\[preset\.\d+\]$)", text)
+    for i, section in enumerate(sections):
+        if 'platform="Android"' not in section:
+            continue
+        if re.search(r"(?m)^version/code=", section):
+            section = re.sub(r"(?m)^version/code=.*$", f"version/code={code}", section)
+        else:
+            section = re.sub(r"(?m)^(\[preset\.\d+\.options\]\n\n)", rf"\g<1>version/code={code}\n", section, count=1)
+        sections[i] = section
+    new_text = "".join(sections)
+    if new_text != text:
+        path.write_text(new_text, encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--platform", required=True)
@@ -101,6 +125,7 @@ def main() -> None:
         "artifact_id": f"ionfall-{version}-{args.platform}-{args.arch}-{args.config}-ci{ci_run}+{sha[:7]}",
     }
     (ROOT / "build_info.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
+    sync_android_version_code(info["version_code"])
     print(info[args.print])
 
 
