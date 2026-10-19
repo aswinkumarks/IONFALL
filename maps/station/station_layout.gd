@@ -108,7 +108,7 @@ static func lights() -> Array:
 	for sx in [-1.0, 1.0]:
 		out.append([Vector3(20 * sx, 4.5, 0), orange, 2.5, 9.0])
 		for sz in [-1.0, 1.0]:
-			out.append([Vector3(9 * sx, 1.5, 10.5 * sz), cyan, 2.0, 7.0])
+			out.append([Vector3(9 * sx, 1.8, 9.0 * sz), cyan, 0.9, 6.0])
 			out.append([Vector3(19.5 * sx, 4.5, 17 * sz), cyan, 2.0, 8.0])
 	return out
 
