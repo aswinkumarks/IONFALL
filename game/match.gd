@@ -78,6 +78,11 @@ func _ready() -> void:
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
 			return
+		var nav := BotNavigation.new()
+		nav.name = "BotNavigation"
+		add_child(nav)
+		nav.build(gameplay)  # async: bots wait until it's ready
+		server.bot_nav = nav
 		server.max_combatants = config.max_combatants()
 		server.bot_fill = 1 + config.bots
 		var me := server.add_local_player(config.player_name)

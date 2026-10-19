@@ -48,7 +48,9 @@ var phase: int = MatchPhase.WAITING
 var phase_seq: int = 0
 var phase_ends_tick: int = 0
 var clients: Dictionary = {}  ## peer id -> Client
-var bots: Dictionary = {}  ## net id -> TargetDummyDriver
+var bots: Dictionary = {}  ## net id -> BotBrain (or TargetDummyDriver without navigation)
+## Set by the owner once the map's navigation is built; bots need it.
+var bot_nav: BotNavigation
 ## Listen host / offline: the local player's id and this tick's command.
 var local_player_id: int = 0
 var local_command: PlayerCommand
@@ -141,7 +143,12 @@ func add_local_player(player_name: String) -> SimPlayer:
 	return p
 
 
-func add_bot(bot_name: String, driver: TargetDummyDriver) -> SimPlayer:
+const BOT_NAMES := ["Kestrel", "Vanta", "Ordo", "Lumen", "Rook", "Sable", "Quill", "Echo", "Halcyon", "Tarsus",
+		"Wren", "Corvid", "Nyx", "Brant", "Ivo"]
+
+
+## `driver`: anything with command_for(tick, player) -> PlayerCommand.
+func add_bot(bot_name: String, driver: RefCounted) -> SimPlayer:
 	var id := 1000 + _bot_seq
 	_bot_seq += 1
 	bots[id] = driver
@@ -163,7 +170,12 @@ func update_bot_fill() -> void:
 		world.remove_player(id)
 		stats.remove_player(id, world.tick)
 	while combatants() < mini(bot_fill, max_combatants):
-		add_bot("Dummy %d" % (_bot_seq + 1), TargetDummyDriver.new(_bot_seq * 50))
+		var bot_name: String = BOT_NAMES[_bot_seq % BOT_NAMES.size()]
+		var id := 1000 + _bot_seq
+		if bot_nav != null:
+			add_bot(bot_name, BotBrain.new(world, bot_nav, id, _rng.randi()))
+		else:
+			add_bot(bot_name, TargetDummyDriver.new(_bot_seq * 50))
 	_broadcast_roster()
 
 
@@ -246,6 +258,10 @@ func _physics_process(_delta: float) -> void:
 	for e in world.drain_events():
 		_host_events.append(e)
 		stats.on_event(e)
+		if e.type == "hit":
+			var brain: Variant = bots.get(e.target)
+			if brain is BotBrain:
+				brain.on_event(e)
 		if e.type == "death" or e.type == "spawn":
 			score_changed = score_changed or e.type == "death"
 			_send_reliable_event(e)

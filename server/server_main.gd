@@ -39,7 +39,12 @@ func _ready() -> void:
 		printerr("IONFALL server: could not listen on UDP port %d: %s" % [port, error_string(err)])
 		get_tree().quit(1)
 		return
-	# `--bots N`: dummies fill the match up to N combatants and leave as humans join.
+	var nav := BotNavigation.new()
+	nav.name = "BotNavigation"
+	add_child(nav)
+	nav.build(gameplay)  # async: bots wait until it's ready
+	server.bot_nav = nav
+	# `--bots N`: bots fill the match up to N combatants and leave as humans join.
 	server.bot_fill = bots
 	server.update_bot_fill()
 	server.stepped.connect(func() -> void:

@@ -112,6 +112,15 @@ func get_player(net_id: int) -> SimPlayer:
 	return players.get(net_id)
 
 
+## Moves a player instantly (bot stuck recovery, PLAN §2.7). Counts as a
+## discontinuity, so nobody interpolates across it.
+func teleport(p: SimPlayer, position: Vector3) -> void:
+	p.state.position = position
+	p.state.velocity = Vector3.ZERO
+	p.state.discontinuity_gen += 1
+	p.global_position = position
+
+
 func drain_events() -> Array[Dictionary]:
 	var out := _events
 	_events = []
