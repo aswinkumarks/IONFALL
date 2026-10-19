@@ -1,20 +1,27 @@
 class_name CharacterRig
 extends Node3D
 ## Third-person body of a player (presentation only; hitboxes come from the
-## simulation). Subclasses: CapsuleRig (greybox), SkinnedRig (one skinned CC0
-## character) and PartsRig (rigid parts). PLAN §4 decides between the last
-## two by an on-device comparison (M2).
+## simulation). Subclasses: AstronautRig (default: Quaternius astronauts),
+## SkinnedRig (Kenney character in a painted suit), PartsRig (rigid parts)
+## and CapsuleRig (greybox). Skinned won the on-device comparison
+## (docs/decisions/0003-character-rig.md).
 
-const STYLES := ["skinned", "parts", "capsule"]
+const STYLES := ["astronaut", "skinned", "parts", "capsule"]
 
 
-static func create(style: String) -> CharacterRig:
+static func create(style: String, variant: int = 0) -> CharacterRig:
 	match style:
+		"astronaut":
+			var a := AstronautRig.new()
+			a.variant = variant
+			return a
+		"skinned":
+			return SkinnedRig.new()
 		"parts":
 			return PartsRig.new()
 		"capsule":
 			return CapsuleRig.new()
-	return SkinnedRig.new()
+	return AstronautRig.new()
 
 
 func setup(_color: Color) -> void:
@@ -34,4 +41,9 @@ func set_glow(_amount: float) -> void:
 
 ## Brief white hit flash, 0..1.
 func flash(_amount: float) -> void:
+	pass
+
+
+## The weapon shown in the character's hands (rigs without hands ignore it).
+func set_weapon(_id: StringName) -> void:
 	pass

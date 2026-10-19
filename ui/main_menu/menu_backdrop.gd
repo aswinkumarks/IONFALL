@@ -18,7 +18,7 @@ func _ready() -> void:
 	for i in RUNNERS:
 		var v := PlayerVisual.new()
 		add_child(v)
-		v.setup("", false, COLORS[i % COLORS.size()])
+		v.setup("", false, COLORS[i % COLORS.size()], i)
 		v.get_child(v.get_child_count() - 1).visible = false  # no nameplate
 		_runners.append(v)
 	_time = randf() * 100.0

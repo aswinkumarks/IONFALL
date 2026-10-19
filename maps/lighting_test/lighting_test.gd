@@ -107,7 +107,7 @@ func _spawn_runners() -> void:
 	for i in _runner_count:
 		var v := PlayerVisual.new()
 		add_child(v)
-		v.setup("Runner %d" % (i + 1), false, COLORS[i % COLORS.size()])
+		v.setup("Runner %d" % (i + 1), false, COLORS[i % COLORS.size()], i)
 		_runners.append(v)
 	_stats.clear()
 	_gpu_ms.clear()

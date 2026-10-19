@@ -45,3 +45,11 @@ simulation-driven and independent of the pose.
   strafe/crouch/aim clips (e.g. Quaternius, CC0) replaces it in M4.
 - Each character has its own AnimationPlayer; the clips are shared through one
   AnimationLibrary.
+
+## Update (2026-10-19)
+
+The stand-in is now the Quaternius Ultimate Space Kit astronauts (CC0, four
+variants, one skinned mesh each) with gun-ready clips (Idle_Gun, Walk_Gun,
+Run_Gun, Jump_Idle, Duck), as `AstronautRig`. The player's weapon model is
+attached to the right-hand bone. Same approach (one skinned mesh per
+character), so the measurement above still applies.

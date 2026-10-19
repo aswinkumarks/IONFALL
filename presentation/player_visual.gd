@@ -5,18 +5,22 @@ extends Node3D
 
 ## Body style for new visuals (CharacterRig.STYLES); set by the character
 ## comparison bench and the diagnostics overlay.
-static var style: String = "skinned"
+static var style: String = "astronaut"
 
 var rig: CharacterRig
 var color := Color.WHITE
+## Weapons by slot, to show the held weapon (FFA loadout until per-player
+## loadouts exist).
+var loadout: Array[WeaponData] = Loadouts.ffa()
 var _label: Label3D
 var _height: float = 1.8
 var _last_time: float = -1.0
 
 
-func setup(display_name: String, is_bot: bool, p_color: Color) -> void:
+## `variant` picks the character model (e.g. one astronaut per player).
+func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0) -> void:
 	color = p_color
-	rig = CharacterRig.create(style)
+	rig = CharacterRig.create(style, variant)
 	add_child(rig)
 	rig.setup(p_color)
 	_label = Label3D.new()
@@ -42,6 +46,8 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 	rotation.y = lerp_angle(from.yaw, cur.yaw, alpha)
 	var target_h := 1.8 if cur.stance == PlayerSimState.Stance.STAND else 1.2
 	_height = lerpf(_height, target_h, 0.3)
+	if cur.weapon_slot >= 0 and cur.weapon_slot < loadout.size():
+		rig.set_weapon(loadout[cur.weapon_slot].id)
 	rig.animate(cur, delta, _height)
 	_label.position.y = _height + 0.45
 	var shimmer := 0.0

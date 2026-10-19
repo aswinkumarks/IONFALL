@@ -159,4 +159,5 @@ func to_render_state() -> PlayerSimState:
 	s.shield = shield
 	s.health = health
 	s.discontinuity_gen = disc
+	s.weapon_slot = weapon
 	return s

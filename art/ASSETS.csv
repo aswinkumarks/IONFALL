@@ -9,3 +9,4 @@ art/weapons/kenney/colormap_ion*.png,tools/recolor_colormap.py from the Blaster 
 ui/fonts/Rajdhani-*.ttf,https://github.com/google/fonts/tree/main/ofl/rajdhani,Indian Type Foundry,2026-10-19,SIL OFL 1.1 (licenses/OFL-Rajdhani.txt),license text shipped,none,"OFL: can't be sold on its own; keep the license"
 ui/fonts/Exo2-Variable.ttf,https://github.com/google/fonts/tree/main/ofl/exo2,The Exo 2 Project Authors,2026-10-19,SIL OFL 1.1 (licenses/OFL-Exo2.txt),license text shipped,renamed from Exo2[wght].ttf,"OFL: can't be sold on its own; keep the license"
 art/characters/kenney/suit*.png,tools/gen_suit.py (painted over the Kenney UV layout),IONFALL project,n/a,project's own work,none,none,none
+art/characters/quaternius/Astronaut_*.gltf,https://quaternius.com/packs/ultimatespacekit.html (Ultimate Space Kit March 2023 Google Drive),Quaternius,2026-10-19,CC0 1.0 (licenses/quaternius-ultimate-space-kit.txt),optional: Quaternius,none (pistol hidden at runtime),none

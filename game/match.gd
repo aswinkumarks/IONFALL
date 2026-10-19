@@ -515,7 +515,7 @@ func _visual_for(id: int, display_name: String, is_bot: bool) -> PlayerVisual:
 	if v == null:
 		v = PlayerVisual.new()
 		add_child(v)
-		v.setup(display_name, is_bot, BOT_COLOR if is_bot else PLAYER_COLORS[id % PLAYER_COLORS.size()])
+		v.setup(display_name, is_bot, BOT_COLOR if is_bot else PLAYER_COLORS[id % PLAYER_COLORS.size()], id)
 		_visuals[id] = v
 	return v
 
