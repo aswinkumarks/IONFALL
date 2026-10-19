@@ -63,11 +63,10 @@ func test_prediction_without_corrections_on_clean_network() -> void:
 	var c: ServerSession.Client = server.clients.values()[0]
 	gut.p("corrections=%d (any size), server synthesized=%d" % [client.corrections, c.synthesized])
 	assert_eq(c.view_anomalies, 0, "view ticks validated without anomalies")
-	var errs := server.view_errors.duplicate()
-	errs.sort()
+	var errs := server.view_errors
 	gut.p("view error ticks: min %.2f p5 %.2f p50 %.2f p95 %.2f max %.2f (n=%d) interp=%d rtt=%.1f srv_rtt=%.1f" % [
-			errs[0], errs[errs.size() * 5 / 100], errs[errs.size() / 2], errs[errs.size() * 95 / 100], errs[-1],
-			errs.size(), client.interp_ticks, client.clock.rtt_ms, c.rtt_ms])
+			errs.percentile(0.0), errs.percentile(5.0), errs.percentile(50.0), errs.percentile(95.0), errs.percentile(100.0),
+			errs.count(), client.interp_ticks, client.clock.rtt_ms, c.rtt_ms])
 
 
 func test_three_lost_packets_lose_no_presses() -> void:

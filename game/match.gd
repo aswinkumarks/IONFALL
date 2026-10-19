@@ -46,6 +46,7 @@ var _perf_ms := FrameStats.new(7200)  ## frame times of the current minute
 var _perf_minute_start_ms: int = 0
 var _perf_frames: int = 0
 var _tick_ms := FrameStats.new(3600)  ## host: server tick times of the current minute
+var _sim_ms := FrameStats.new(3600)  ## host: of which simulation
 
 
 func _ready() -> void:
@@ -108,6 +109,7 @@ func _start_client(token: int) -> bool:
 	if client != null:
 		client.leave()
 		client.queue_free()
+		effects.reset_seen()  # event ids restart with the new session
 	client = ClientSession.new()
 	client.name = "Client"
 	client.player_name = config.player_name
@@ -175,6 +177,7 @@ func _physics_process(_delta: float) -> void:
 	_snapshot_prev()
 	if server.last_step_usec > 0:
 		_tick_ms.add(server.last_step_usec / 1000.0)  # the previous tick
+		_sim_ms.add(server.last_sim_usec / 1000.0)
 	server.local_command = _local_command(server.world.tick)
 
 
@@ -306,9 +309,10 @@ func _log_perf(delta: float) -> void:
 		["offline", "host", "client"][config.mode], _perf_frames / seconds,
 		_perf_ms.percentile(50.0), _perf_ms.percentile(95.0), _perf_ms.percentile(99.0)]
 	if server != null:
-		line += " tick_p50=%.2f tick_p99=%.2f players=%d clients=%d" % [_tick_ms.percentile(50.0),
-				_tick_ms.percentile(99.0), server.world.players.size(), server.clients.size()]
+		line += " tick_p50=%.2f tick_p99=%.2f sim_p99=%.2f players=%d clients=%d" % [_tick_ms.percentile(50.0),
+				_tick_ms.percentile(99.0), _sim_ms.percentile(99.0), server.world.players.size(), server.clients.size()]
 		_tick_ms = FrameStats.new(3600)
+		_sim_ms = FrameStats.new(3600)
 	if client != null:
 		line += " rtt=%.0f corrections=%d visible=%d snaps=%d" % [client.clock.rtt_ms, client.corrections,
 				client.visible_corrections, client.snaps]

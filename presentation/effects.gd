@@ -18,6 +18,11 @@ func _ready() -> void:
 	_explosion_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
 
+## Forget handled event ids: a new session (reconnect) reuses them.
+func reset_seen() -> void:
+	_seen.clear()
+
+
 ## Returns false if this event was already handled.
 func first_time(event: Dictionary) -> bool:
 	if _seen.has(event.id):

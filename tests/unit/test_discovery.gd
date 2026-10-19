@@ -67,12 +67,12 @@ func test_browser_lists_and_expires_games() -> void:
 	var udp := PacketPeerUDP.new()
 	udp.set_dest_address("127.0.0.1", Discovery.PORT)
 	udp.put_packet(Discovery.encode(_beacon()))
-	await wait_until(func() -> bool: return browser.games.size() == 1, 2.0)
-	assert_eq(browser.games.size(), 1)
-	var b: Discovery.Beacon = browser.sorted()[0]
-	assert_eq(b.address, "127.0.0.1", "address comes from the packet source")
+	# Real servers on the LAN may be listed too: only look at our entry.
+	var key := "127.0.0.1:47712"
+	await wait_until(func() -> bool: return browser.games.has(key), 2.0)
+	assert_true(browser.games.has(key), "listed, keyed by the packet's source address")
 	await wait_seconds(Discovery.EXPIRY_MS / 1000.0 + 0.3)
-	assert_eq(browser.games.size(), 0, "expired after 3.5 s without beacons")
+	assert_false(browser.games.has(key), "expired after 3.5 s without beacons")
 
 
 func test_join_links() -> void:

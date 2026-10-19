@@ -1,0 +1,187 @@
+[gd_scene format=3 uid="uid://b2tniexwtq1d1"]
+
+[ext_resource type="Script" uid="uid://c71rwji2h8irr" path="res://maps/lighting_test/lighting_test.gd" id="1"]
+[ext_resource type="LightmapGIData" uid="uid://cljswb8h78jce" path="res://maps/lighting_test/lighting_test.lmbake" id="2_jcklt"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.25, 0.4, 0.65, 1)
+sky_horizon_color = Color(0.55, 0.65, 0.8, 1)
+ground_bottom_color = Color(0.1, 0.1, 0.12, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+tonemap_mode = 2
+glow_enabled = true
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.32, 0.35, 0.4, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+lightmap_size_hint = Vector2i(304, 158)
+material = SubResource("floor_mat")
+add_uv2 = true
+size = Vector3(30, 0.2, 30)
+
+[sub_resource type="StandardMaterial3D" id="wall_mat"]
+albedo_color = Color(0.75, 0.78, 0.82, 1)
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="wall_mesh"]
+lightmap_size_hint = Vector2i(156, 216)
+material = SubResource("wall_mat")
+add_uv2 = true
+size = Vector3(30, 6, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="accent_mat"]
+albedo_color = Color(0.1, 0.12, 0.16, 1)
+emission_enabled = true
+emission = Color(0.35, 0.9, 1, 1)
+emission_energy_multiplier = 3.0
+
+[sub_resource type="BoxMesh" id="strip_mesh"]
+lightmap_size_hint = Vector2i(154, 157)
+material = SubResource("accent_mat")
+add_uv2 = true
+size = Vector3(30, 0.15, 0.1)
+
+[sub_resource type="BoxMesh" id="pillar_mesh"]
+lightmap_size_hint = Vector2i(19, 63)
+material = SubResource("wall_mat")
+add_uv2 = true
+size = Vector3(1.5, 5, 1.5)
+
+[sub_resource type="BoxMesh" id="cover_mesh"]
+lightmap_size_hint = Vector2i(24, 33)
+material = SubResource("wall_mat")
+add_uv2 = true
+size = Vector3(3, 1.2, 1)
+
+[sub_resource type="LabelSettings" id="label_settings"]
+font_size = 20
+outline_size = 6
+outline_color = Color(0, 0, 0, 1)
+
+[node name="LightingTest" type="Node3D" unique_id=767650976]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1871451508]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=594943259]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 10, 0)
+light_energy = 1.2
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 30.0
+
+[node name="AccentCyan" type="OmniLight3D" parent="." unique_id=1408690926]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 2.5, -8)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 3.0
+light_bake_mode = 1
+omni_range = 8.0
+
+[node name="AccentOrange" type="OmniLight3D" parent="." unique_id=193168190]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2.5, 8)
+light_color = Color(1, 0.6, 0.25, 1)
+light_energy = 3.0
+light_bake_mode = 1
+omni_range = 8.0
+
+[node name="LightmapGI" type="LightmapGI" parent="." unique_id=1590081408]
+bounces = 2
+shadowmask_mode = 2
+light_data = ExtResource("2_jcklt")
+
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=129124106]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+cast_shadow = 0
+mesh = SubResource("floor_mesh")
+
+[node name="WallNorth" type="MeshInstance3D" parent="." unique_id=1085179397]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, -15)
+cast_shadow = 0
+mesh = SubResource("wall_mesh")
+
+[node name="WallWest" type="MeshInstance3D" parent="." unique_id=760672651]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -15, 3, 0)
+cast_shadow = 0
+mesh = SubResource("wall_mesh")
+
+[node name="StripNorth" type="MeshInstance3D" parent="." unique_id=1221331241]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -14.7)
+cast_shadow = 0
+mesh = SubResource("strip_mesh")
+
+[node name="Pillar1" type="MeshInstance3D" parent="." unique_id=1678425159]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 2.5, -4)
+cast_shadow = 0
+mesh = SubResource("pillar_mesh")
+
+[node name="Pillar2" type="MeshInstance3D" parent="." unique_id=1531430715]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 2.5, -3)
+cast_shadow = 0
+mesh = SubResource("pillar_mesh")
+
+[node name="Pillar3" type="MeshInstance3D" parent="." unique_id=1116733666]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 2.5, 6)
+cast_shadow = 0
+mesh = SubResource("pillar_mesh")
+
+[node name="Cover1" type="MeshInstance3D" parent="." unique_id=1876727957]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+cast_shadow = 0
+mesh = SubResource("cover_mesh")
+
+[node name="Cover2" type="MeshInstance3D" parent="." unique_id=682557338]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 8, 0.6, 2)
+cast_shadow = 0
+mesh = SubResource("cover_mesh")
+
+[node name="Camera" type="Camera3D" parent="." unique_id=911837642]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 9)
+fov = 68.0
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=158645063]
+
+[node name="Info" type="Label" parent="UI" unique_id=432943244]
+unique_name_in_owner = true
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 1200.0
+offset_bottom = 120.0
+label_settings = SubResource("label_settings")
+
+[node name="Buttons" type="HBoxContainer" parent="UI" unique_id=1045942679]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -76.0
+offset_right = 700.0
+offset_bottom = -16.0
+theme_override_constants/separation = 12
+
+[node name="ShadowsButton" type="Button" parent="UI/Buttons" unique_id=210577457]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 56)
+layout_mode = 2
+text = "Toggle sun shadows"
+
+[node name="LightmapButton" type="Button" parent="UI/Buttons" unique_id=592207822]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 56)
+layout_mode = 2
+text = "Toggle lightmap"
+
+[node name="BackButton" type="Button" parent="UI/Buttons" unique_id=578634785]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 56)
+layout_mode = 2
+text = "Back"

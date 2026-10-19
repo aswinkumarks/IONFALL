@@ -103,8 +103,8 @@ func send(id: int, data: PackedByteArray, channel: int, reliable: bool) -> void:
 func _send_now(id: int, data: PackedByteArray, channel: int, reliable: bool) -> void:
 	if api.multiplayer_peer == null or api.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
 		return
-	if is_server and not api.get_peers().has(id):
-		return  # left (or still authenticating): ENet would log an error
+	if not api.get_peers().has(id):
+		return  # gone, or still authenticating: ENet would log an error
 	var mode := MultiplayerPeer.TRANSFER_MODE_RELIABLE if reliable else MultiplayerPeer.TRANSFER_MODE_UNRELIABLE
 	if api.send_bytes(data, id, mode, channel) == OK and not conditioner.is_active():
 		stats.on_out(data.size())

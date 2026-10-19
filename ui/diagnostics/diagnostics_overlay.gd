@@ -31,6 +31,13 @@ func _ready() -> void:
 		Diagnostics.autopilot = not Diagnostics.autopilot
 		pilot.text = "Autopilot: " + ("on" if Diagnostics.autopilot else "off"))
 	add_child(pilot)
+	var lighting := Button.new()
+	lighting.text = "Lighting test"
+	lighting.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 8)
+	lighting.position.x += 380
+	lighting.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://maps/lighting_test/lighting_test.tscn"))
+	add_child(lighting)
 
 
 func _process(delta: float) -> void:

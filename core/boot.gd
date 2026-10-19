@@ -14,6 +14,9 @@ func _ready() -> void:
 		check.finished.connect(func(_s: String) -> void: get_tree().quit())
 		add_child(check)
 		return
+	if Platform.user_args.has("--lighting-test"):
+		get_tree().change_scene_to_file.call_deferred("res://maps/lighting_test/lighting_test.tscn")
+		return
 	var target := SERVER_MAIN if Platform.is_dedicated_server() else MAIN_MENU
 	if not Platform.is_dedicated_server() and Platform.user_args.has("--test-clients"):
 		target = TEST_CLIENTS

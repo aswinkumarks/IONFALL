@@ -57,9 +57,10 @@ var max_combatants: int = Protocol.MAX_PEERS
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
 ## Recent (claimed - expected) view tick errors, for diagnostics and tests.
-var view_errors: Array[float] = []
+var view_errors := FrameStats.new(600)
 ## Wall time of the last tick (simulation + snapshots), in microseconds.
 var last_step_usec: int = 0
+var last_sim_usec: int = 0  ## of which world.step()
 
 var _host_events: Array[Dictionary] = []
 var _next_player_id: int = 2
@@ -218,7 +219,9 @@ func _physics_process(_delta: float) -> void:
 		commands[local_player_id] = local_command
 	for id in bots:
 		commands[id] = bots[id].command_for(world.tick, world.get_player(id))
+	var t_sim := Time.get_ticks_usec()
 	world.step(commands)
+	last_sim_usec = Time.get_ticks_usec() - t_sim
 	var score_changed := false
 	for e in world.drain_events():
 		_host_events.append(e)
@@ -232,10 +235,15 @@ func _physics_process(_delta: float) -> void:
 	_update_phase()
 	stepped.emit()
 	if networked:
-		if world.tick % SNAPSHOT_INTERVAL == 0:
-			for c: Client in clients.values():
-				if c.loaded:
-					_send_snapshot(c)
+		# Each client gets a snapshot every SNAPSHOT_INTERVAL ticks, staggered
+		# by player id so the encoding work is spread over ticks.
+		var tick_entities := {}
+		for c: Client in clients.values():
+			if c.loaded and (world.tick + c.player_id) % SNAPSHOT_INTERVAL == 0:
+				if tick_entities.is_empty():
+					for id in world.players:
+						tick_entities[id] = NetEntity.from_player(world.players[id])
+				_send_snapshot(c, tick_entities)
 		if world.tick % PING_INTERVAL_TICKS == 0:
 			var ping := Protocol.encode_ping(Time.get_ticks_msec() & 0xFFFFFFFF)
 			for c: Client in clients.values():
@@ -296,9 +304,7 @@ func validate_view_tick(claimed: float, arrived: float, rtt_ms: float, interp_ti
 	var expected := arrived - one_way - clampi(interp_ticks, 3, 9)
 	var bias := c.view_bias if c != null else 0.0
 	var error := claimed - expected
-	view_errors.append(error)
-	if view_errors.size() > 600:
-		view_errors.pop_front()
+	view_errors.add(error)
 	if c != null and c.view_samples < VIEW_BIAS_LEARN_SAMPLES \
 			and absf(error) <= VIEW_TOLERANCE_TICKS + MAX_VIEW_BIAS_TICKS:
 		c.view_samples += 1
@@ -530,7 +536,8 @@ func _on_commands(c: Client, data: PackedByteArray) -> void:
 		c.arrival_offsets.add(now - cmd.tick)
 
 
-func _send_snapshot(c: Client) -> void:
+## `tick_entities`: every player quantized once this tick, shared by all clients.
+func _send_snapshot(c: Client, tick_entities: Dictionary) -> void:
 	var snap := Snapshot.new()
 	snap.id = completed_tick()
 	snap.match_id = match_id
@@ -538,9 +545,9 @@ func _send_snapshot(c: Client) -> void:
 	snap.baseline_id = c.ack if c.sent.has(c.ack) else 0
 	snap.last_cmd_tick = c.last_processed if c.last_processed >= 0 else Snapshot.NO_COMMAND
 	snap.buffer_delta = clampi(roundi((c.buffer_avg - c.target_buffer) * 10.0), -127, 127)
-	for id in world.players:
+	for id in tick_entities:
 		if id != c.player_id:
-			snap.entities[id] = NetEntity.from_player(world.players[id])
+			snap.entities[id] = tick_entities[id]
 	var me: SimPlayer = world.players.get(c.player_id)
 	if me != null:
 		snap.owner_state = me.state

@@ -1,5 +1,10 @@
 ; Engine configuration file.
-; Godot 4.7.2-stable is pinned (PLAN §3.18). Don't open with another version.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -8,10 +13,9 @@ config_version=5
 config/name="IONFALL"
 config/version="0.0.1"
 run/main_scene="res://core/boot.tscn"
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
-; The Android back button opens the pause menu instead of quitting.
-config/quit_on_go_back=false
 
 [autoload]
 
@@ -29,29 +33,22 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/ionfall_android/plugin.cfg", "res://addons/ionfall_tools/plugin.cfg")
+
 [internationalization]
 
 locale/translations=PackedStringArray("res://locale/strings.en.translation")
-; Dedicated servers show no UI and ship without translations.
 locale/translations.dedicated_server=PackedStringArray()
-locale/fallback="en"
 
 [physics]
 
 3d/physics_engine="Jolt Physics"
-common/physics_ticks_per_second=60
 
 [rendering]
 
-renderer/rendering_method="mobile"
-renderer/rendering_method.mobile="mobile"
-renderer/rendering_method.web="gl_compatibility"
-; Non-Vulkan Android devices are excluded in v1.0 (PLAN §3.9): with the
-; fallback off, the exported manifest marks Vulkan 1.1 as required.
 rendering_device/fallback_to_opengl3=false
+renderer/rendering_method="mobile"
 textures/vram_compression/import_s3tc_bptc=true
 textures/vram_compression/import_etc2_astc=true
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/ionfall_android/plugin.cfg")
