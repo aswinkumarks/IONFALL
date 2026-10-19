@@ -1,0 +1,2 @@
+file,source,author,download_date,license,attribution,modifications,redistribution_limits
+audio/generated/*.wav,tools/gen_sounds.gd (procedural synthesis),IONFALL project,n/a,project's own work,none,none,none

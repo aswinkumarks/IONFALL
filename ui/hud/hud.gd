@@ -26,6 +26,10 @@ var _slots: PackedStringArray = []
 var _slot: int = 0
 var _timer: Label
 var _slots_label: Label
+var _caption: Label
+var _caption_time: float = 0.0
+## [source position, seconds left]: unseen gunfire nearby (visual audio cue).
+var _gunfire_sources: Array = []
 
 @onready var _ammo: Label = %Ammo
 @onready var _weapon: Label = %Weapon
@@ -60,6 +64,16 @@ func _enter_tree() -> void:
 	_timer.offset_top = 46.0
 	_timer.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	add_child(_timer)
+	_caption = Label.new()
+	_caption.add_theme_font_size_override("font_size", 20)
+	_caption.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
+	_caption.add_theme_constant_override("outline_size", 5)
+	_caption.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_caption.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_caption.offset_top = -130.0
+	_caption.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	add_child(_caption)
 	_slots_label = Label.new()
 	_slots_label.add_theme_font_size_override("font_size", 16)
 	_slots_label.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
@@ -94,6 +108,23 @@ func on_damaged_from(source: Vector3) -> void:
 	_damage_sources.append([source, 1.2])
 	while _damage_sources.size() > 6:
 		_damage_sources.pop_front()
+
+
+## Captions for important sounds (PLAN §3.16).
+func show_caption(text: String) -> void:
+	_caption.text = "[%s]" % text
+	_caption_time = 2.5
+
+
+## Visual equivalent of nearby gunfire you may not hear or see.
+func on_gunfire_from(source: Vector3) -> void:
+	for g in _gunfire_sources:
+		if (g[0] as Vector3).distance_to(source) < 2.0:
+			g[1] = 0.8
+			return
+	_gunfire_sources.append([source, 0.8])
+	while _gunfire_sources.size() > 6:
+		_gunfire_sources.pop_front()
 
 
 func on_shield_broken() -> void:
@@ -155,6 +186,11 @@ func _process(delta: float) -> void:
 	for d in _damage_sources:
 		d[1] -= delta
 	_damage_sources = _damage_sources.filter(func(d: Array) -> bool: return d[1] > 0.0)
+	for g in _gunfire_sources:
+		g[1] -= delta
+	_gunfire_sources = _gunfire_sources.filter(func(g: Array) -> bool: return g[1] > 0.0)
+	_caption_time = maxf(0.0, _caption_time - delta)
+	_caption.modulate.a = clampf(_caption_time / 0.4, 0.0, 1.0)
 	queue_redraw()
 
 
@@ -185,6 +221,12 @@ func _draw() -> void:
 		var r := 90.0 * scale
 		draw_arc(c, r, screen - 0.35, screen + 0.35, 12, Color(1.0, 0.3, 0.25, clampf(d[1], 0.0, 1.0) * 0.9),
 				6.0 * scale if not reduce else 4.0 * scale)
+	for g in _gunfire_sources:
+		var to: Vector3 = g[0] - _view_pos
+		var rel := wrapf(atan2(-to.x, -to.z) - _view_yaw, -PI, PI)
+		var screen := -rel - PI * 0.5
+		draw_arc(c, 110.0 * scale, screen - 0.12, screen + 0.12, 6, Color(1.0, 0.8, 0.3, clampf(g[1], 0.0, 1.0) * 0.8),
+				4.0 * scale)
 	if _shield_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.35, 0.9, 1.0, _shield_flash * 0.18))
 	# Crosshair

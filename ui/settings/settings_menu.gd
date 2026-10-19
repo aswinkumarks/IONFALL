@@ -27,6 +27,7 @@ const SCHEMA := {
 		["audio", "master", "SETTING_VOL_MASTER", "percent", 0.0, 1.0, 0.05],
 		["audio", "music", "SETTING_VOL_MUSIC", "percent", 0.0, 1.0, 0.05],
 		["audio", "sfx", "SETTING_VOL_SFX", "percent", 0.0, 1.0, 0.05],
+		["audio", "night_mode", "SETTING_NIGHT_MODE", "check"],
 	],
 	"SETTINGS_TAB_ACCESSIBILITY": [
 		["accessibility", "hud_scale", "SETTING_HUD_SCALE", "percent", 0.8, 1.5, 0.05],

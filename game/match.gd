@@ -23,6 +23,7 @@ var client: ClientSession  ## client
 var input := InputAdapter.new()
 var view := FirstPersonView.new()
 var effects := Effects.new()
+var audio := GameAudio.new()
 var hud: Hud
 var touch := TouchControls.new()
 
@@ -55,6 +56,10 @@ var _life_taken: float = 0.0
 var _remote_cache: Dictionary = {}  ## client: latest remote render states
 ## Our own tally of the current match, for partial results if the match
 ## never sends RESULTS (we quit or the host vanished, PLAN §3.13).
+var _last_slot: int = -1
+var _last_reload: int = 0
+var _last_shield: float = 100.0
+var _shield_rising: bool = false
 var _tally := MatchStats.new()
 var _tally_match: int = 0
 var _results_applied: bool = false
@@ -79,7 +84,10 @@ func _ready() -> void:
 	add_child(input)
 	add_child(view)
 	add_child(effects)
+	add_child(audio)
+	audio.listener = view.camera
 	_build_ui()
+	audio.caption.connect(hud.show_caption)
 	get_tree().root.get_window().focus_exited.connect(_on_focus_lost)
 	Diagnostics.net_info = _net_info
 	# Static world bodies become queryable after the first physics step.
@@ -288,6 +296,8 @@ func _render_host(delta: float) -> void:
 		var p: SimPlayer = world.players[id]
 		seen[id] = true
 		_visual_for(id, p.display_name, p.is_bot).update_from(_prev.get(id), p.state, alpha, _time)
+		audio.update_player(id, p.state, false)
+	audio.update_player(me.net_id, s, true)
 	_prune_visuals(seen)
 	effects.sync_projectiles(world.projectiles, alpha)
 	hud.update_state(s, me.current_weapon(), world.scores.get(me.net_id, 0), s.respawn_tick - world.tick)
@@ -310,6 +320,8 @@ func _render_client(delta: float) -> void:
 		var info: Dictionary = names.get(id, {"name": "?", "bot": false})
 		seen[id] = true
 		_visual_for(id, info.name, info.bot).update_from(null, states[id], 1.0, _time)
+		audio.update_player(id, states[id], false)
+	audio.update_player(client.local_id, s, true)
 	_prune_visuals(seen)
 	# Snapshot projectiles, moved along their velocity to the current server time.
 	var ahead := (client.clock.server_time() - client.latest_snapshot.id) * Sim.TICK_DT
@@ -441,6 +453,7 @@ func _update_match_ui(delta: float) -> void:
 		for w: WeaponData in me.loadout:
 			names.append(KillFeed.WEAPON_TAGS.get(w.id, w.display_name))
 		hud.set_slots(names, me.state.weapon_slot)
+		_local_sounds(me.state)
 	# Death cam: 3 s looking at the killer from where we died.
 	var dead := me != null and not me.state.alive
 	if dead and not _death_cam.is_empty() and _time < _death_cam.until:
@@ -471,6 +484,22 @@ func _update_match_ui(delta: float) -> void:
 		_scoreboard.visible = false
 
 
+## Our own reload, weapon switch and shield recharge sounds, from state changes.
+func _local_sounds(s: PlayerSimState) -> void:
+	if s.weapon_slot != _last_slot and _last_slot >= 0 and s.alive:
+		audio.play_ui("switch", -4.0)
+	_last_slot = s.weapon_slot
+	var reloading: int = s.reload[s.weapon_slot]
+	if reloading > 0 and _last_reload == 0:
+		audio.play_at("reload", view.global_position, "UI", 2, -6.0)
+	_last_reload = reloading
+	var rising := s.shield > _last_shield + 0.01
+	if rising and not _shield_rising and s.shield < Health.MAX_SHIELD * 0.5:
+		audio.cue("shield_recharge", "CAPTION_SHIELD_RECHARGING")
+	_shield_rising = rising
+	_last_shield = s.shield
+
+
 func _local_player() -> SimPlayer:
 	if server != null:
 		return server.world.get_player(ServerSession.LOCAL_PLAYER_ID)
@@ -492,6 +521,7 @@ func _prune_visuals(seen: Dictionary) -> void:
 		if not seen.has(id):
 			_visuals[id].queue_free()
 			_visuals.erase(id)
+			audio.forget_player(id)
 
 
 func _update_banner() -> void:
@@ -517,6 +547,10 @@ func _handle_event(e: Dictionary) -> void:
 	match e.type:
 		"fire":
 			var local: bool = e.shooter == me
+			var sound := "arc_launch" if e.weapon == &"arc_launcher" else String(e.weapon)
+			audio.play_at(sound, e.origin, "Weapons", 2 if local else 4, -4.0 if local else 0.0)
+			if not local and e.origin.distance_to(view.global_position) < 25.0:
+				hud.on_gunfire_from(e.origin)
 			if local:
 				view.kick(2.0 if e.weapon == &"arc_launcher" else 1.0)
 				if e.get("predicted_hit", false):
@@ -528,9 +562,11 @@ func _handle_event(e: Dictionary) -> void:
 					effects.impact(e.end, e.hit_player)
 		"explosion":
 			effects.explosion(e.position, 4.0)
+			audio.play_at("explosion", e.position, "World", 3)
 		"hit":
 			if e.attacker == me and e.target != me:
 				hud.on_hit_marker(true, e.killed)
+				audio.play_ui("kill_confirm" if e.killed else "hit_marker", -2.0)
 				_life_dealt += e.amount
 			if e.target == me:
 				_life_taken += e.amount
@@ -540,6 +576,7 @@ func _handle_event(e: Dictionary) -> void:
 					hud.on_damaged()
 				if e.shield_broken:
 					hud.on_shield_broken()
+					audio.cue("shield_break", "CAPTION_SHIELD_BROKEN")
 		"death":
 			_kill_feed.add_death(e, _display_name, me)
 			if e.victim == me:
@@ -558,6 +595,7 @@ func _handle_event(e: Dictionary) -> void:
 				_death_cam = {}
 				_life_dealt = 0.0
 				_life_taken = 0.0
+				audio.play_ui("spawn", -6.0)
 
 
 func _net_info() -> String:

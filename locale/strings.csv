@@ -120,3 +120,6 @@ ACTION_WEAPON_1,Weapon 1
 ACTION_WEAPON_2,Weapon 2
 ACTION_WEAPON_3,Weapon 3
 ACTION_SCOREBOARD,Scoreboard
+SETTING_NIGHT_MODE,Night mode (compressed dynamic range)
+CAPTION_SHIELD_BROKEN,Shield broken
+CAPTION_SHIELD_RECHARGING,Shield recharging

@@ -29,6 +29,12 @@ var _settings := SettingsMenu.new()
 
 
 func _ready() -> void:
+	var music := AudioStreamPlayer.new()
+	music.stream = load("res://audio/generated/ambient_loop.wav")
+	music.bus = "Music"
+	music.volume_db = -8.0
+	add_child(music)
+	music.play()
 	_version_label.text = BuildInfo.display_string()
 	_storage_warning.visible = not Platform.storage_available
 	# Browsers and mobile apps are closed by the OS, not by an in-game button.
