@@ -11,6 +11,13 @@ const RESPAWN_TICKS := 180
 const SPAWN_PROTECTION_TICKS := 120
 const RECENT_DEATH_TICKS := 300
 const ENVIRONMENT_CREDIT_TICKS := 300
+## Assist (PLAN §2.4): at least this much damage within ASSIST_TICKS before
+## an enemy's death, by someone other than the killer.
+const ASSIST_DAMAGE := 40.0
+const ASSIST_TICKS := 300
+const MAX_ASSISTS := 3
+## Falling below this height is an environmental death.
+const KILL_Y := -30.0
 
 var tick: int = 0
 var match_seed: int = 1
@@ -27,6 +34,7 @@ var history: Dictionary = {}  ## net_id -> HitboxHistory
 
 var _events: Array[Dictionary] = []
 var _recent_deaths: Array = []  ## [Vector3, tick]
+var _damage_log: Dictionary = {}  ## victim id -> Array of [attacker id, amount, tick]
 var _rng := RandomNumberGenerator.new()
 var _next_entity_gen: int = 1
 
@@ -135,6 +143,10 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 			p.state.spawn_protection_ticks = 0
 			_resolve_shot(p, shot)
 	_step_projectiles()
+	for id in ids:
+		var fallen: SimPlayer = players[id]
+		if fallen.state.alive and fallen.state.position.y < KILL_Y:
+			_kill(fallen, 0, null, false)
 	for id in ids:
 		var s: PlayerSimState = players[id].state
 		Health.tick_regen(s)
@@ -272,26 +284,52 @@ func _damage(target: SimPlayer, attacker_id: int, amount: float, headshot: bool,
 		"attacker": attacker_id, "target": target.net_id, "amount": r.shield_damage + r.health_damage,
 		"headshot": headshot, "shield_broken": r.shield_broken, "killed": r.killed,
 	})
+	if attacker_id != target.net_id:
+		var dmg_log: Array = _damage_log.get(target.net_id, [])
+		dmg_log.append([attacker_id, r.shield_damage + r.health_damage, tick])
+		_damage_log[target.net_id] = dmg_log
 	if r.killed:
-		_kill(target, attacker_id, w)
+		_kill(target, attacker_id, w, headshot)
 
 
-func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData) -> void:
+## `attacker_id` 0 = the environment (falls, hazards); `w` is null then.
+func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -> void:
 	var s := victim.state
 	s.alive = false
 	s.move_state = PlayerSimState.Move.DEAD
 	s.velocity = Vector3.ZERO
 	s.respawn_tick = tick + RESPAWN_TICKS
 	_recent_deaths.append([s.position, tick])
-	# Death attribution (PLAN §2.4): your own explosive is always a suicide.
-	var suicide := attacker_id == victim.net_id
+	# Death attribution (PLAN §2.4): 1. an enemy's weapon → that enemy;
+	# 2. your own explosive → suicide; 3. environment → the last enemy who
+	# damaged you within 5 s; 4. otherwise suicide.
+	var dmg_log: Array = _damage_log.get(victim.net_id, []).filter(
+			func(e: Array) -> bool: return tick - e[2] <= maxi(ASSIST_TICKS, ENVIRONMENT_CREDIT_TICKS))
+	_damage_log.erase(victim.net_id)
+	var killer := attacker_id
+	if killer == 0:
+		for i in range(dmg_log.size() - 1, -1, -1):
+			if tick - dmg_log[i][2] <= ENVIRONMENT_CREDIT_TICKS and players.has(dmg_log[i][0]):
+				killer = dmg_log[i][0]
+				break
+	var suicide := killer == 0 or killer == victim.net_id
 	if suicide:
 		scores[victim.net_id] -= 1
-	elif scores.has(attacker_id):
-		scores[attacker_id] += 1
+	elif scores.has(killer):
+		scores[killer] += 1
+	var assists: Array[int] = []
+	var dealt := {}
+	for e in dmg_log:
+		if tick - e[2] <= ASSIST_TICKS and e[0] != killer:
+			dealt[e[0]] = dealt.get(e[0], 0.0) + e[1]
+	for id in dealt:
+		if dealt[id] >= ASSIST_DAMAGE and assists.size() < MAX_ASSISTS:
+			assists.append(id)
+	assists.sort()
 	_emit("d:%d:%d" % [victim.net_id, s.life_gen], "death", {
-		"victim": victim.net_id, "killer": attacker_id, "weapon": w.id, "suicide": suicide,
-		"position": s.position,
+		"victim": victim.net_id, "killer": killer if not suicide else victim.net_id,
+		"weapon": w.id if w != null else &"", "suicide": suicide, "headshot": headshot,
+		"environment": attacker_id == 0, "assists": assists, "position": s.position,
 	})
 
 
@@ -316,6 +354,7 @@ func _spawn(p: SimPlayer) -> void:
 	s.discontinuity_gen += 1
 	s.pending_presses = PackedByteArray([0, 0, 0, 0, 0, 0, 0])
 	Health.reset(s)
+	_damage_log.erase(p.net_id)
 	s.init_weapons(p.loadout)
 	p.apply_stance_shape(s.stance)
 	p.global_position = s.position

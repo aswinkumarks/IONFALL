@@ -6,8 +6,6 @@ extends Node3D
 ## is interpolated from snapshots. Input, HUD and effects are shared.
 
 const MOVEMENT := preload("res://data/movement_config.tres")
-const PULSE := preload("res://data/weapons/pulse_rifle.tres")
-const ARC := preload("res://data/weapons/arc_launcher.tres")
 const ARENA_GAMEPLAY := preload("res://maps/test_arena/gameplay.tscn")
 const ARENA_PRESENTATION := preload("res://maps/test_arena/presentation.tscn")
 const HUD_SCENE := preload("res://ui/hud/hud.tscn")
@@ -63,7 +61,7 @@ func _ready() -> void:
 	Diagnostics.net_info = _net_info
 	# Static world bodies become queryable after the first physics step.
 	await get_tree().physics_frame
-	var loadout: Array[WeaponData] = [PULSE, ARC]
+	var loadout := Loadouts.ffa()
 	var spawns: Array[Transform3D] = gameplay.spawn_points()
 	_loadout = loadout
 	_spawns = spawns

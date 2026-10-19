@@ -14,7 +14,7 @@ HUD_SPAWN_PROTECTED,Spawn protection
 PAUSE_TITLE,Paused
 PAUSE_RESUME,Resume
 PAUSE_LEAVE,Leave match
-PAUSE_CONTROLS_HINT,"WASD move · Shift sprint · Ctrl/C crouch, slide · Space jump, double jump, hold to mantle · R reload · Q / 1 / 2 switch · F3 diagnostics"
+PAUSE_CONTROLS_HINT,"WASD move · Shift sprint · Ctrl/C crouch, slide · Space jump, double jump, hold to mantle · R reload · Q / 1 / 2 / 3 switch · F3 diagnostics"
 TOUCH_FIRE,Fire
 TOUCH_JUMP,Jump
 TOUCH_CROUCH,Crouch

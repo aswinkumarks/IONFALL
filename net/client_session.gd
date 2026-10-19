@@ -253,6 +253,12 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 			var r := Protocol.decode_roster(data)
 			if not r.is_empty():
 				roster = r.players
+		Protocol.Msg.RESULTS:
+			var res := Protocol.decode_results(data)
+			if not res.is_empty():
+				res["type"] = "results"
+				res["id"] = "r:" + res.result_id
+				_events.append(res)
 		Protocol.Msg.EVENT:
 			var e := Protocol.decode_event_message(data)
 			if not e.is_empty():

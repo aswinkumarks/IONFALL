@@ -67,6 +67,11 @@ var last_sim_usec: int = 0  ## of which world.step()
 
 var _host_events: Array[Dictionary] = []
 var _next_player_id: int = 2
+var stats := MatchStats.new()
+## Winner of the last finished match (0 = draw), for presentation.
+var last_winner: int = 0
+var _play_started_tick: int = 0
+var _instance_id: int = 0  ## makes match_result_ids unique across server runs
 var _departed: Dictionary = {}  ## reconnect token -> {player_id, score, expires_ms}
 var _bot_seq: int = 0
 var _rng := RandomNumberGenerator.new()
@@ -106,6 +111,7 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	movement = movement_config
 	loadout = weapons
 	_rng.randomize()
+	_instance_id = _rng.randi()
 	match_id = _rng.randi() | 1
 	world = SimWorld.new()
 	world.name = "ServerWorld"
@@ -129,6 +135,7 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 func add_local_player(player_name: String) -> SimPlayer:
 	local_player_id = LOCAL_PLAYER_ID
 	var p := world.add_player(local_player_id, loadout, player_name, false)
+	stats.add_player(local_player_id, player_name, false, world.tick)
 	update_bot_fill()
 	_on_humans_changed()
 	return p
@@ -139,6 +146,7 @@ func add_bot(bot_name: String, driver: TargetDummyDriver) -> SimPlayer:
 	_bot_seq += 1
 	bots[id] = driver
 	var p := world.add_player(id, loadout, bot_name, true)
+	stats.add_player(id, bot_name, true, world.tick)
 	_broadcast_roster()
 	return p
 
@@ -153,6 +161,7 @@ func update_bot_fill() -> void:
 		var id: int = bots.keys().max()
 		bots.erase(id)
 		world.remove_player(id)
+		stats.remove_player(id, world.tick)
 	while combatants() < mini(bot_fill, max_combatants):
 		add_bot("Dummy %d" % (_bot_seq + 1), TargetDummyDriver.new(_bot_seq * 50))
 	_broadcast_roster()
@@ -205,7 +214,9 @@ func roster() -> Array:
 	ids.sort()
 	for id in ids:
 		var p: SimPlayer = world.players[id]
-		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "score": world.scores.get(id, 0)})
+		var l: MatchStats.Line = stats.lines.get(id)
+		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "score": world.scores.get(id, 0),
+				"kills": l.kills if l else 0, "deaths": l.deaths if l else 0, "assists": l.assists if l else 0})
 	return out
 
 
@@ -234,6 +245,7 @@ func _physics_process(_delta: float) -> void:
 	var score_changed := false
 	for e in world.drain_events():
 		_host_events.append(e)
+		stats.on_event(e)
 		if e.type == "death" or e.type == "spawn":
 			score_changed = score_changed or e.type == "death"
 			_send_reliable_event(e)
@@ -380,22 +392,63 @@ func _update_phase() -> void:
 	match phase:
 		MatchPhase.COUNTDOWN:
 			if world.tick >= phase_ends_tick:
+				_play_started_tick = world.tick
 				_set_phase(MatchPhase.PLAYING, world.tick + MatchPhase.FFA_TIME_LIMIT_TICKS)
 		MatchPhase.PLAYING:
 			var top := -999
 			for id in world.scores:
 				top = maxi(top, world.scores[id])
-			if top >= MatchPhase.FFA_SCORE_LIMIT or world.tick >= phase_ends_tick:
-				_set_phase(MatchPhase.POST_MATCH, world.tick + MatchPhase.POST_MATCH_TICKS)
+			var lead := MatchPhase.leader(world.scores)
+			if top >= MatchPhase.FFA_SCORE_LIMIT:
+				_end_match(lead)
+			elif world.tick >= phase_ends_tick:
+				if lead != 0:
+					_end_match(lead)
+				else:
+					_set_phase(MatchPhase.SUDDEN_DEATH, world.tick + MatchPhase.SUDDEN_DEATH_TICKS)
+		MatchPhase.SUDDEN_DEATH:
+			var lead := MatchPhase.leader(world.scores)
+			if lead != 0:
+				_end_match(lead)
+			elif world.tick >= phase_ends_tick:
+				_end_match(0)  # draw
 		MatchPhase.POST_MATCH:
 			if world.tick >= phase_ends_tick:
 				match_id = _rng.randi() | 1
 				phase_seq = 0
 				world.reset_match(_rng.randi())
+				stats.reset(world.tick)
 				for d: Dictionary in _departed.values():
 					d.score = 0  # scores belong to the finished match
 				_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
 				_broadcast_roster()
+
+
+## PLAN §2.6: results go to every client (reliable) and to the host's own
+## presentation; each carries a unique result id for idempotent profiles.
+func _end_match(winner: int) -> void:
+	last_winner = winner
+	_set_phase(MatchPhase.POST_MATCH, world.tick + MatchPhase.POST_MATCH_TICKS)
+	var rows := []
+	for id in stats.lines:
+		var l: MatchStats.Line = stats.lines[id]
+		rows.append({"id": l.id, "bot": l.bot, "name": l.name, "score": world.scores.get(id, 0),
+				"ticks_played": l.ticks_played(world.tick), "kills": l.kills, "kills_vs_bots": l.kills_vs_bots,
+				"deaths": l.deaths, "deaths_vs_bots": l.deaths_vs_bots, "assists": l.assists,
+				"assists_vs_bots": l.assists_vs_bots, "suicides": l.suicides, "headshot_kills": l.headshot_kills,
+				"shots": l.shots, "hits": l.hits, "damage_dealt": l.damage_dealt, "damage_taken": l.damage_taken,
+				"best_streak": l.best_streak, "weapon_kills": l.weapon_kills})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
+	var result_id := "%08x-%08x" % [_instance_id, match_id]
+	var msg := Protocol.encode_results(match_id, result_id, winner, world.tick - _play_started_tick, _humans(), rows)
+	# The host reads the same decoded form clients get.
+	var results := Protocol.decode_results(msg)
+	results["type"] = "results"
+	results["id"] = "r:" + result_id
+	_host_events.append(results)
+	if networked:
+		for c: Client in clients.values():
+			transport.send(c.id, msg, Protocol.CH_CONTROL, true)
 
 
 # --- Networking ---
@@ -496,6 +549,7 @@ func _on_peer_left(id: int) -> void:
 			_departed[c.token] = {"player_id": c.player_id, "score": world.scores.get(c.player_id, 0),
 					"expires_ms": Time.get_ticks_msec() + RECONNECT_WINDOW_MS}
 		world.remove_player(c.player_id)
+		stats.remove_player(c.player_id, world.tick)
 	update_bot_fill()
 	_on_humans_changed()
 
@@ -527,6 +581,7 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			elif not c.loaded:
 				c.loaded = true
 				world.add_player(c.player_id, loadout, c.name, false)
+				stats.add_player(c.player_id, c.name, false, world.tick)
 				if c.restored_score != 0:
 					world.scores[c.player_id] = c.restored_score
 				update_bot_fill()

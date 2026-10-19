@@ -9,8 +9,6 @@ extends Node
 ## Logs go to stderr; stdout is reserved for the managed-mode JSON protocol.
 
 const MOVEMENT := preload("res://data/movement_config.tres")
-const PULSE := preload("res://data/weapons/pulse_rifle.tres")
-const ARC := preload("res://data/weapons/arc_launcher.tres")
 const ARENA_GAMEPLAY := preload("res://maps/test_arena/gameplay.tscn")
 
 var server: ServerSession
@@ -35,7 +33,7 @@ func _ready() -> void:
 	server = ServerSession.new()
 	server.name = "Server"
 	add_child(server)
-	var loadout: Array[WeaponData] = [PULSE, ARC]
+	var loadout := Loadouts.ffa()
 	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points())
 	if err != OK:
 		printerr("IONFALL server: could not listen on UDP port %d: %s" % [port, error_string(err)])

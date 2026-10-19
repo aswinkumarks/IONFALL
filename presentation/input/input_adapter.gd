@@ -106,6 +106,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_slot_request = 0
 	elif event.is_action_pressed("weapon_2"):
 		_slot_request = 1
+	elif event.is_action_pressed("weapon_3"):
+		_slot_request = 2
 
 
 ## Default bindings, created at runtime so they can be remapped later
@@ -123,6 +125,7 @@ static func _ensure_actions() -> void:
 		"switch_weapon": [KEY_Q],
 		"weapon_1": [KEY_1],
 		"weapon_2": [KEY_2],
+		"weapon_3": [KEY_3],
 	}
 	for action in keys:
 		if InputMap.has_action(action):

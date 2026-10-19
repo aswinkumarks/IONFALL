@@ -8,8 +8,6 @@ extends Node
 ## Exit code 0 when every client stayed connected with clean snapshots.
 
 const MOVEMENT := preload("res://data/movement_config.tres")
-const PULSE := preload("res://data/weapons/pulse_rifle.tres")
-const ARC := preload("res://data/weapons/arc_launcher.tres")
 const ARENA_GAMEPLAY := preload("res://maps/test_arena/gameplay.tscn")
 
 var clients: Array[ClientSession] = []
@@ -29,7 +27,7 @@ func _ready() -> void:
 	var gameplay := ARENA_GAMEPLAY.instantiate()
 	add_child(gameplay)
 	await get_tree().physics_frame
-	var loadout: Array[WeaponData] = [PULSE, ARC]
+	var loadout := Loadouts.ffa()
 	printerr("IONFALL test clients: %d joining %s:%d" % [count, address, port])
 	for i in count:
 		var c := ClientSession.new()

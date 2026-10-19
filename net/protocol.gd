@@ -4,12 +4,12 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 2
+const VERSION := 3
 const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
 
-enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25 }
+enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26 }
 ## NOTICE codes: host lifecycle hints (PLAN §3.5.1, best effort).
 enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2 }
 const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED]
@@ -152,11 +152,12 @@ static func decode_phase(data: PackedByteArray) -> Dictionary:
 	return out if r.ok else {}
 
 
-## roster: Array of {id, name, bot, score}
+## roster: Array of {id, name, bot, score, kills, deaths, assists}
 static func encode_roster(match_id: int, roster: Array) -> PackedByteArray:
 	var w := Wire.Writer.new().u8(Msg.ROSTER).u32(match_id).u8(roster.size())
 	for p in roster:
-		w.u16(p.id).u8(1 if p.bot else 0).i16(p.score).str8(p.name)
+		w.u16(p.id).u8(1 if p.bot else 0).i16(p.score).u16(p.get("kills", 0)).u16(p.get("deaths", 0)) \
+				.u16(p.get("assists", 0)).str8(p.name)
 	return w.data()
 
 
@@ -166,8 +167,55 @@ static func decode_roster(data: PackedByteArray) -> Dictionary:
 	var out := {"match_id": r.u32(), "players": []}
 	var n := r.u8()
 	for i in n:
-		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "score": r.i16(), "name": r.str8()})
+		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "score": r.i16(), "kills": r.u16(),
+				"deaths": r.u16(), "assists": r.u16(), "name": r.str8()})
 	return out if r.ok else {}
+
+
+## End-of-match results (PLAN §2.6, §3.13). `result_id` makes applying them
+## to a profile idempotent. `winner` 0 = draw. `players`: Array of Dictionary
+## from MatchStats lines plus "score".
+static func encode_results(match_id: int, result_id: String, winner: int, duration_ticks: int, humans: int,
+		players: Array) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.RESULTS).u32(match_id).str8(result_id).u16(winner).u32(duration_ticks) \
+			.u8(humans).u8(players.size())
+	for p in players:
+		w.u16(p.id).u8(1 if p.bot else 0).str8(p.name).i16(p.score).u32(p.ticks_played)
+		for k in RESULT_COUNTERS:
+			w.u16(clampi(p[k], 0, 65535))
+		var wk: Dictionary = p.weapon_kills
+		w.u8(mini(wk.size(), WEAPON_IDS.size()))
+		for weapon in wk.keys().slice(0, WEAPON_IDS.size()):
+			w.u8(weapon_index(weapon)).u16(clampi(wk[weapon], 0, 65535))
+	return w.data()
+
+
+const RESULT_COUNTERS := ["kills", "kills_vs_bots", "deaths", "deaths_vs_bots", "assists", "assists_vs_bots",
+		"suicides", "headshot_kills", "shots", "hits", "damage_dealt", "damage_taken", "best_streak"]
+
+
+static func decode_results(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var out := {"match_id": r.u32(), "result_id": r.str8(64), "winner": r.u16(), "duration_ticks": r.u32(),
+			"humans": r.u8(), "players": []}
+	var n := r.u8()
+	if n > MAX_PEERS:
+		return {}
+	for i in n:
+		var p := {"id": r.u16(), "bot": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES), "score": r.i16(), "ticks_played": r.u32()}
+		for k in RESULT_COUNTERS:
+			p[k] = r.u16()
+		var wk := {}
+		var nw := r.u8()
+		if nw > WEAPON_IDS.size():
+			return {}
+		for j in nw:
+			var idx := r.u8()
+			wk[WEAPON_IDS[clampi(idx, 0, WEAPON_IDS.size() - 1)]] = r.u16()
+		p["weapon_kills"] = wk
+		out.players.append(p)
+	return out if r.ok and r.remaining() == 0 else {}
 
 
 static func encode_notice(code: int) -> PackedByteArray:
@@ -231,8 +279,12 @@ static func write_event(w: Wire.Writer, e: Dictionary) -> bool:
 			var flags := (1 if e.headshot else 0) | (2 if e.killed else 0) | (4 if e.shield_broken else 0)
 			w.u8(Event.HIT).u16(e.attacker).u32(int(parts[1])).u16(e.target).u32(e.tick).u8(clampi(roundi(e.amount), 0, 255)).u8(flags)
 		"death":
-			w.u8(Event.DEATH).u16(e.victim).u8(int(e.id.split(":")[2])).u16(e.killer).u8(1 if e.suicide else 0) \
-					.u8(weapon_index(e.weapon)).pos(e.position)
+			var flags := (1 if e.suicide else 0) | (2 if e.get("headshot", false) else 0) | (4 if e.get("environment", false) else 0)
+			var assists: Array = e.get("assists", [])
+			w.u8(Event.DEATH).u16(e.victim).u8(int(e.id.split(":")[2])).u16(e.killer).u8(flags) \
+					.u8(weapon_index(e.weapon) if e.weapon != &"" else 255).pos(e.position).u8(mini(assists.size(), 3))
+			for i in mini(assists.size(), 3):
+				w.u16(assists[i])
 		"spawn":
 			w.u8(Event.SPAWN).u16(e.player).u8(int(e.id.split(":")[2])).pos(e.position).u16(PlayerCommand.quantize_yaw(e.yaw))
 		_:
@@ -280,10 +332,20 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 			var victim := r.u16()
 			var life := r.u8()
 			var killer := r.u16()
-			var suicide := r.u8() == 1
-			var weapon: StringName = WEAPON_IDS[clampi(r.u8(), 0, WEAPON_IDS.size() - 1)]
+			var flags := r.u8()
+			var wi := r.u8()
+			var weapon: StringName = &"" if wi == 255 else WEAPON_IDS[clampi(wi, 0, WEAPON_IDS.size() - 1)]
+			var position := r.pos()
+			var n := r.u8()
+			if n > 3:
+				r.ok = false
+				return {}
+			var assists: Array[int] = []
+			for i in n:
+				assists.append(r.u16())
 			return {"type": "death", "id": "d:%d:%d" % [victim, life], "victim": victim, "killer": killer,
-					"suicide": suicide, "weapon": weapon, "position": r.pos()}
+					"suicide": (flags & 1) != 0, "headshot": (flags & 2) != 0, "environment": (flags & 4) != 0,
+					"weapon": weapon, "position": position, "assists": assists}
 		Event.SPAWN:
 			var player := r.u16()
 			var life := r.u8()
