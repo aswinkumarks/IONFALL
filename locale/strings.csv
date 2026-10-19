@@ -123,3 +123,6 @@ ACTION_SCOREBOARD,Scoreboard
 SETTING_NIGHT_MODE,Night mode (compressed dynamic range)
 CAPTION_SHIELD_BROKEN,Shield broken
 CAPTION_SHIELD_RECHARGING,Shield recharging
+NET_MAP_MISMATCH,"The host is on a different map (%s); update both devices to the same build"
+MAP_STATION,Meridian Station
+MAP_TEST_ARENA,Test Arena

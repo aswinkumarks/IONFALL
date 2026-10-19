@@ -1,15 +1,13 @@
 extends Node
-## Dedicated server (PLAN §3.5.2): one ServerSession in the test arena, no
-## local player.
+## Dedicated server (PLAN §3.5.2): one ServerSession, no local player.
 ##
-## Arguments (after `--`): `--port N` (default 47710), `--bots N` fills the match
+## Arguments (after `--`): `--port N` (default 47710), `--map ID` (maps/maps.gd), `--bots N` fills the match
 ## with training dummies up to N combatants, `--status-interval S` seconds between status lines,
 ## `--name NAME` shown in LAN server lists, `--no-discovery` stops beacons, `--smoke-test`
 ## exits right after startup so CI can verify that the exported server boots.
 ## Logs go to stderr; stdout is reserved for the managed-mode JSON protocol.
 
 const MOVEMENT := preload("res://data/movement_config.tres")
-const ARENA_GAMEPLAY := preload("res://maps/test_arena/gameplay.tscn")
 
 var server: ServerSession
 var _status_timer: float = 0.0
@@ -26,12 +24,14 @@ func _ready() -> void:
 	var port := Platform.get_user_arg("--port", str(Protocol.DEFAULT_PORT)).to_int()
 	var bots := clampi(Platform.get_user_arg("--bots", "0").to_int(), 0, Protocol.MAX_PEERS - 1)
 	_status_interval = maxf(Platform.get_user_arg("--status-interval", "10").to_float(), 1.0)
-	var gameplay := ARENA_GAMEPLAY.instantiate()
+	var map := Maps.from_args()
+	var gameplay := Maps.gameplay(map)
 	add_child(gameplay)
 	# Static world bodies become queryable after the first physics step.
 	await get_tree().physics_frame
 	server = ServerSession.new()
 	server.name = "Server"
+	server.map_id = map
 	add_child(server)
 	var loadout := Loadouts.ffa()
 	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points())

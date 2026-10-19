@@ -6,8 +6,6 @@ extends Node3D
 ## is interpolated from snapshots. Input, HUD and effects are shared.
 
 const MOVEMENT := preload("res://data/movement_config.tres")
-const ARENA_GAMEPLAY := preload("res://maps/test_arena/gameplay.tscn")
-const ARENA_PRESENTATION := preload("res://maps/test_arena/presentation.tscn")
 const HUD_SCENE := preload("res://ui/hud/hud.tscn")
 const MAIN_MENU := "res://ui/main_menu/main_menu.tscn"
 const BOT_COLOR := Color(0.95, 0.5, 0.2)
@@ -73,9 +71,11 @@ var _sim_ms := FrameStats.new(3600)  ## host: of which simulation
 func _ready() -> void:
 	config = MatchConfig.pending if MatchConfig.pending != null else MatchConfig.new()
 	MatchConfig.pending = null
-	var gameplay := ARENA_GAMEPLAY.instantiate()
+	if not Maps.has(config.map):
+		config.map = Maps.DEFAULT
+	var gameplay := Maps.gameplay(config.map)
 	add_child(gameplay)
-	var presentation := ARENA_PRESENTATION.instantiate()
+	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
 	Events.settings_changed.connect(func(section: String, key: String, _value: Variant) -> void:
@@ -103,6 +103,7 @@ func _ready() -> void:
 	else:
 		server = ServerSession.new()
 		server.name = "Server"
+		server.map_id = config.map
 		add_child(server)
 		var port := config.port if config.mode == MatchConfig.Mode.HOST else -1
 		var err := server.start(port, MOVEMENT, loadout, spawns)
@@ -151,6 +152,11 @@ func _start_client(token: int) -> bool:
 	client.reconnect_token = token
 	client.input_source = _local_command
 	add_child(client)
+	client.joined.connect(func() -> void:
+		# Clients load the map before joining (prediction needs its collision).
+		if client.map_id != config.map:
+			client.leave()
+			_fail(tr("NET_MAP_MISMATCH") % client.map_id))
 	client.failed.connect(_on_client_lost)
 	client.left.connect(_on_client_lost)
 	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns)

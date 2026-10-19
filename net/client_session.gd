@@ -32,6 +32,7 @@ var phase: int = MatchPhase.WAITING
 var phase_seq: int = 0
 var phase_ends_tick: int = 0
 var match_seed: int = 1
+var map_id: String = ""  ## the server's map, from WELCOME
 var roster: Array = []
 var clock := ClockSync.new()
 var interpolator := RemoteInterpolator.new()
@@ -253,6 +254,7 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 				phase = w.phase
 				phase_seq = w.phase_seq
 				match_seed = w.seed
+				map_id = w.map
 				reconnect_token = w.token
 				_metrics_start_ms = Time.get_ticks_msec()
 				joined.emit()

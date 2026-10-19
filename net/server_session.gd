@@ -33,7 +33,6 @@ const VIEW_BIAS_LEARN_SAMPLES := 60
 const MAX_PENDING_EVENTS := 32
 const PING_INTERVAL_TICKS := 60
 const BASELINE_HISTORY_TICKS := 64
-const MAP_ID := "test_arena"
 const LOCAL_PLAYER_ID := 1
 ## A client that drops can come back with its reconnect token within this
 ## time and gets its player id and score back (PLAN §3.4).
@@ -58,6 +57,7 @@ var anomalies: int = 0
 var networked: bool = false
 ## Most combatants (humans + bots) this session admits: 16 dedicated,
 ## 8 PC listen host, 4 phone host (PLAN §3.5.1).
+var map_id: String = Maps.DEFAULT  ## sent in WELCOME and beacons
 var max_combatants: int = Protocol.MAX_PEERS
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
@@ -185,7 +185,7 @@ func beacon(display_name: String, dedicated: bool, port: int) -> Discovery.Beaco
 	b.build = BuildInfo.display_string()
 	b.compat_prefix = BuildInfo.compat_hash.left(8)
 	b.name = display_name
-	b.map = MAP_ID
+	b.map = map_id
 	b.combatants = _humans()
 	b.max_combatants = max_combatants
 	b.flags = Discovery.FLAG_DEDICATED if dedicated else 0
@@ -550,7 +550,7 @@ func _on_peer_joined(id: int) -> void:
 	if c == null:
 		transport.kick(id)
 		return
-	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, MAP_ID, c.token),
+	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, map_id, c.token),
 			Protocol.CH_CONTROL, true)
 	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick),
 			Protocol.CH_CONTROL, true)

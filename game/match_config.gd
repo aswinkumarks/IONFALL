@@ -13,6 +13,7 @@ var mode: int = Mode.OFFLINE
 var address: String = "127.0.0.1"
 var port: int = Protocol.DEFAULT_PORT
 var player_name: String = "Player"
+var map: String = Maps.DEFAULT
 var bots: int = 3  ## dummies alongside the local player; they leave as humans join
 
 
@@ -27,6 +28,9 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	c.mode = p_mode
 	c.player_name = p_name
 	c.bots = p_bots
+	c.map = Maps.from_args()
+	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches
+		c.bots = Platform.get_user_arg("--bots").to_int()
 	if not p_address.is_empty():
 		c.address = p_address
 	return c

@@ -2,3 +2,5 @@ file,source,author,download_date,license,attribution,modifications,redistributio
 art/characters/kenney/characterMedium.fbx,https://opengameart.org/content/animated-characters-3 (Kenney Animated Characters 3 v1.1),Kenney (www.kenney.nl),2026-10-19,CC0 1.0 (licenses/kenney-animated-characters-3.txt),optional: Kenney,none (tinted at runtime),none
 art/characters/kenney/idle.fbx;run.fbx;jump.fbx,same pack (Animations/),Kenney (www.kenney.nl),2026-10-19,CC0 1.0,optional: Kenney,none,none
 art/characters/kenney/humanMaleA.png,same pack (Skins/),Kenney (www.kenney.nl),2026-10-19,CC0 1.0,optional: Kenney,none,none
+art/textures/*.png,tools/gen_textures.gd (procedural),IONFALL project,n/a,project's own work,none,none,none
+maps/station/space_sky.gdshader,written for IONFALL,IONFALL project,n/a,project's own work,none,none,none

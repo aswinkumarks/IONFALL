@@ -8,7 +8,8 @@ const OVERLAY_SCENE := preload("res://ui/diagnostics/diagnostics_overlay.tscn")
 var frame_stats := FrameStats.new(600)
 ## Set by the active match: func() -> String with network rows for the overlay.
 var net_info: Callable
-## Soak testing: the local player is driven by a bot (toggled in the overlay).
+## Soak testing: the local player is driven by a bot (toggled in the overlay,
+## or `--autopilot` on the command line).
 var autopilot: bool = false
 var _overlay: CanvasLayer
 var _touches: Dictionary = {}
@@ -19,6 +20,7 @@ func _ready() -> void:
 		set_process(false)
 		set_process_input(false)
 		return
+	autopilot = Platform.user_args.has("--autopilot")
 	_overlay = OVERLAY_SCENE.instantiate()
 	_overlay.visible = false
 	add_child(_overlay)
