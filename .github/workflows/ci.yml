@@ -19,13 +19,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
 
       - name: Cache Godot
         id: cache-godot
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/godot
@@ -55,7 +55,7 @@ jobs:
 
       # Godot reads JAVA_HOME when it first creates its editor settings (import step).
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -108,11 +108,12 @@ jobs:
           python3 tools/write_build_info.py --platform android --arch arm64 --config debug
           mkdir -p build/android
           timeout 1800 godot --headless --install-android-build-template --export-debug "Android" build/android/ionfall.aab 2>&1 | tee export.log
+          if grep -q "ERROR" export.log; then echo "::error::Android export logged errors"; exit 1; fi
           test -f build/android/ionfall.aab
           bash tools/check_16kb.sh build/android/ionfall.aab
 
       - name: Upload builds
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ionfall-${{ github.run_number }}
           path: build/
