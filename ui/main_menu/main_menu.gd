@@ -2,8 +2,8 @@ extends Control
 ## Main menu. Every visible string is a translation key (PLAN §3.16).
 ##
 ## Quick test launches (desktop): `-- --play`, `-- --host`, `-- --join <address>` and
-## `-- --name <name>` skip the menu; `--open-settings` / `--open-profile` / `--open-customize`
-## open those screens.
+## `-- --name <name>` skip the menu; `--open-settings` / `--open-profile` open those screens
+## (`--open-stats`: the profile's Stats tab).
 
 const MATCH := "res://game/match.tscn"
 const OFFLINE_DUMMIES := 3
@@ -26,7 +26,6 @@ const HOST_DUMMIES := 2
 
 var _browser: Discovery.Browser
 var _profile_panel := ProfilePanel.new()
-var _customize_panel := CustomizePanel.new()
 var _settings := SettingsMenu.new()
 
 
@@ -51,15 +50,12 @@ func _ready() -> void:
 	_back_button.pressed.connect(_show_join.bind(false))
 	_connect_button.pressed.connect(_start.bind(MatchConfig.Mode.JOIN))
 	add_child(_profile_panel)
-	add_child(_customize_panel)
-	%CustomizeButton.pressed.connect(func() -> void: _customize_panel.open(_name_edit.text))
-	_customize_panel.closed.connect(func() -> void:
-		_name_edit.text = MatchConfig.profile_name()
-		%CustomizeButton.grab_focus())
 	add_child(_settings)
 	%SettingsButton.pressed.connect(_settings.open)
 	_settings.closed.connect(func() -> void: %SettingsButton.grab_focus())
-	_profile_panel.closed.connect(func() -> void: %ProfileButton.grab_focus())
+	_profile_panel.closed.connect(func() -> void:
+		_name_edit.text = MatchConfig.profile_name()
+		%ProfileButton.grab_focus())
 	%ProfileButton.pressed.connect(func() -> void: _profile_panel.open(_name_edit.text))
 	_address_edit.text_submitted.connect(func(_t: String) -> void: _start(MatchConfig.Mode.JOIN))
 	# Web builds can't host or use ENet (PLAN §3.20); they get a WebSocket transport later.
@@ -79,8 +75,8 @@ func _ready() -> void:
 		_settings.open()
 	elif Platform.user_args.has("--open-profile"):
 		_profile_panel.open(_name_edit.text)
-	elif Platform.user_args.has("--open-customize"):
-		_customize_panel.open(_name_edit.text)
+	elif Platform.user_args.has("--open-stats"):
+		_profile_panel.open(_name_edit.text, ProfilePanel.Tab.STATS)
 	elif Platform.user_args.has("--play"):
 		_start.call_deferred(MatchConfig.Mode.OFFLINE)
 	elif Platform.user_args.has("--host"):

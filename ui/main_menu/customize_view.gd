@@ -1,13 +1,11 @@
-class_name CustomizePanel
-extends Control
-## Player customisation: callsign, colour (PlayerVisual.PALETTE) and
-## playable character (CharacterRig.SELECTABLE), with a turning 3D preview
-## of the pick holding the rifle. Colour and character save to the profile
-## as they change; the callsign saves on Done. All three are sent when
-## joining a match. Full-screen overlay in the menu's style; left/right
-## (keys, pad) cycle the character unless the callsign field has focus.
-
-signal closed
+class_name CustomizeView
+extends HBoxContainer
+## Player customisation (the Profile screen's first tab): callsign, colour
+## (PlayerVisual.PALETTE) and playable character (CharacterRig.SELECTABLE),
+## with a turning 3D preview of the pick holding the rifle. Colour and
+## character save to the profile as they change; the callsign on save().
+## All three are sent when joining a match. While shown, left/right (keys,
+## pad) cycle the character unless the callsign field has focus.
 
 const SWATCH_SIZE := Vector2(64, 44)
 
@@ -22,36 +20,17 @@ var _swatches: Array[Button] = []
 var _character_buttons: Array[Button] = []
 var _title: Label
 var _blurb: Label
-var _done: Button
 
 
 func _init() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	var bg := ColorRect.new()
-	bg.color = Color(UiStyle.BG, 0.96)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 72)
-	margin.add_theme_constant_override("margin_right", 72)
-	margin.add_theme_constant_override("margin_top", 40)
-	margin.add_theme_constant_override("margin_bottom", 32)
-	add_child(margin)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 12)
-	margin.add_child(column)
-	column.add_child(UiStyle.label("MENU_CUSTOMIZE", &"HeaderLabel"))
-	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 32)
-	column.add_child(body)
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_theme_constant_override("separation", 32)
 
 	# Left: the preview, with the character's name and blurb under it.
 	var preview := VBoxContainer.new()
 	preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview.size_flags_stretch_ratio = 1.4
-	body.add_child(preview)
+	add_child(preview)
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
 	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -74,7 +53,7 @@ func _init() -> void:
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"CardPanel"
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(card)
+	add_child(card)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	card.add_child(scroll)
@@ -86,7 +65,7 @@ func _init() -> void:
 	_name_edit.max_length = 16
 	_name_edit.placeholder_text = "MENU_NAME_PLACEHOLDER"
 	_name_edit.custom_minimum_size.y = 52
-	_name_edit.text_submitted.connect(func(_t: String) -> void: _done.grab_focus())
+	_name_edit.text_submitted.connect(func(_t: String) -> void: release_focus_owner())
 	side.add_child(_name_edit)
 	side.add_child(_gap())
 	side.add_child(UiStyle.label("CUSTOMIZE_COLOR", &"DimLabel"))
@@ -104,25 +83,23 @@ func _init() -> void:
 		_swatches.append(b)
 	side.add_child(_gap())
 	side.add_child(UiStyle.label("CUSTOMIZE_CHARACTER", &"DimLabel"))
+	var characters := HBoxContainer.new()
+	characters.add_theme_constant_override("separation", 8)
+	side.add_child(characters)
 	for i in CharacterRig.SELECTABLE.size():
 		var b := UiStyle.menu_button(CharacterRig.SELECTABLE_KEYS[i])
 		b.toggle_mode = true
+		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.custom_minimum_size.y = 50
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 20)
+		b.clip_text = true
 		b.pressed.connect(_pick_character.bind(i))
-		side.add_child(b)
+		characters.add_child(b)
 		_character_buttons.append(b)
-	var bottom := HBoxContainer.new()
-	bottom.alignment = BoxContainer.ALIGNMENT_END
-	column.add_child(bottom)
-	_done = UiStyle.menu_button("MENU_DONE", &"PrimaryButton")
-	_done.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_done.custom_minimum_size.x = 240
-	_done.pressed.connect(close)
-	bottom.add_child(_done)
 	_idle.alive = true
 	_idle.move_state = PlayerSimState.Move.GROUND
-	visible = false
-	set_process(false)
+	visibility_changed.connect(_on_visibility_changed)
 
 
 static func _gap() -> Control:
@@ -157,27 +134,33 @@ func _build_stage() -> void:
 	_stage.add_child(camera)
 
 
-## `player_name`: the callsign currently in the menu's name field.
-func open(player_name: String) -> void:
+## Loads the profile picks; `player_name` is the callsign to edit.
+func load_profile(player_name: String) -> void:
 	_name_edit.text = player_name
 	_character = MatchConfig.profile_character()
 	_color = MatchConfig.profile_color()
 	_refresh()
-	visible = true
-	set_process(true)
-	_done.grab_focus()
 
 
-func close() -> void:
-	var n := ServerSession.sanitize_name(_name_edit.text)
-	Settings.set_value("profile", "name", n)
+## Saves the callsign (sanitised); colour and character are already saved.
+func save() -> void:
+	Settings.set_value("profile", "name", ServerSession.sanitize_name(_name_edit.text))
 	Settings.save_settings()
-	visible = false
-	set_process(false)
-	if _rig != null:
+
+
+func release_focus_owner() -> void:
+	_name_edit.release_focus()
+
+
+## The preview runs only while the tab is shown; hidden, its rig is freed.
+func _on_visibility_changed() -> void:
+	var shown := is_visible_in_tree()
+	set_process(shown)
+	if not shown and _rig != null:
 		_rig.queue_free()
 		_rig = null
-	closed.emit()
+	elif shown and _rig == null and is_inside_tree():
+		_refresh()
 
 
 func _pick_character(index: int) -> void:
@@ -238,16 +221,16 @@ func _process(delta: float) -> void:
 		_rig.animate(_idle, delta, 1.8)
 
 
-## _input, not _unhandled_input: focused buttons would eat left/right.
+## _input, not _unhandled_input: focused buttons would eat left/right (the
+## tab bar keeps them, to switch tabs).
 func _input(event: InputEvent) -> void:
-	if not visible or get_viewport().gui_get_focus_owner() == _name_edit:
+	var focus := get_viewport().gui_get_focus_owner()
+	if not is_visible_in_tree() or focus == _name_edit or focus is TabBar:
 		return
 	if event.is_action_pressed("ui_left"):
 		_pick_character(_character - 1)
 	elif event.is_action_pressed("ui_right"):
 		_pick_character(_character + 1)
-	elif event.is_action_pressed("ui_cancel"):
-		close()
 	else:
 		return
 	get_viewport().set_input_as_handled()

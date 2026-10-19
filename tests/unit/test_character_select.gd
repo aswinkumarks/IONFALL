@@ -28,11 +28,13 @@ func test_catalog() -> void:
 
 
 func test_panel_picks_and_saves() -> void:
-	var panel := CustomizePanel.new()
-	add_child_autofree(panel)
+	var profile := ProfilePanel.new()
+	add_child_autofree(profile)
+	var panel := profile.customize
 	Settings.set_value("profile", "character", CharacterRig.SELECTABLE[0])
 	Settings.set_value("profile", "color", 0)
-	panel.open("Tester")
+	profile.open("Tester")
+	assert_eq(profile._tabs.current_tab, ProfilePanel.Tab.CUSTOMIZE, "opens on Customise")
 	panel._pick_character(1)
 	assert_eq(Settings.get_value("profile", "character"), CharacterRig.SELECTABLE[1])
 	assert_eq(MatchConfig.profile_character(), 1)
@@ -43,8 +45,8 @@ func test_panel_picks_and_saves() -> void:
 	assert_eq(MatchConfig.profile_color(), 3)
 	assert_eq(panel.preview_color(), PlayerVisual.PALETTE[3])
 	panel._name_edit.text = "  Nova\u0007  "
-	panel.close()
-	assert_false(panel.visible)
+	profile.close()
+	assert_false(profile.visible)
 	assert_eq(MatchConfig.profile_name(), "Nova", "callsign sanitised and saved")
 
 

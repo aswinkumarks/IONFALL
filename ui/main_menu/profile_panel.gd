@@ -1,11 +1,17 @@
 class_name ProfilePanel
 extends Control
-## Profile and stats screen (PLAN §3.13): a header card with level and XP,
+## Profile screen (PLAN §3.13), two tabs: Customise (callsign, colour,
+## character; CustomizeView) and Stats (a header card with level and XP,
 ## then stat tiles split vs players / vs bots, with unconfirmed results and
-## read-only profiles called out. Full-screen overlay in the menu's style.
+## read-only profiles called out). Back saves the callsign. Full-screen
+## overlay in the menu's style.
 
 signal closed
 
+enum Tab { CUSTOMIZE, STATS }
+
+var customize := CustomizeView.new()
+var _tabs := TabContainer.new()
 var _column: VBoxContainer
 var _name: Label
 var _badge: Label
@@ -29,14 +35,22 @@ func _init() -> void:
 	margin.add_theme_constant_override("margin_top", 40)
 	margin.add_theme_constant_override("margin_bottom", 32)
 	add_child(margin)
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 14)
+	margin.add_child(root)
+	root.add_child(UiStyle.label("MENU_PROFILE", &"HeaderLabel"))
+	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(_tabs)
+	customize.name = "PROFILE_TAB_CUSTOMIZE"
+	_tabs.add_child(customize)
 	var scroll := ScrollContainer.new()
+	scroll.name = "PROFILE_TAB_STATS"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
+	_tabs.add_child(scroll)
 	_column = VBoxContainer.new()
 	_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_column.add_theme_constant_override("separation", 14)
 	scroll.add_child(_column)
-	_column.add_child(UiStyle.label("MENU_PROFILE", &"HeaderLabel"))
 
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"CardPanel"
@@ -74,11 +88,9 @@ func _init() -> void:
 	_back = UiStyle.menu_button("MENU_BACK", &"PrimaryButton")
 	_back.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_back.custom_minimum_size.x = 240
-	_back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_back.pressed.connect(func() -> void:
-		visible = false
-		closed.emit())
-	_column.add_child(_back)
+	_back.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_back.pressed.connect(close)
+	root.add_child(_back)
 	visible = false
 
 
@@ -97,7 +109,9 @@ func _tile(value: String, caption: String, sub: String = "") -> Control:
 	return tile
 
 
-func open(player_name: String) -> void:
+## `player_name`: the callsign in the menu's name field.
+func open(player_name: String, tab: Tab = Tab.CUSTOMIZE) -> void:
+	customize.load_profile(player_name)
 	var d := Profile.data
 	var s := d.stats()
 	var lv := ProfileData.level_for(d.xp())
@@ -127,5 +141,18 @@ func open(player_name: String) -> void:
 		notes.append(tr("PROFILE_READ_ONLY"))
 	_notes.text = "\n".join(notes)
 	_notes.visible = not notes.is_empty()
+	_tabs.current_tab = tab
 	visible = true
 	_back.grab_focus()
+
+
+func close() -> void:
+	customize.save()
+	visible = false
+	closed.emit()
+
+
+func _input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		close()
+		get_viewport().set_input_as_handled()
