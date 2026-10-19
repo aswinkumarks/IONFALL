@@ -55,4 +55,4 @@ func test_sentinel_retarget() -> void:
 	var hips: Vector3 = idle.track_get_key_value(idle.get_track_count() - 1, 0)
 	assert_between(hips.y, 85.0, 110.0, "hips stay near the model's rest height (cm)")
 	rig.set_weapon(Loadouts.PISTOL.id)
-	assert_almost_eq(SentinelRig._grip.basis.get_scale().x, SentinelRig.GRIP_SCALE * 100.0, 0.5, "grip scaled into centimetres")
+	assert_almost_eq(SentinelRig._grip.basis.get_scale().x, SentinelRig.SENTINEL_GRIP_SCALE * 100.0, 0.5, "grip scaled into centimetres")

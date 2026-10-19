@@ -71,3 +71,22 @@ func set_weapon(_id: StringName) -> void:
 ## The character fired (upper-body recoil where supported).
 func on_fire() -> void:
 	pass
+
+
+## Turns this body into first-person arms: only the arms are kept, in the
+## rest pose, casting no shadow; pose them with pose_first_person(). False if
+## the rig can't.
+func make_first_person() -> bool:
+	return false
+
+
+## First person: the head's position in this rig's space (the camera sits
+## just in front of it).
+func head_position() -> Vector3:
+	return Vector3(0.0, 1.6, 0.0)
+
+
+## First person: reach the right hand to grip `weapon` (its transform in this
+## rig's space) and the left hand to `support` (a point, same space).
+func pose_first_person(_weapon: Transform3D, _support: Vector3) -> void:
+	pass

@@ -47,6 +47,7 @@ var _scores_button: Button
 var _results_until: float = 0.0
 ## Death cam (PLAN §2.6): {pos, killer, until} while active.
 var _death_cam: Dictionary = {}
+var _arms_ready: bool = false  ## first-person arms built (see _ensure_arms)
 var _life_dealt: float = 0.0
 var _life_taken: float = 0.0
 var _remote_cache: Dictionary = {}  ## client: latest remote render states
@@ -204,6 +205,15 @@ func _apply_shadows(root: Node) -> void:
 		(light as DirectionalLight3D).shadow_enabled = on
 
 
+## First-person arms in the player's character and colour, once the local
+## id (for the "auto" colour) is known.
+func _ensure_arms() -> void:
+	if _arms_ready:
+		return
+	_arms_ready = true
+	view.set_character(CharacterRig.selectable_style(config.character), PlayerVisual.color_for(local_id(), config.color))
+
+
 func local_id() -> int:
 	return client.local_id if client != null else ServerSession.LOCAL_PLAYER_ID
 
@@ -299,6 +309,7 @@ func _render_host(delta: float) -> void:
 	var s := me.state
 	var prev: PlayerSimState = _prev.get(me.net_id)
 	var from := prev if prev != null and prev.discontinuity_gen == s.discontinuity_gen else s
+	_ensure_arms()
 	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw,
 			input.look_pitch, s, me.current_weapon(), delta)
 	var seen := {}
@@ -321,6 +332,7 @@ func _render_client(delta: float) -> void:
 	var prev := client.prev_state
 	var from := prev if prev != null and prev.discontinuity_gen == s.discontinuity_gen else s
 	var feet := from.position.lerp(s.position, client.alpha()) + client.correction_offset
+	_ensure_arms()
 	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw, input.look_pitch, s, me.current_weapon(), delta)
 	var names := {}
 	for p in client.roster:

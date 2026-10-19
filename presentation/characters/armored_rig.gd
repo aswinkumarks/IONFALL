@@ -19,9 +19,14 @@ const UPPER_BONES := ["spine_02", "spine_03", "neck_01", "Head", "clavicle_l", "
 const LOOPING := ["Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Pistol_Idle",
 		"Pistol_Aim_Down", "Pistol_Aim_Neutral", "Pistol_Aim_Up"]
 const MAX_LEG_TWIST := deg_to_rad(50.0)
+## The weapon in the right hand (hand-bone space).
+const GRIP_EULER := Vector3(0.0, PI * 0.5, PI * 0.5)
+const GRIP_OFFSET := Vector3(0.0, 0.08, 0.03)
+const GRIP_SCALE := 2.6
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
 static var _library: AnimationLibrary
+static var _arms_cache: Dictionary = {}  ## source mesh instance id -> arms-only mesh
 
 var _model: Node3D
 var _skeleton: Skeleton3D
@@ -347,12 +352,146 @@ func set_weapon(id: StringName) -> void:
 	var w := WeaponModels.instantiate(id)
 	if w == null:
 		return
-	# Grip in the right hand, barrel along the hand's forward.
-	w.scale = Vector3.ONE * 2.6
-	w.rotation = Vector3(0.0, PI * 0.5, PI * 0.5)
-	w.position = Vector3(0.0, 0.08, 0.03)
+	w.transform = _grip_local()
 	_hand.add_child(w)
 	_weapon_node = w
+
+
+## The weapon's transform in the hand bone's space: grip in the right hand,
+## barrel along the hand's forward.
+func _grip_local() -> Transform3D:
+	return Transform3D(Basis.from_euler(GRIP_EULER) * GRIP_SCALE, GRIP_OFFSET)
+
+
+## The weapon's scale relative to the hand, in metres.
+func _grip_scale() -> float:
+	return GRIP_SCALE
+
+
+## Each arm's [upper arm, forearm, hand] bones, right first; the upper arms'
+## subtrees are what first person keeps.
+func _arm_chains() -> Array:
+	return [["upperarm_r", "lowerarm_r", "hand_r"], ["upperarm_l", "lowerarm_l", "hand_l"]]
+
+
+func _arm_roots() -> Array:
+	return _arm_chains().map(func(c: Array) -> String: return c[0])
+
+
+func head_position() -> Vector3:
+	var head := _skeleton.find_bone("Head") if _skeleton.find_bone("Head") >= 0 else _skeleton.find_bone("neck")
+	return global_transform.affine_inverse() * _skeleton.global_transform * _skeleton.get_bone_global_rest(head).origin
+
+
+func pose_first_person(weapon: Transform3D, support: Vector3) -> void:
+	var to_skel := (global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
+	var grip := _grip_local()
+	var unit := grip.basis.get_scale().x / _grip_scale()  ## skeleton units per metre (e.g. 100 for cm)
+	# The hand that holds `weapon`: undo the grip, keeping metres for the offset.
+	var hand_basis := weapon.basis.orthonormalized() * grip.basis.orthonormalized().inverse()
+	var hand_pos := weapon.origin - hand_basis * (grip.origin / unit)
+	var chains := _arm_chains()
+	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
+	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
+	_reach(chains[1], to_skel * support, Basis(), Vector3(0.3, -1.0, -0.8))
+
+
+## Two-bone IK in skeleton space: upper arm and forearm bend in the plane
+## towards `pole` so the hand lands on `target`; the hand takes `hand_basis`
+## (identity basis: keep the forearm's).
+func _reach(chain: Array, target: Vector3, hand_basis: Basis, pole: Vector3) -> void:
+	var sk := _skeleton
+	var u := sk.find_bone(chain[0])
+	var f := sk.find_bone(chain[1])
+	var h := sk.find_bone(chain[2])
+	var rest_u := sk.get_bone_global_rest(u)
+	var rest_f := sk.get_bone_global_rest(f)
+	var rest_h := sk.get_bone_global_rest(h)
+	var l1 := rest_u.origin.distance_to(rest_f.origin)
+	var l2 := rest_f.origin.distance_to(rest_h.origin)
+	var parent := sk.get_bone_global_pose(sk.get_bone_parent(u))
+	var shoulder := parent * sk.get_bone_rest(u).origin
+	var to_target := target - shoulder
+	var d := clampf(to_target.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
+	var dir := to_target.normalized()
+	var a := (l1 * l1 - l2 * l2 + d * d) / (2.0 * d)
+	var bend := (pole - dir * pole.dot(dir)).normalized()
+	var elbow := shoulder + dir * a + bend * sqrt(maxf(l1 * l1 - a * a, 0.0))
+	var wrist := shoulder + dir * d
+	# Upper arm: turn its rest direction onto the elbow.
+	var swing_u := Quaternion((rest_f.origin - rest_u.origin).normalized(), (elbow - shoulder).normalized())
+	var upper := Basis(swing_u) * rest_u.basis.orthonormalized()
+	sk.set_bone_pose_rotation(u, (parent.basis.orthonormalized().inverse() * upper).get_rotation_quaternion())
+	# Forearm: from where the upper arm carried it onto the wrist.
+	var fore_dir := Basis(swing_u) * (rest_h.origin - rest_f.origin).normalized()
+	var swing_f := Quaternion(fore_dir, (wrist - elbow).normalized())
+	var fore := Basis(swing_f) * Basis(swing_u) * rest_f.basis.orthonormalized()
+	sk.set_bone_pose_rotation(f, (upper.inverse() * fore).get_rotation_quaternion())
+	if hand_basis != Basis():
+		sk.set_bone_pose_rotation(h, (fore.inverse() * hand_basis).get_rotation_quaternion())
+
+
+func make_first_person() -> bool:
+	_tree.active = false
+	_skeleton.reset_bone_poses()
+	_model.rotation.y = PI
+	var keep := {}
+	for root: String in _arm_roots():
+		var stack := [_skeleton.find_bone(root)]
+		while not stack.is_empty():
+			var b: int = stack.pop_back()
+			keep[_skeleton.get_bone_name(b)] = true
+			stack.append_array(_skeleton.get_bone_children(b))
+	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if mi.skin == null or not mi.visible:
+			mi.visible = false
+			continue
+		var key := mi.mesh.get_instance_id()
+		if not _arms_cache.has(key):
+			_arms_cache[key] = _arms_only(mi.mesh, mi.skin, _skeleton, keep)
+		mi.mesh = _arms_cache[key]
+	return true
+
+
+## `mesh` keeping only triangles mostly weighted to `keep` bones.
+static func _arms_only(mesh: Mesh, skin: Skin, sk: Skeleton3D, keep: Dictionary) -> ArrayMesh:
+	var kept_bind := PackedByteArray()
+	kept_bind.resize(skin.get_bind_count())
+	for i in skin.get_bind_count():
+		var bone_name := String(skin.get_bind_name(i))
+		if bone_name.is_empty():
+			bone_name = sk.get_bone_name(skin.get_bind_bone(i))
+		kept_bind[i] = 1 if keep.has(bone_name) else 0
+	var out := ArrayMesh.new()
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		if verts.is_empty() or bones.is_empty():
+			continue  # no CPU-side data (headless dummy renderer)
+		var per := bones.size() / verts.size()
+		var on_arm := PackedByteArray()
+		on_arm.resize(verts.size())
+		for v in verts.size():
+			var w := 0.0
+			for k in per:
+				if kept_bind[bones[v * per + k]]:
+					w += weights[v * per + k]
+			on_arm[v] = 1 if w > 0.5 else 0
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var kept := PackedInt32Array()
+		for t in range(0, indices.size(), 3):
+			if on_arm[indices[t]] and on_arm[indices[t + 1]] and on_arm[indices[t + 2]]:
+				kept.append_array([indices[t], indices[t + 1], indices[t + 2]])
+		if kept.is_empty():
+			continue
+		arrays[Mesh.ARRAY_INDEX] = kept
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {},
+				mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
+		out.surface_set_material(out.get_surface_count() - 1, mesh.surface_get_material(s))
+	return out
 
 
 func set_glow(amount: float) -> void:

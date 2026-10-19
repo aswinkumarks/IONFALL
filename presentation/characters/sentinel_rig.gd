@@ -32,10 +32,7 @@ const CHAIN := {
 const SENTINEL_UPPER := ["Spine01", "Spine", "neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand",
 		"RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const SAMPLE_FPS := 30.0
-## The weapon grip in the animation-library hand space (metres), as ArmoredRig.
-const GRIP_EULER := Vector3(0.0, PI * 0.5, PI * 0.5)
-const GRIP_SCALE := 2.0  ## a touch smaller than ArmoredRig: slimmer hands
-const GRIP_OFFSET := Vector3(0.0, 0.08, 0.03)
+const SENTINEL_GRIP_SCALE := 2.0  ## a touch smaller than ArmoredRig: slimmer hands
 
 static var _sentinel_library: AnimationLibrary
 static var _grip: Transform3D  ## GRIP in the Sentinel's hand space
@@ -66,19 +63,16 @@ func setup(color: Color) -> void:
 	_build_tree(_retarget_to(_skeleton, String(_model.get_path_to(_skeleton))), SENTINEL_UPPER)
 
 
-func set_weapon(id: StringName) -> void:
-	if id == _weapon_id or _hand == null:
-		return
-	_weapon_id = id
-	if _weapon_node != null:
-		_weapon_node.queue_free()
-		_weapon_node = null
-	var w := WeaponModels.instantiate(id)
-	if w == null:
-		return
-	w.transform = _grip
-	_hand.add_child(w)
-	_weapon_node = w
+func _grip_local() -> Transform3D:
+	return _grip
+
+
+func _arm_chains() -> Array:
+	return [["RightArm", "RightForeArm", "RightHand"], ["LeftArm", "LeftForeArm", "LeftHand"]]
+
+
+func _grip_scale() -> float:
+	return SENTINEL_GRIP_SCALE
 
 
 func _apply_emission() -> void:
@@ -116,7 +110,7 @@ static func _retarget_to(target: Skeleton3D, skel_path: String) -> AnimationLibr
 	var hand_fix: Basis = dst_rest[tb.call("hand_r")].basis.orthonormalized().inverse() \
 			* Basis(fix["hand_r"]).inverse() * src_rest[sb.call("hand_r")].basis.orthonormalized()
 	var unit: float = 1.0 / (target.get_parent() as Node3D).scale.x if target.get_parent() is Node3D else 1.0
-	_grip = Transform3D(hand_fix * Basis.from_euler(GRIP_EULER) * (GRIP_SCALE * unit), hand_fix * GRIP_OFFSET * unit)
+	_grip = Transform3D(hand_fix * Basis.from_euler(GRIP_EULER) * (SENTINEL_GRIP_SCALE * unit), hand_fix * GRIP_OFFSET * unit)
 
 	_sentinel_library = AnimationLibrary.new()
 	for clip: String in CLIPS:

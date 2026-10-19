@@ -9,13 +9,31 @@ extends Node3D
 ## spring recoil, reload and switch animations, muzzle flash with a short
 ## light, and camera FOV kicks for sprint and slide. "Reduce screen shake"
 ## scales the camera-side effects down.
+##
+## Arms: the player's own character cut down to its arms
+## (CharacterRig.make_first_person), its head just behind the camera; every
+## frame two-bone IK reaches the right hand to the weapon's grip and the
+## left to its fore-end, so the hands follow every pose above.
 
 const SPRINT_FOV := 6.0
 const SLIDE_FOV := 9.0
+## Where the camera sits relative to the rig's head bone (the eyes are above
+## the head joint).
+const EYE_FROM_HEAD := Vector3(0.0, 0.12, 0.0)
+## Bladed stance: the (hidden) body turns towards the weapon side, bringing
+## the left shoulder forward so the support arm comes up from below.
+const STANCE_YAW := -0.45
+## First-person weapons are drawn this much larger than their hip offsets
+## were tuned for, to sit in life-size hands.
+const WEAPON_SCALE := 1.5
+## Left-hand support: this far from the grip towards the muzzle, and below the barrel.
+const SUPPORT_ALONG := 0.55
+const SUPPORT_DROP := 0.035
 
 var camera := Camera3D.new()
 var _viewmodel := Node3D.new()  ## pose root, animated every frame
 var _models: Dictionary = {}  ## weapon id -> Node3D
+var _arms: CharacterRig
 var _current_id: StringName = &""
 var _muzzle: Node3D
 var _flash := MeshInstance3D.new()
@@ -83,6 +101,24 @@ static func _flash_texture() -> Texture2D:
 	return t
 
 
+## First-person arms of `style` (CharacterRig.STYLES) in `color`; rigs that
+## can't hold a weapon in first person fall back to `fallback`.
+func set_character(style: String, color: Color, fallback: String = "armored") -> void:
+	if _arms != null:
+		_arms.queue_free()
+		_arms = null
+	for s: String in [style, fallback]:
+		var rig := CharacterRig.create(s)
+		camera.add_child(rig)
+		rig.setup(color)
+		if rig.make_first_person():
+			_arms = rig
+			_arms.rotation.y = STANCE_YAW
+			_arms.position = -EYE_FROM_HEAD - _arms.basis * rig.head_position()
+			return
+		rig.free()
+
+
 func muzzle_position() -> Vector3:
 	return _muzzle.global_position if _muzzle != null else camera.global_position
 
@@ -107,6 +143,7 @@ func _show_weapon(id: StringName) -> void:
 		var m := WeaponModels.instantiate(id)
 		if m == null:
 			return
+		m.scale = Vector3.ONE * WEAPON_SCALE
 		_viewmodel.add_child(m)
 		_models[id] = m
 	var model: Node3D = _models[id]
@@ -191,6 +228,14 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	if _muzzle != null:
 		_flash_light.global_position = _muzzle.global_position
 	_viewmodel.visible = s.alive
+	if _arms != null:
+		_arms.visible = s.alive and _models.has(_current_id)
+		if _arms.visible:
+			var weapon_node: Node3D = _models[_current_id]
+			var to_rig := _arms.global_transform.affine_inverse()
+			var grip := weapon_node.global_position
+			var support := grip.lerp(_muzzle.global_position, SUPPORT_ALONG) - camera.global_basis.y * SUPPORT_DROP
+			_arms.pose_first_person(to_rig * weapon_node.global_transform, to_rig * support)
 
 
 ## Death cam (PLAN §2.6): from where we died, looking at the killer.
