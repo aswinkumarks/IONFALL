@@ -147,14 +147,54 @@ func _draw() -> void:
 		var center: Vector2 = b.pos * screen
 		var r: float = b.radius * screen.y
 		var pressed := _is_pressed(b)
-		draw_circle(center, r, Color(0.35, 0.9, 1.0, 0.35 if pressed else 0.15))
-		draw_arc(center, r, 0.0, TAU, 48, Color(0.35, 0.9, 1.0, 0.7), 2.0)
-		var text := tr(b.label)
-		var fs := 18
-		var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
-		draw_string(_font, center + Vector2(-w * 0.5, fs * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.8))
+		var accent := UiStyle.ACCENT
+		draw_circle(center, r, Color(accent, 0.38) if pressed else Color(0.02, 0.04, 0.07, 0.35))
+		draw_arc(center, r, 0.0, TAU, 48, Color(accent, 0.9 if pressed else 0.55), 2.5)
+		draw_arc(center, r - 5.0, -PI * 0.75, -PI * 0.25, 16, Color(accent, 0.35), 2.0)
+		_icon(b.id, center, r * 0.42, Color(1, 1, 1, 0.95 if pressed else 0.8))
+	var moving := false
 	for f in _fingers.values():
 		if f.kind == Kind.MOVE:
-			draw_arc(f.origin, JOYSTICK_RADIUS, 0.0, TAU, 48, Color(1, 1, 1, 0.35), 2.0)
-			var knob: Vector2 = f.origin + (f.pos - f.origin).limit_length(JOYSTICK_RADIUS)
-			draw_circle(knob, 34.0, Color(1, 1, 1, 0.35))
+			moving = true
+			var offset: Vector2 = (f.pos - f.origin).limit_length(JOYSTICK_RADIUS)
+			var sprint := -offset.y / JOYSTICK_RADIUS >= SPRINT_THRESHOLD
+			draw_circle(f.origin, JOYSTICK_RADIUS, Color(0.02, 0.04, 0.07, 0.3))
+			draw_arc(f.origin, JOYSTICK_RADIUS, 0.0, TAU, 64, Color(UiStyle.ACCENT, 0.5), 2.0)
+			draw_arc(f.origin, JOYSTICK_RADIUS + 8.0, -PI * 0.5 - 0.35, -PI * 0.5 + 0.35, 16,
+					Color(UiStyle.WARN, 0.95 if sprint else 0.35), 4.0)
+			draw_circle(f.origin + offset, 36.0, Color(UiStyle.ACCENT, 0.35))
+			draw_arc(f.origin + offset, 36.0, 0.0, TAU, 40, Color(1, 1, 1, 0.5), 2.0)
+	if not moving:
+		# Ghost hint where the floating stick usually starts.
+		var hint := Vector2(0.14, 0.72) * screen
+		draw_arc(hint, JOYSTICK_RADIUS * 0.7, 0.0, TAU, 48, Color(1, 1, 1, 0.12), 2.0)
+		draw_circle(hint, 22.0, Color(1, 1, 1, 0.08))
+
+
+## Simple vector icons so buttons read at a glance without text.
+func _icon(id: String, c: Vector2, s: float, col: Color) -> void:
+	var w := maxf(2.5, s * 0.14)
+	match id:
+		"fire":
+			draw_arc(c, s * 0.75, 0.0, TAU, 32, col, w)
+			for d in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+				draw_line(c + d * s * 0.35, c + d * s * 1.05, col, w)
+		"jump":
+			draw_polyline(PackedVector2Array([c + Vector2(-s * 0.7, s * 0.2), c + Vector2(0, -s * 0.5), c + Vector2(s * 0.7, s * 0.2)]), col, w * 1.3)
+			draw_line(c + Vector2(-s * 0.5, s * 0.75), c + Vector2(s * 0.5, s * 0.75), col, w)
+		"crouch":
+			draw_polyline(PackedVector2Array([c + Vector2(-s * 0.7, -s * 0.3), c + Vector2(0, s * 0.4), c + Vector2(s * 0.7, -s * 0.3)]), col, w * 1.3)
+			draw_line(c + Vector2(-s * 0.5, s * 0.8), c + Vector2(s * 0.5, s * 0.8), col, w)
+		"reload":
+			draw_arc(c, s * 0.7, -PI * 0.3, PI * 1.35, 24, col, w * 1.2)
+			var tip := c + Vector2(cos(-PI * 0.3), sin(-PI * 0.3)) * s * 0.7
+			draw_colored_polygon(PackedVector2Array([tip + Vector2(-s * 0.35, -s * 0.1), tip + Vector2(s * 0.15, -s * 0.4), tip + Vector2(s * 0.2, s * 0.2)]), col)
+		"swap":
+			for k: float in [-1.0, 1.0]:
+				var y := c.y + k * s * 0.35
+				draw_line(Vector2(c.x - s * 0.7, y), Vector2(c.x + s * 0.7, y), col, w)
+				var head := Vector2(c.x + k * s * 0.7, y)
+				draw_line(head, head + Vector2(-k * s * 0.3, -s * 0.25), col, w)
+				draw_line(head, head + Vector2(-k * s * 0.3, s * 0.25), col, w)
+		_:
+			draw_string(_font, c + Vector2(-s, s * 0.3), tr(id), HORIZONTAL_ALIGNMENT_CENTER, s * 2.0, 16, col)

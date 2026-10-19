@@ -2,7 +2,7 @@ extends Control
 ## Main menu. Every visible string is a translation key (PLAN §3.16).
 ##
 ## Quick test launches (desktop): `-- --play`, `-- --host`, `-- --join <address>` and
-## `-- --name <name>` skip the menu.
+## `-- --name <name>` skip the menu; `--open-settings` / `--open-profile` open those screens.
 
 const MATCH := "res://game/match.tscn"
 const OFFLINE_DUMMIES := 3
@@ -70,6 +70,8 @@ func _ready() -> void:
 		return
 	if Platform.user_args.has("--open-settings"):
 		_settings.open()
+	elif Platform.user_args.has("--open-profile"):
+		_profile_panel.open(_name_edit.text)
 	elif Platform.user_args.has("--play"):
 		_start.call_deferred(MatchConfig.Mode.OFFLINE)
 	elif Platform.user_args.has("--host"):

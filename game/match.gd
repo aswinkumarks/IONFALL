@@ -104,6 +104,8 @@ func _ready() -> void:
 		server = ServerSession.new()
 		server.name = "Server"
 		server.map_id = config.map
+		if Platform.get_user_arg("--time-limit").is_valid_int():  # dev: short matches
+			server.time_limit_ticks = Platform.get_user_arg("--time-limit").to_int() * Sim.TICK_RATE
 		add_child(server)
 		var port := config.port if config.mode == MatchConfig.Mode.HOST else -1
 		var err := server.start(port, MOVEMENT, loadout, spawns)
@@ -390,13 +392,6 @@ func _track_tally(e: Dictionary) -> void:
 	_tally.on_event(e)
 
 
-func _xp_line(gained: int) -> String:
-	if gained < 0:
-		return ""
-	var lv := ProfileData.level_for(Profile.data.xp())
-	return tr("RESULTS_XP") % [gained, lv.level, lv.into, lv.needed]
-
-
 ## Leaving (or losing the host) before RESULTS: save what we saw ourselves
 ## as an incomplete match; unconfirmed when the host vanished.
 func _save_partial(confirmed: bool) -> void:
@@ -475,6 +470,7 @@ func _update_match_ui(delta: float) -> void:
 		_death_label.visible = true
 	else:
 		_death_label.visible = false
+	_banner.visible = not _results.visible
 	# Results until the next match starts; the scoreboard while held.
 	if _results.visible:
 		if phase != MatchPhase.POST_MATCH:
@@ -593,7 +589,8 @@ func _handle_event(e: Dictionary) -> void:
 			_results.show_results(e, me)
 			_results_applied = true
 			var gained := Profile.apply_results(e, me)
-			_results.footer_extra = _xp_line(gained)
+			_results.footer_extra = ""
+			_results.show_xp(gained, Profile.data.xp())
 			_results_until = _time + MatchPhase.POST_MATCH_TICKS / float(Sim.TICK_RATE)
 		"spawn":
 			if e.player == me:

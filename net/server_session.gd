@@ -58,6 +58,7 @@ var networked: bool = false
 ## Most combatants (humans + bots) this session admits: 16 dedicated,
 ## 8 PC listen host, 4 phone host (PLAN §3.5.1).
 var map_id: String = Maps.DEFAULT  ## sent in WELCOME and beacons
+var time_limit_ticks: int = MatchPhase.FFA_TIME_LIMIT_TICKS
 var max_combatants: int = Protocol.MAX_PEERS
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
@@ -409,7 +410,7 @@ func _update_phase() -> void:
 		MatchPhase.COUNTDOWN:
 			if world.tick >= phase_ends_tick:
 				_play_started_tick = world.tick
-				_set_phase(MatchPhase.PLAYING, world.tick + MatchPhase.FFA_TIME_LIMIT_TICKS)
+				_set_phase(MatchPhase.PLAYING, world.tick + time_limit_ticks)
 		MatchPhase.PLAYING:
 			var top := -999
 			for id in world.scores:

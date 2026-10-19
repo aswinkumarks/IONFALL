@@ -5,7 +5,11 @@ extends CharacterRig
 ## AnimationPlayer from the pack's idle / run / jump clips.
 
 const MODEL := preload("res://art/characters/kenney/characterMedium.fbx")
-const SKIN := preload("res://art/characters/kenney/humanMaleA.png")
+## Armour suit painted over the pack's UV layout (tools/gen_suit.py); the
+## emission mask glows in the player's colour.
+const SKIN := preload("res://art/characters/kenney/suit.png")
+const GLOW_MASK := preload("res://art/characters/kenney/suit_emission.png")
+const GLOW_ENERGY := 3.5
 const CLIPS := {
 	"idle": ["res://art/characters/kenney/idle.fbx", "Root|Idle", true],
 	"run": ["res://art/characters/kenney/run.fbx", "Root|Run", true],
@@ -43,12 +47,15 @@ func setup(color: Color) -> void:
 	_model.rotation.y = PI  # the model faces +Z; Godot forward is -Z
 	add_child(_model)
 	_material.albedo_texture = SKIN
-	_material.albedo_color = Color.WHITE.lerp(color, 0.45)
-	_material.roughness = 0.8
+	_material.albedo_color = Color.WHITE.lerp(color, 0.12)
+	_material.roughness = 0.55
+	_material.metallic = 0.2
 	_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_material.emission_enabled = true
 	_material.emission = color
-	_material.emission_energy_multiplier = 0.0
+	_material.emission_texture = GLOW_MASK
+	_material.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+	_material.emission_energy_multiplier = GLOW_ENERGY
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D"):
 		mi.material_override = _material
 	_anim = AnimationPlayer.new()
@@ -83,4 +90,4 @@ func animate(state: PlayerSimState, delta: float, height: float) -> void:
 
 
 func set_glow(amount: float) -> void:
-	_material.emission_energy_multiplier = amount
+	_material.emission_energy_multiplier = GLOW_ENERGY + amount * 4.0
