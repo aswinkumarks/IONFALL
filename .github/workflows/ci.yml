@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GODOT_VERSION: "4.7.2"
+  GODOT_RELEASE: "4.7.2-stable"
+  # Pinned to Godot 4.7.2's Android template (platform/android/java/app/config.gradle).
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "36.1.0"
+  ANDROID_NDK: "29.0.14206865"
+  BUNDLETOOL_VERSION: "1.18.3"
+
+jobs:
+  test-and-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          key: godot-${{ env.GODOT_RELEASE }}-v1
+
+      - name: Download and verify Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          B=https://github.com/godotengine/godot/releases/download/$GODOT_RELEASE
+          mkdir -p ~/godot/dl && cd ~/godot/dl
+          curl -fsSL -o SHA512-SUMS.txt $B/SHA512-SUMS.txt
+          curl -fsSL -o editor.zip $B/Godot_v${GODOT_RELEASE}_linux.x86_64.zip
+          curl -fsSL -o templates.tpz $B/Godot_v${GODOT_RELEASE}_export_templates.tpz
+          echo "$(grep " Godot_v${GODOT_RELEASE}_linux.x86_64.zip$" SHA512-SUMS.txt | cut -d' ' -f1)  editor.zip" | sha512sum -c
+          echo "$(grep " Godot_v${GODOT_RELEASE}_export_templates.tpz$" SHA512-SUMS.txt | cut -d' ' -f1)  templates.tpz" | sha512sum -c
+          unzip -q editor.zip -d ~/godot
+          TPL=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$TPL" && unzip -q templates.tpz -d tpl && mv tpl/templates/* "$TPL"/
+          rm -rf ~/godot/dl
+
+      - name: Put Godot on PATH
+        run: |
+          sudo ln -sf ~/godot/Godot_v${GODOT_RELEASE}_linux.x86_64 /usr/local/bin/godot
+          godot --version
+
+      # Godot reads JAVA_HOME when it first creates its editor settings (import step).
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Import project
+        run: timeout 600 godot --headless --import
+
+      - name: Layer check (simulation/presentation split)
+        run: python3 tools/check_layers.py
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          timeout 600 godot --headless -s addons/gut/gut_cmdln.gd -gconfig=.gutconfig.json -gexit 2>&1 | tee gut.log
+          grep -q -- "---- All tests passed! ----" gut.log
+
+      - name: Export desktop, server and web builds
+        env:
+          IONFALL_BUILD_NUMBER: "0"
+        run: |
+          set -euo pipefail
+          export_preset() {
+            python3 tools/write_build_info.py --platform "$2" --arch "$3" --config "$4"
+            mkdir -p "$(dirname "$5")"
+            timeout 900 godot --headless --export-$4 "$1" "$5" 2>&1 | tee export.log
+            if grep -q "ERROR" export.log; then echo "::error::export of $1 logged errors"; exit 1; fi
+          }
+          export_preset "Linux" linux x86_64 release build/linux/ionfall.x86_64
+          export_preset "Windows" windows x86_64 release build/windows/IONFALL.exe
+          export_preset "Server Linux" server-linux x86_64 release build/server-linux/ionfall_server.x86_64
+          export_preset "Server Windows" server-windows x86_64 release build/server-windows/ionfall_server.exe
+          export_preset "Web" web wasm32 release build/web/index.html
+
+      - name: Smoke test exported dedicated server
+        run: timeout 60 build/server-linux/ionfall_server.x86_64 --headless -- --smoke-test
+
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK" >/dev/null
+          curl -fsSL -o ~/bundletool.jar \
+            https://github.com/google/bundletool/releases/download/$BUNDLETOOL_VERSION/bundletool-all-$BUNDLETOOL_VERSION.jar
+
+      - name: Export Android (debug-signed AAB) and run 16 KB checks
+        env:
+          BUNDLETOOL: /home/runner/bundletool.jar
+        run: |
+          set -euo pipefail
+          python3 tools/write_build_info.py --platform android --arch arm64 --config debug
+          mkdir -p build/android
+          timeout 1800 godot --headless --install-android-build-template --export-debug "Android" build/android/ionfall.aab 2>&1 | tee export.log
+          test -f build/android/ionfall.aab
+          bash tools/check_16kb.sh build/android/ionfall.aab
+
+      - name: Upload builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: ionfall-${{ github.run_number }}
+          path: build/
+          retention-days: 14

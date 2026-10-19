@@ -1,0 +1,50 @@
+; Engine configuration file.
+; Godot 4.7.2-stable is pinned (PLAN §3.18). Don't open with another version.
+
+config_version=5
+
+[application]
+
+config/name="IONFALL"
+config/version="0.0.1"
+run/main_scene="res://core/boot.tscn"
+config/features=PackedStringArray("4.7", "Mobile")
+
+[autoload]
+
+Platform="*res://core/platform.gd"
+Events="*res://core/events.gd"
+BuildInfo="*res://core/build_info.gd"
+Settings="*res://core/settings.gd"
+Diagnostics="*res://core/diagnostics.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://locale/strings.en.translation")
+; Dedicated servers show no UI and ship without translations.
+locale/translations.dedicated_server=PackedStringArray()
+locale/fallback="en"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=60
+
+[rendering]
+
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+renderer/rendering_method.web="gl_compatibility"
+; Non-Vulkan Android devices are excluded in v1.0 (PLAN §3.9): with the
+; fallback off, the exported manifest marks Vulkan 1.1 as required.
+rendering_device/fallback_to_opengl3=false
+textures/vram_compression/import_s3tc_bptc=true
+textures/vram_compression/import_etc2_astc=true

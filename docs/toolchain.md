@@ -1,0 +1,51 @@
+# Toolchain (pinned)
+
+Every version here is pinned (PLAN §3.18). Change one only on a branch, then re-run the full test suite before merging. Never change engine versions mid-milestone.
+
+| Component | Version | Source / notes |
+|---|---|---|
+| Godot editor | **4.7.2-stable** (`4.7.2.stable.official.ed1daf0bf`) | `Godot_v4.7.2-stable_linux.x86_64.zip`, SHA-512 verified against the release's `SHA512-SUMS.txt` |
+| Export templates | 4.7.2.stable | `Godot_v4.7.2-stable_export_templates.tpz`, SHA-512 verified |
+| Physics backend | Jolt Physics (built into 4.7) | `physics/3d/physics_engine`; see `docs/decisions/0001-physics-backend.md` |
+| JDK | Temurin 17.0.20.1+1 | Godot 4.7.2's Android build uses Java 17 (`config.gradle`: `javaVersion`) |
+| Android compile/target SDK | 36 | From Godot 4.7.2 `platform/android/java/app/config.gradle` |
+| Android min SDK | 29 | Godot's Vulkan default (`VULKAN_MIN_SDK_VERSION`) |
+| Android build-tools | 36.1.0 | Same `config.gradle` |
+| Android NDK | 29.0.14206865 | Same `config.gradle`; also provides `llvm-readelf` for the 16 KB checks |
+| Android cmdline-tools | 16111833 | SHA-1 verified against Google's `repository2-3.xml` |
+| bundletool | 1.18.3 | 16 KB ZIP-alignment check (`tools/check_16kb.sh`) |
+| GUT (unit tests) | 9.7.1 | Vendored in `addons/gut` |
+| Python | 3.10+ | Build tooling in `tools/` |
+
+## Local install layout (Linux dev machine)
+
+| Path | Contents |
+|---|---|
+| `~/.local/bin/godot` | Symlink to the pinned editor |
+| `~/.local/share/ionfall-toolchain/` | Godot editor, JDK 17, bundletool, verified downloads |
+| `~/.local/share/godot/export_templates/4.7.2.stable/` | Export templates |
+| `~/Android/Sdk/` | Android SDK (`cmdline-tools/latest`, platform, build-tools, NDK) |
+| `~/.local/share/ionfall-keys/` | **Upload keystore + passwords. Never in the repo.** Back up to a password manager and an encrypted offline copy |
+
+## Common commands
+
+```bash
+godot --headless --import                                              # import assets
+godot --headless -s addons/gut/gut_cmdln.gd -gconfig=.gutconfig.json   # unit tests
+python3 tools/check_layers.py                                          # simulation/presentation split
+python3 tools/write_build_info.py --platform linux --arch x86_64 --config release
+godot --headless --export-release "Linux" build/linux/ionfall.x86_64
+
+# Dedicated server
+godot --headless --export-release "Server Linux" build/server-linux/ionfall_server.x86_64
+build/server-linux/ionfall_server.x86_64 --headless -- --server --smoke-test
+
+# Signed release AAB (loads the upload key from outside the repo)
+set -a; source ~/.local/share/ionfall-keys/upload-key.env; set +a
+godot --headless --export-release "Android" build/android/ionfall.aab
+tools/check_16kb.sh build/android/ionfall.aab
+```
+
+## Known engine quirks
+
+- **Dedicated-server exports and CSV translations:** with the `customized` / `strip` export mode, Godot 4.7.2 logs "Failed loading resource: res://locale/strings.csv" (multi-locale CSV imports have no single import path). Server presets therefore exclude `locale/*`, and `project.godot` sets `locale/translations.dedicated_server` to an empty list.
