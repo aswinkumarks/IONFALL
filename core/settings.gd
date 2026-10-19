@@ -210,8 +210,9 @@ func set_value(section: String, key: String, value: Variant) -> void:
 const QUALITY := {
 	"low": {"render_scale": 0.6, "shadows": false, "upscale": "bilinear", "msaa": 0, "fxaa": false,
 			"shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "glow": false},
-	"medium": {"render_scale": 0.85, "shadows": true, "upscale": "fsr", "msaa": 0, "fxaa": true,
-			"shadow_size": 2048, "soft_shadows": 1, "aniso": 2, "glow": true},
+	## Phone default: sized to hold 60 fps on the Mi 11X (docs/perf/m2-station.md).
+	"medium": {"render_scale": 0.75, "shadows": false, "upscale": "fsr", "msaa": 0, "fxaa": true,
+			"shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "glow": true},
 	"high": {"render_scale": 1.0, "shadows": true, "upscale": "bilinear", "msaa": 1, "fxaa": false,
 			"shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "glow": true},
 	"ultra": {"render_scale": 1.0, "shadows": true, "upscale": "bilinear", "msaa": 2, "fxaa": false,

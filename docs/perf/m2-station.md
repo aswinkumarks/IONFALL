@@ -34,3 +34,23 @@ the themed HUD, weapon viewmodels, particles, Quaternius astronauts and the
 Steady state matches the M2 baseline. The first-minute p99 comes from effects
 and materials compiling on first use; a shader warm-up during the countdown
 belongs to the M4 cold-start stutter work.
+
+## Sentinel, first-person arms and the Medium preset (2026-10-20)
+
+Mi 11X, debug APK, 4 combatants, autopilot; minute 2+ (minute 1 includes
+first-use shader compiles). The Sentinel itself is not the cost: the
+8-runner bench gives GPU p50 12.9 ms (Sentinel), 12.1 ms (Vanguard),
+10.9 ms (Operative).
+
+| Video settings | fps avg | Frame p50 / p95 / p99 (ms) |
+|---|---|---|
+| Medium as shipped (0.85 scale, FSR, soft shadows, sun shadows) | 54.7–57.6 | 16.7 / 23–25 / 29–31 |
+| Medium extras at 0.75 scale | 58.3 | 16.7 / 22.2 / 28.9 |
+| 0.75, soft shadows off, FSR | 57.8 | 16.7 / 22.2 / 29.2 |
+| same, bilinear instead of FSR | 57.9 | 16.7 / 22.9 / 27.8 |
+| same, sun shadows off | 55.8 → 59.4 | 16.7 / 25.0 → 16.7 / 27.5 → 25.0 |
+| Low | 59.2 | 16.7 / 18.1 / 23.8 |
+
+Sun shadows (every character drawn twice) are the main remaining cost.
+Medium (the phone default) is now: 0.75 render scale, FSR, FXAA, glow, no
+soft shadows and no sun shadows; baked lighting still shadows the map.
