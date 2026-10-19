@@ -49,3 +49,4 @@ tools/check_16kb.sh build/android/ionfall.aab
 ## Known engine quirks
 
 - **Dedicated-server exports and CSV translations:** with the `customized` / `strip` export mode, Godot 4.7.2 logs "Failed loading resource: res://locale/strings.csv" (multi-locale CSV imports have no single import path). Server presets therefore exclude `locale/*`, and `project.godot` sets `locale/translations.dedicated_server` to an empty list.
+- **First import on a fresh checkout** logs `Cannot open file 'res://locale/strings.en.translation'`. `project.godot` references the translation that the CSV import generates (it's gitignored as a build artifact), so the very first project load can't find it yet. It's harmless: the import creates it, and every later load is clean.
