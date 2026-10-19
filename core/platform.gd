@@ -21,8 +21,17 @@ var _latency_lock: Variant = null
 var _handled_link: String = ""
 
 
+const LAUNCH_ARGS_FILE := "user://launch_args.txt"
+
+
 func _init() -> void:
 	user_args = OS.get_cmdline_user_args()
+	# Debug builds: one-shot arguments from a file, for devices where launch
+	# arguments can't be passed (Android: `adb shell run-as <app>` writes
+	# files/launch_args.txt). Read once, then deleted.
+	if OS.is_debug_build() and FileAccess.file_exists(LAUNCH_ARGS_FILE):
+		user_args.append_array(FileAccess.get_file_as_string(LAUNCH_ARGS_FILE).strip_edges().split(" ", false))
+		DirAccess.remove_absolute(LAUNCH_ARGS_FILE)
 	if OS.has_feature("dedicated_server") or user_args.has("--server"):
 		role = Role.DEDICATED_SERVER
 

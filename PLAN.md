@@ -614,7 +614,7 @@ game/
 All assets are restyled with shared materials (team color, emissive trims, palette) so mixed packs read as one game. Anything missing is built in code/shaders.
 
 - **Environments**: CSG greybox → modular mesh kit (floor/wall/trim/pillar/ramp) with triplanar materials + emissive strips, following the lighting and lightmap pipeline (§3.9). Theme: orbital research station (white panels, ion-cyan accents; teams cyan vs orange, plus shape markers)
-- **Characters**: **decided by an on-device comparison in M2**: (a) one skinned CC0 rigged character (1 draw per material, uses existing animations) vs (b) rigid parts (≥ 10 draws each; 16 characters ≈ 160 draws before weapons and world). Default expectation: skinned wins
+- **Characters**: **one skinned CC0 rigged character** (1 draw per material, uses existing animations). *(Decided in M2 by the on-device comparison against rigid parts: on the Mi 11X, 16 skinned characters cost 80 draws vs 432 for rigid parts and ~1 ms less GPU time; see `docs/decisions/0003-character-rig.md`.)*
   - **Hitboxes** are authoritative simple shapes (head, torso, legs per stance) driven by the simulation state, independent of the animation pose
   - Ragdolls are cosmetic only: ≤ 4 at once, removed after 3 s
 - **Weapons**: low-poly hard-surface models with emissive accents; procedural viewmodel sway/recoil/reload motion
