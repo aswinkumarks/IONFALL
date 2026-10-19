@@ -85,6 +85,8 @@ class Client:
 	var player_id: int = 0  ## small server-assigned id used on the wire and in the world
 	var name: String = ""
 	var uuid: String = ""
+	var character: int = 0
+	var color: int = 0
 	var loaded: bool = false
 	var queue: Dictionary = {}  ## tick -> PlayerCommand
 	var arrival: Dictionary = {}  ## tick -> server time (ticks) of first arrival
@@ -135,9 +137,11 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	return OK
 
 
-func add_local_player(player_name: String) -> SimPlayer:
+func add_local_player(player_name: String, character: int = 0, color: int = 0) -> SimPlayer:
 	local_player_id = LOCAL_PLAYER_ID
 	var p := world.add_player(local_player_id, loadout, player_name, false)
+	p.character = character
+	p.color = color
 	stats.add_player(local_player_id, player_name, false, world.tick)
 	update_bot_fill()
 	_on_humans_changed()
@@ -154,6 +158,7 @@ func add_bot(bot_name: String, driver: RefCounted) -> SimPlayer:
 	_bot_seq += 1
 	bots[id] = driver
 	var p := world.add_player(id, loadout, bot_name, true)
+	p.character = _bot_seq - 1  # bots cycle through the characters
 	stats.add_player(id, bot_name, true, world.tick)
 	_broadcast_roster()
 	return p
@@ -228,7 +233,8 @@ func roster() -> Array:
 	for id in ids:
 		var p: SimPlayer = world.players[id]
 		var l: MatchStats.Line = stats.lines.get(id)
-		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "score": world.scores.get(id, 0),
+		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "character": p.character, "color": p.color,
+				"score": world.scores.get(id, 0),
 				"kills": l.kills if l else 0, "deaths": l.deaths if l else 0, "assists": l.assists if l else 0})
 	return out
 
@@ -492,6 +498,8 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 	c.id = id
 	c.name = sanitize_name(hello.name)
 	c.uuid = hello.uuid
+	c.character = hello.character
+	c.color = hello.color
 	_expire_departed()
 	var back: Dictionary = _departed.get(hello.token, {})
 	if not back.is_empty() and _player_id_free(back.player_id):
@@ -597,7 +605,9 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 				anomalies += 1
 			elif not c.loaded:
 				c.loaded = true
-				world.add_player(c.player_id, loadout, c.name, false)
+				var joined := world.add_player(c.player_id, loadout, c.name, false)
+				joined.character = c.character
+				joined.color = c.color
 				stats.add_player(c.player_id, c.name, false, world.tick)
 				if c.restored_score != 0:
 					world.scores[c.player_id] = c.restored_score

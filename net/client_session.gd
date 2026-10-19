@@ -20,6 +20,8 @@ var loadout: Array[WeaponData] = []
 ## func(tick: int) -> PlayerCommand. Set by the presentation (InputAdapter) or a test bot.
 var input_source: Callable
 var player_name: String = "Player"
+var character: int = 0  ## sent in the handshake (CharacterRig.SELECTABLE index)
+var color: int = 0  ## sent in the handshake (PlayerVisual.PALETTE index)
 ## Reconnect token from the server's WELCOME; pass it to join() to get the
 ## same player and score back within 60 s (PLAN §3.4).
 var reconnect_token: int = 0
@@ -82,7 +84,7 @@ func join(address: String, port: int, movement_config: MovementConfig, weapons: 
 	transport.message.connect(_on_message)
 	_last_packet_ms = Time.get_ticks_msec()
 	return transport.join(address, port, Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
-			uuid, player_name, reconnect_token))
+			uuid, player_name, reconnect_token, character, color))
 
 
 ## Seconds since the last packet from the server (host-loss detection,

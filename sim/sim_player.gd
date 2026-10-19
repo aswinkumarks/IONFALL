@@ -10,6 +10,8 @@ var net_id: int = 0
 var entity_gen: int = 0
 var is_bot: bool = false
 var display_name: String = ""
+var character: int = 0  ## cosmetic (CharacterRig.SELECTABLE index); presentation only
+var color: int = 0  ## cosmetic (PlayerVisual.PALETTE index, 0 = auto); presentation only
 var team: int = 0
 var config: MovementConfig
 var loadout: Array[WeaponData] = []

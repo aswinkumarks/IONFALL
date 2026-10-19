@@ -15,6 +15,8 @@ var port: int = Protocol.DEFAULT_PORT
 var player_name: String = "Player"
 var map: String = Maps.DEFAULT
 var bots: int = 3  ## dummies alongside the local player; they leave as humans join
+var character: int = 0  ## index into CharacterRig.SELECTABLE
+var color: int = 0  ## index into PlayerVisual.PALETTE (0 = auto)
 
 
 ## PLAN §3.5.1: a phone host is limited to 4 combatants until it passes the
@@ -29,6 +31,8 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	c.player_name = p_name
 	c.bots = p_bots
 	c.map = Maps.from_args()
+	c.character = profile_character()
+	c.color = profile_color()
 	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches
 		c.bots = Platform.get_user_arg("--bots").to_int()
 	if not p_address.is_empty():
@@ -45,6 +49,18 @@ static func profile_name() -> String:
 		Settings.set_value("profile", "name", n)
 		Settings.save_settings()
 	return n
+
+
+## The chosen character's index (CharacterRig.SELECTABLE).
+static func profile_character() -> int:
+	var v: Variant = Settings.get_value("profile", "character")
+	return CharacterRig.selectable_index(v if v is String else "")
+
+
+## The chosen colour's index (PlayerVisual.PALETTE, 0 = auto).
+static func profile_color() -> int:
+	var v: Variant = Settings.get_value("profile", "color")
+	return clampi(v if v is int else 0, 0, PlayerVisual.PALETTE.size() - 1)
 
 
 ## Stable per-install id sent in the handshake (identifies the player across

@@ -9,6 +9,19 @@ extends Node3D
 ## (docs/decisions/0003-character-rig.md).
 
 const STYLES := ["sentinel", "armored", "astronaut", "skinned", "parts", "capsule"]
+## Characters a player can pick (profile "character"), with their name keys.
+## Sent as an index in the handshake and roster; indices wrap, so bots can
+## take any number.
+const SELECTABLE := ["sentinel", "armored", "skinned"]
+const SELECTABLE_KEYS := ["CHAR_SENTINEL", "CHAR_VANGUARD", "CHAR_OPERATIVE"]
+
+
+static func selectable_index(style: String) -> int:
+	return maxi(SELECTABLE.find(style), 0)
+
+
+static func selectable_style(index: int) -> String:
+	return SELECTABLE[posmod(index, SELECTABLE.size())]
 
 
 static func create(style: String, variant: int = 0) -> CharacterRig:

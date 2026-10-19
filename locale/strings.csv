@@ -145,3 +145,15 @@ SETTING_VALUE_MEDIUM,Medium
 SETTING_VALUE_HIGH,High
 SETTING_VALUE_ULTRA,Ultra
 SETTING_VALUE_CUSTOM,Custom
+MENU_CUSTOMIZE,Customise
+MENU_DONE,Done
+CUSTOMIZE_CALLSIGN,Callsign
+CUSTOMIZE_COLOR,Colour
+CUSTOMIZE_AUTO,Auto
+CUSTOMIZE_CHARACTER,Character
+CHAR_SENTINEL,Sentinel
+CHAR_SENTINEL_DESC,"Cybernetic combat frame. Light-strip armour glows in your colour."
+CHAR_VANGUARD,Vanguard
+CHAR_VANGUARD_DESC,"Heavy plated trooper with a gold visor, armour in your colour."
+CHAR_OPERATIVE,Operative
+CHAR_OPERATIVE_DESC,"Light flight-suit pilot, quick and low-profile."

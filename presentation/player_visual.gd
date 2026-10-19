@@ -3,11 +3,28 @@ extends Node3D
 ## Third-person view of another player: a CharacterRig body and a nameplate,
 ## interpolated between the previous and current simulation ticks.
 
-## Body style for new visuals (CharacterRig.STYLES); set by the character
-## comparison bench and the diagnostics overlay.
+## Body style for visuals set up without one (CharacterRig.STYLES); the
+## character comparison bench sets it.
 static var style: String = "sentinel"
+## Colours a player can pick (profile "color"); index 0 is "auto", one of
+## AUTO_COLORS by player id. Sent as an index in the handshake and roster.
+const PALETTE := [Color(0, 0, 0, 0), Color(0.31, 0.89, 1.0), Color(1.0, 0.55, 0.2), Color(0.36, 0.95, 0.5),
+		Color(0.62, 0.45, 1.0), Color(1.0, 0.3, 0.35), Color(1.0, 0.85, 0.25), Color(1.0, 0.45, 0.8),
+		Color(0.92, 0.95, 1.0)]
+const AUTO_COLORS := [Color(0.55, 0.45, 1.0), Color(0.3, 0.85, 0.5), Color(0.95, 0.4, 0.6), Color(0.9, 0.85, 0.3)]
+const BOT_COLOR := Color(0.95, 0.5, 0.2)
+
+
+## The colour of player `id` with palette pick `pick` (0 = auto).
+static func color_for(id: int, pick: int, is_bot: bool = false) -> Color:
+	if is_bot:
+		return BOT_COLOR
+	if pick > 0 and pick < PALETTE.size():
+		return PALETTE[pick]
+	return AUTO_COLORS[posmod(id, AUTO_COLORS.size())]
 
 var rig: CharacterRig
+var rig_style: String = ""
 var color := Color.WHITE
 ## Weapons by slot, to show the held weapon (FFA loadout until per-player
 ## loadouts exist).
@@ -17,10 +34,12 @@ var _height: float = 1.8
 var _last_time: float = -1.0
 
 
-## `variant` picks the character model (e.g. one astronaut per player).
-func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0) -> void:
+## `variant` picks the character model (e.g. one astronaut per player);
+## `p_style` the body (CharacterRig.STYLES), else `style`.
+func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0, p_style: String = "") -> void:
 	color = p_color
-	rig = CharacterRig.create(style, variant)
+	rig_style = p_style if not p_style.is_empty() else style
+	rig = CharacterRig.create(rig_style, variant)
 	add_child(rig)
 	rig.setup(p_color)
 	_label = Label3D.new()

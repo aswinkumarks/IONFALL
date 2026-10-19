@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 3
+const VERSION := 4
 const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
@@ -36,9 +36,13 @@ static func weapon_index(id: StringName) -> int:
 # --- Handshake (SceneMultiplayer auth payloads) ---
 
 ## `token`: the reconnect token from an earlier WELCOME, or 0 for a new join.
-static func encode_hello(compat: String, build: String, uuid: String, player_name: String, token: int = 0) -> PackedByteArray:
+## `character`, `color`: the player's cosmetic picks (CharacterRig.SELECTABLE,
+## PlayerVisual.PALETTE indices).
+static func encode_hello(compat: String, build: String, uuid: String, player_name: String, token: int = 0,
+		character: int = 0, color: int = 0) -> PackedByteArray:
 	return Wire.Writer.new().u32(MAGIC).u16(VERSION).str8(compat).str8(build).str8(uuid) \
-			.str8(player_name.left(MAX_NAME_BYTES)).u32(token >> 32).u32(token & 0xFFFFFFFF).data()
+			.str8(player_name.left(MAX_NAME_BYTES)).u32(token >> 32).u32(token & 0xFFFFFFFF).u8(character & 0xFF) \
+			.u8(color & 0xFF).data()
 
 
 ## Returns {} if malformed.
@@ -49,6 +53,8 @@ static func decode_hello(data: PackedByteArray) -> Dictionary:
 		return out if r.ok else {}  # other versions: only magic and version are comparable
 	out.merge({"compat": r.str8(64), "build": r.str8(96), "uuid": r.str8(64), "name": r.str8(MAX_NAME_BYTES)})
 	out["token"] = (r.u32() << 32) | r.u32()
+	out["character"] = r.u8()
+	out["color"] = r.u8()
 	return out if r.ok and r.remaining() == 0 else {}
 
 
@@ -152,11 +158,12 @@ static func decode_phase(data: PackedByteArray) -> Dictionary:
 	return out if r.ok else {}
 
 
-## roster: Array of {id, name, bot, score, kills, deaths, assists}
+## roster: Array of {id, name, bot, character, color, score, kills, deaths, assists}
 static func encode_roster(match_id: int, roster: Array) -> PackedByteArray:
 	var w := Wire.Writer.new().u8(Msg.ROSTER).u32(match_id).u8(roster.size())
 	for p in roster:
-		w.u16(p.id).u8(1 if p.bot else 0).i16(p.score).u16(p.get("kills", 0)).u16(p.get("deaths", 0)) \
+		w.u16(p.id).u8(1 if p.bot else 0).u8(p.get("character", 0) & 0xFF).u8(p.get("color", 0) & 0xFF) \
+				.i16(p.score).u16(p.get("kills", 0)).u16(p.get("deaths", 0)) \
 				.u16(p.get("assists", 0)).str8(p.name)
 	return w.data()
 
@@ -167,7 +174,7 @@ static func decode_roster(data: PackedByteArray) -> Dictionary:
 	var out := {"match_id": r.u32(), "players": []}
 	var n := r.u8()
 	for i in n:
-		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "score": r.i16(), "kills": r.u16(),
+		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "character": r.u8(), "color": r.u8(), "score": r.i16(), "kills": r.u16(),
 				"deaths": r.u16(), "assists": r.u16(), "name": r.str8()})
 	return out if r.ok else {}
 

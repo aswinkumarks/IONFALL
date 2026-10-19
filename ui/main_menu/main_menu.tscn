@@ -219,6 +219,13 @@ layout_mode = 2
 text = "MENU_PROFILE"
 alignment = 0
 
+[node name="CustomizeButton" type="Button" parent="Margin/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+text = "MENU_CUSTOMIZE"
+alignment = 0
+
 [node name="SettingsButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)

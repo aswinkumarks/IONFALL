@@ -8,6 +8,8 @@ const DEFAULTS := {
 		"name": "",
 		"last_address": "",
 		"uuid": "",
+		"character": "sentinel",  ## CharacterRig.SELECTABLE
+		"color": 0,  ## PlayerVisual.PALETTE index, 0 = auto
 	},
 	"video": {
 		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive

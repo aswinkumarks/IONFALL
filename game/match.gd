@@ -8,12 +8,10 @@ extends Node3D
 const MOVEMENT := preload("res://data/movement_config.tres")
 const HUD_SCENE := preload("res://ui/hud/hud.tscn")
 const MAIN_MENU := "res://ui/main_menu/main_menu.tscn"
-const BOT_COLOR := Color(0.95, 0.5, 0.2)
 ## A client suspended this long reconnects instead of waiting for the old
 ## connection (the server times it out after 10 s).
 const RECONNECT_AFTER_MS := 5000
 const DEATH_CAM_SECONDS := 3.0
-const PLAYER_COLORS := [Color(0.55, 0.45, 1.0), Color(0.3, 0.85, 0.5), Color(0.95, 0.4, 0.6), Color(0.9, 0.85, 0.3)]
 
 var config: MatchConfig
 var server: ServerSession  ## offline and host
@@ -123,7 +121,7 @@ func _ready() -> void:
 		server.bot_nav = nav
 		server.max_combatants = config.max_combatants()
 		server.bot_fill = 1 + config.bots
-		var me := server.add_local_player(config.player_name)
+		var me := server.add_local_player(config.player_name, config.character, config.color)
 		input.look_yaw = me.state.yaw
 		if config.mode == MatchConfig.Mode.HOST:
 			_info.text = tr("NET_HOSTING") % [", ".join(lan_addresses()), config.port]
@@ -154,6 +152,8 @@ func _start_client(token: int) -> bool:
 	client = ClientSession.new()
 	client.name = "Client"
 	client.player_name = config.player_name
+	client.character = config.character
+	client.color = config.color
 	client.uuid = MatchConfig.profile_uuid()
 	client.reconnect_token = token
 	client.input_source = _local_command
@@ -307,7 +307,7 @@ func _render_host(delta: float) -> void:
 			continue
 		var p: SimPlayer = world.players[id]
 		seen[id] = true
-		_visual_for(id, p.display_name, p.is_bot).update_from(_prev.get(id), p.state, alpha, _time)
+		_visual_for(id, p.display_name, p.is_bot, p.character, p.color).update_from(_prev.get(id), p.state, alpha, _time)
 		audio.update_player(id, p.state, false)
 	audio.update_player(me.net_id, s, true)
 	_prune_visuals(seen)
@@ -329,9 +329,9 @@ func _render_client(delta: float) -> void:
 	var states := client.remote_states()
 	_remote_cache = states
 	for id in states:
-		var info: Dictionary = names.get(id, {"name": "?", "bot": false})
+		var info: Dictionary = names.get(id, {"name": "?", "bot": false, "character": 0, "color": 0})
 		seen[id] = true
-		_visual_for(id, info.name, info.bot).update_from(null, states[id], 1.0, _time)
+		_visual_for(id, info.name, info.bot, info.character, info.color).update_from(null, states[id], 1.0, _time)
 		audio.update_player(id, states[id], false)
 	audio.update_player(client.local_id, s, true)
 	_prune_visuals(seen)
@@ -512,12 +512,20 @@ func _local_player() -> SimPlayer:
 	return client.pred
 
 
-func _visual_for(id: int, display_name: String, is_bot: bool) -> PlayerVisual:
+## `character`, `color`: the player's picks (CharacterRig.SELECTABLE and
+## PlayerVisual.PALETTE indices); the visual is rebuilt if they change (a
+## client may see a player before the roster arrives).
+func _visual_for(id: int, display_name: String, is_bot: bool, character: int, color_pick: int) -> PlayerVisual:
 	var v: PlayerVisual = _visuals.get(id)
+	var style := CharacterRig.selectable_style(character)
+	var color := PlayerVisual.color_for(id, color_pick, is_bot)
+	if v != null and (v.rig_style != style or v.color != color):
+		v.queue_free()
+		v = null
 	if v == null:
 		v = PlayerVisual.new()
 		add_child(v)
-		v.setup(display_name, is_bot, BOT_COLOR if is_bot else PLAYER_COLORS[id % PLAYER_COLORS.size()], id)
+		v.setup(display_name, is_bot, color, id, style)
 		_visuals[id] = v
 	return v
 
