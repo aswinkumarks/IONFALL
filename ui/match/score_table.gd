@@ -10,18 +10,20 @@ func set_rows(headers: Array, rows: Array, highlight_row: int) -> void:
 	for child in get_children():
 		child.queue_free()
 	add_theme_constant_override("h_separation", 28)
-	add_theme_constant_override("v_separation", 6)
+	add_theme_constant_override("v_separation", 8)
 	for h in headers:
-		add_child(_cell(tr(h), Color(0.35, 0.9, 1.0), 16, h == headers[0]))
+		add_child(_cell(tr(h).to_upper(), UiStyle.TEXT_DIM, 17, h == headers[0]))
 	for i in rows.size():
-		var color := Color(1.0, 0.85, 0.4) if i == highlight_row else Color(0.92, 0.94, 0.97)
+		var color := UiStyle.ACCENT if i == highlight_row else UiStyle.TEXT
 		for j in rows[i].size():
-			add_child(_cell(str(rows[i][j]), color, 20, j == 0))
+			add_child(_cell(str(rows[i][j]), color, 24 if j > 0 else 21, j == 0))
 
 
 func _cell(text: String, color: Color, size: int, left: bool) -> Label:
 	var l := Label.new()
 	l.text = text
+	if not left or size >= 24:
+		l.add_theme_font_override("font", UiStyle.font_display)
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if left else HORIZONTAL_ALIGNMENT_RIGHT

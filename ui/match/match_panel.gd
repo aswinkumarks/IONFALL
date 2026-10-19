@@ -14,25 +14,15 @@ func _init() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BOTH
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.05, 0.08, 0.86)
-	style.border_color = Color(0.35, 0.9, 1.0, 0.6)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(24)
-	add_theme_stylebox_override("panel", style)
+	add_theme_stylebox_override("panel", UiStyle.panel(Color(UiStyle.BG, 0.88), UiStyle.ACCENT, 28))
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 14)
 	add_child(box)
-	title = Label.new()
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 34)
+	title = UiStyle.label("", &"HeaderLabel", HORIZONTAL_ALIGNMENT_CENTER)
 	box.add_child(title)
 	table = ScoreTable.new()
 	box.add_child(table)
-	footer = Label.new()
-	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	footer = UiStyle.label("", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER)
 	footer.autowrap_mode = TextServer.AUTOWRAP_WORD
 	box.add_child(footer)
 	visible = false

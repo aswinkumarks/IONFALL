@@ -1,6 +1,28 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://ui/main_menu/main_menu.gd" id="1"]
+[ext_resource type="Script" path="res://ui/main_menu/menu_backdrop.gd" id="2"]
+
+[sub_resource type="Gradient" id="shade_gradient"]
+offsets = PackedFloat32Array(0, 0.38, 0.72)
+colors = PackedColorArray(0.027, 0.043, 0.07, 0.94, 0.027, 0.043, 0.07, 0.6, 0.027, 0.043, 0.07, 0)
+
+[sub_resource type="GradientTexture2D" id="shade"]
+gradient = SubResource("shade_gradient")
+width = 256
+height = 4
+fill_to = Vector2(1, 0)
+
+[sub_resource type="Gradient" id="bottom_gradient"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(0.027, 0.043, 0.07, 0, 0.027, 0.043, 0.07, 0.85)
+
+[sub_resource type="GradientTexture2D" id="bottom"]
+gradient = SubResource("bottom_gradient")
+width = 4
+height = 128
+fill_from = Vector2(0, 0)
+fill_to = Vector2(0, 1)
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -11,125 +33,220 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Backdrop" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="Shade" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.06, 0.08, 0.11, 1)
+mouse_filter = 2
+texture = SubResource("shade")
+expand_mode = 1
 
-[node name="Center" type="VBoxContainer" parent="."]
+[node name="BottomShade" type="TextureRect" parent="."]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -230.0
-offset_right = 160.0
-offset_bottom = 230.0
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -200.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+texture = SubResource("bottom")
+expand_mode = 1
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 12
+mouse_filter = 2
+theme_override_constants/margin_left = 72
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 56
+theme_override_constants/margin_bottom = 32
 
-[node name="Title" type="Label" parent="Center"]
+[node name="Center" type="VBoxContainer" parent="Margin"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(420, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.35, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 56
-text = "MENU_TITLE"
-horizontal_alignment = 1
+size_flags_horizontal = 0
+alignment = 1
+theme_override_constants/separation = 9
 
-[node name="NameEdit" type="LineEdit" parent="Center"]
+[node name="Title" type="Label" parent="Margin/Center"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "MENU_TITLE"
+
+[node name="TitleBar" type="ColorRect" parent="Margin/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+size_flags_horizontal = 0
+color = Color(0.31, 0.89, 1, 1)
+
+[node name="Tagline" type="Label" parent="Margin/Center"]
+layout_mode = 2
+theme_type_variation = &"DimLabel"
+text = "MENU_TAGLINE"
+
+[node name="Gap1" type="Control" parent="Margin/Center"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="PlayerCard" type="PanelContainer" parent="Margin/Center"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="Row" type="HBoxContainer" parent="Margin/Center/PlayerCard"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LevelBadge" type="Label" parent="Margin/Center/PlayerCard/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 56)
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"BadgeLabel"
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Info" type="VBoxContainer" parent="Margin/Center/PlayerCard/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="NameEdit" type="LineEdit" parent="Margin/Center/PlayerCard/Row/Info"]
 unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "MENU_NAME_PLACEHOLDER"
 max_length = 16
-alignment = 1
 
-[node name="PlayButton" type="Button" parent="Center"]
+[node name="XpBar" type="ProgressBar" parent="Margin/Center/PlayerCard/Row/Info"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+show_percentage = false
+
+[node name="XpLabel" type="Label" parent="Margin/Center/PlayerCard/Row/Info"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "MENU_PLAY"
+theme_type_variation = &"DimLabel"
+text = "0 / 500 XP"
 
-[node name="HostButton" type="Button" parent="Center"]
+[node name="Gap2" type="Control" parent="Margin/Center"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "MENU_PLAY"
+alignment = 0
+
+[node name="HostButton" type="Button" parent="Margin/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 text = "MENU_HOST"
+alignment = 0
 
-[node name="JoinButton" type="Button" parent="Center"]
+[node name="JoinButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 text = "MENU_JOIN"
+alignment = 0
 
-[node name="JoinPanel" type="VBoxContainer" parent="Center"]
+[node name="JoinPanel" type="PanelContainer" parent="Margin/Center"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="Box" type="VBoxContainer" parent="Margin/Center/JoinPanel"]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LanLabel" type="Label" parent="Center/JoinPanel"]
+[node name="LanLabel" type="Label" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.65, 0.7, 1)
+theme_type_variation = &"DimLabel"
 text = "MENU_LAN_SEARCHING"
-horizontal_alignment = 1
 
-[node name="GameList" type="VBoxContainer" parent="Center/JoinPanel"]
+[node name="GameList" type="VBoxContainer" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="AddressEdit" type="LineEdit" parent="Center/JoinPanel"]
+[node name="AddressEdit" type="LineEdit" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "MENU_ADDRESS_PLACEHOLDER"
-alignment = 1
 select_all_on_focus = true
 virtual_keyboard_type = 6
 
-[node name="ConnectButton" type="Button" parent="Center/JoinPanel"]
+[node name="ConnectButton" type="Button" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
+theme_type_variation = &"PrimaryButton"
 text = "MENU_CONNECT"
 
-[node name="BackButton" type="Button" parent="Center/JoinPanel"]
+[node name="BackButton" type="Button" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "MENU_BACK"
 
-[node name="ProfileButton" type="Button" parent="Center"]
+[node name="ProfileButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 text = "MENU_PROFILE"
+alignment = 0
 
-[node name="SettingsButton" type="Button" parent="Center"]
+[node name="SettingsButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 text = "MENU_SETTINGS"
+alignment = 0
 
-[node name="QuitButton" type="Button" parent="Center"]
+[node name="QuitButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
+theme_type_variation = &"GhostButton"
 text = "MENU_QUIT"
+alignment = 0
 
-[node name="StatusLabel" type="Label" parent="Center"]
+[node name="StatusLabel" type="Label" parent="Margin/Center"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.45, 0.4, 1)
-horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 0.3, 0.37, 1)
 autowrap_mode = 2
 
-[node name="StorageWarning" type="Label" parent="Center"]
+[node name="StorageWarning" type="Label" parent="Margin/Center"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.7, 0.3, 1)
+theme_override_colors/font_color = Color(1, 0.6, 0.24, 1)
 text = "MENU_PROFILE_NOT_SAVED"
-horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="VersionLabel" type="Label" parent="."]
@@ -140,11 +257,11 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -260.0
-offset_top = -32.0
-offset_right = -12.0
-offset_bottom = -8.0
+offset_left = -360.0
+offset_top = -36.0
+offset_right = -20.0
+offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_colors/font_color = Color(0.6, 0.65, 0.7, 1)
+theme_type_variation = &"DimLabel"
 horizontal_alignment = 2

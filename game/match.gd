@@ -559,6 +559,7 @@ func _handle_event(e: Dictionary) -> void:
 				hud.on_gunfire_from(e.origin)
 			if local:
 				view.kick(2.0 if e.weapon == &"arc_launcher" else 1.0)
+				hud.on_fired(2.0 if e.weapon == &"arc_launcher" else 1.0)
 				if e.get("predicted_hit", false):
 					hud.on_hit_marker(false, false)
 			if e.has("end"):
@@ -634,12 +635,12 @@ func _build_ui() -> void:
 	hud = HUD_SCENE.instantiate()
 	layer.add_child(hud)
 	hud.pause_requested.connect(_set_paused.bind(true))
-	_banner = _make_label(32, Color(0.35, 0.9, 1.0))
+	_banner = _make_label(44, UiStyle.TEXT)
 	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_banner.offset_top = 70.0
+	_banner.offset_top = 120.0
 	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	layer.add_child(_banner)
-	_info = _make_label(16, Color(0.7, 0.75, 0.8))
+	_info = _make_label(18, UiStyle.TEXT_DIM)
 	_info.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_info.offset_top = -40.0
 	_info.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -649,12 +650,12 @@ func _build_ui() -> void:
 	_kill_feed.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	_kill_feed.offset_left = -560.0
 	_kill_feed.offset_right = -24.0
-	_kill_feed.offset_top = 150.0 if DisplayServer.is_touchscreen_available() else 24.0
+	_kill_feed.offset_top = 176.0 if DisplayServer.is_touchscreen_available() else 24.0
 	_kill_feed.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	layer.add_child(_kill_feed)
-	_death_label = _make_label(26, Color(1.0, 0.85, 0.8))
+	_death_label = _make_label(28, UiStyle.TEXT)
 	_death_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_death_label.offset_top = 80.0
+	_death_label.offset_top = -250.0
 	_death_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_death_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_death_label.visible = false
@@ -686,51 +687,43 @@ func _build_ui() -> void:
 func _make_label(font_size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_override("font", UiStyle.font_display_bold)
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
-	l.add_theme_constant_override("outline_size", 6)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	l.add_theme_constant_override("shadow_offset_y", 3)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
 
 
 func _make_pause_panel() -> Control:
-	var root := ColorRect.new()
-	root.color = Color(0.02, 0.03, 0.05, 0.75)
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var parts := UiStyle.menu_overlay()
+	var root: Control = parts[0]
+	var box: VBoxContainer = parts[1]
 	root.visible = false
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.custom_minimum_size = Vector2(520, 0)
-	box.position = Vector2(-260, -140)
-	box.add_theme_constant_override("separation", 14)
-	root.add_child(box)
-	var title := Label.new()
-	title.text = "PAUSE_TITLE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 40)
-	box.add_child(title)
-	var resume := Button.new()
-	resume.text = "PAUSE_RESUME"
-	resume.custom_minimum_size = Vector2(0, 56)
+	box.add_child(UiStyle.label("PAUSE_TITLE", &"HeaderLabel"))
+	var bar := ColorRect.new()
+	bar.color = UiStyle.ACCENT
+	bar.custom_minimum_size = Vector2(72, 4)
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	box.add_child(bar)
+	box.add_child(Control.new())
+	var resume := UiStyle.menu_button("PAUSE_RESUME", &"PrimaryButton")
 	resume.pressed.connect(_set_paused.bind(false))
 	box.add_child(resume)
-	var settings := Button.new()
-	settings.text = "MENU_SETTINGS"
-	settings.custom_minimum_size = Vector2(0, 56)
+	root.visibility_changed.connect(func() -> void:
+		if root.visible:
+			resume.grab_focus())
+	var settings := UiStyle.menu_button("MENU_SETTINGS")
 	settings.pressed.connect(func() -> void: _settings_menu.open())
 	box.add_child(settings)
-	var leave := Button.new()
-	leave.text = "PAUSE_LEAVE"
-	leave.custom_minimum_size = Vector2(0, 56)
+	var leave := UiStyle.menu_button("PAUSE_LEAVE", &"GhostButton")
 	leave.pressed.connect(_ask_leave)
 	box.add_child(leave)
-	var hint := Label.new()
-	hint.text = "PAUSE_CONTROLS_HINT"
+	var hint := UiStyle.label("PAUSE_CONTROLS_HINT", &"DimLabel")
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
 	hint.visible = not DisplayServer.is_touchscreen_available()
+	box.add_child(Control.new())
 	box.add_child(hint)
 	return root
 
@@ -746,33 +739,22 @@ func _ask_leave() -> void:
 
 
 func _make_confirm_panel() -> Control:
-	var root := ColorRect.new()
-	root.color = Color(0.02, 0.03, 0.05, 0.85)
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.visible = false
-	var box := VBoxContainer.new()
+	var parts := UiStyle.menu_overlay()
+	var root: Control = parts[0]
+	var box: VBoxContainer = parts[1]
 	box.name = "Box"
-	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.custom_minimum_size = Vector2(520, 0)
-	box.position = Vector2(-260, -100)
-	box.add_theme_constant_override("separation", 14)
-	root.add_child(box)
-	var text := Label.new()
+	root.visible = false
+	var text := UiStyle.label("", &"HeaderLabel")
 	text.name = "Text"
-	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD
-	text.add_theme_font_size_override("font_size", 28)
+	text.add_theme_font_size_override("font_size", 30)
 	box.add_child(text)
-	var yes := Button.new()
-	yes.text = "LEAVE_CONFIRM_YES"
-	yes.custom_minimum_size = Vector2(0, 56)
-	yes.pressed.connect(_leave)
-	box.add_child(yes)
-	var no := Button.new()
-	no.text = "LEAVE_CONFIRM_NO"
-	no.custom_minimum_size = Vector2(0, 56)
+	var no := UiStyle.menu_button("LEAVE_CONFIRM_NO", &"PrimaryButton")
 	no.pressed.connect(func() -> void: root.visible = false)
 	box.add_child(no)
+	var yes := UiStyle.menu_button("LEAVE_CONFIRM_YES")
+	yes.pressed.connect(_leave)
+	box.add_child(yes)
 	return root
 
 

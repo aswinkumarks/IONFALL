@@ -62,7 +62,10 @@ func _ready() -> void:
 		_status.text = tr(MatchConfig.last_error)
 		_status.visible = true
 		MatchConfig.last_error = ""
+	_update_player_card()
+	Profile.changed.connect(_update_player_card)
 	_play_button.grab_focus()
+	_animate_in()
 	if _try_join_link():
 		return
 	if Platform.user_args.has("--open-settings"):
@@ -74,6 +77,30 @@ func _ready() -> void:
 	elif Platform.user_args.has("--join") and not Platform.user_args.has("--test-clients"):
 		_address_edit.text = Platform.get_user_arg("--join", "127.0.0.1")
 		_start.call_deferred(MatchConfig.Mode.JOIN)
+
+
+## Level badge and XP progress from the local profile (PLAN §3.13).
+func _update_player_card() -> void:
+	var lv := ProfileData.level_for(Profile.data.xp())
+	%LevelBadge.text = str(lv.level)
+	%XpBar.max_value = lv.needed
+	%XpBar.value = lv.into
+	%XpLabel.text = tr("MENU_XP_PROGRESS") % [lv.level, lv.into, lv.needed]
+
+
+## Entrance: the column slides in from the left and its rows fade in one
+## after another.
+func _animate_in() -> void:
+	var margin: MarginContainer = $Margin
+	var tween := create_tween().set_parallel().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_method(func(v: float) -> void: margin.add_theme_constant_override("margin_left", roundi(v)), 24.0, 72.0, 0.6)
+	%TitleBar.custom_minimum_size.x = 0.0
+	tween.tween_property(%TitleBar, "custom_minimum_size:x", 96.0, 0.7).set_delay(0.2)
+	var i := 0
+	for row: Control in %Center.get_children():
+		row.modulate.a = 0.0
+		tween.tween_property(row, "modulate:a", 1.0, 0.35).set_delay(0.05 + i * 0.04)
+		i += 1
 
 
 func _notification(what: int) -> void:

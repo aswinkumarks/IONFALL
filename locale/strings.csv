@@ -126,3 +126,6 @@ CAPTION_SHIELD_RECHARGING,Shield recharging
 NET_MAP_MISMATCH,"The host is on a different map (%s); update both devices to the same build"
 MAP_STATION,Meridian Station
 MAP_TEST_ARENA,Test Arena
+MENU_TAGLINE,Arena combat · LAN · Cross-play
+MENU_XP_PROGRESS,Level %d · %d / %d XP
+HUD_RESPAWN_LABEL,Respawning in

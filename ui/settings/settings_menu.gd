@@ -47,17 +47,14 @@ func _init() -> void:
 	InputAdapter.apply_keymap()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.05, 0.08, 1.0)
-	style.set_content_margin_all(24)
+	style.bg_color = Color(UiStyle.BG, 0.94)
+	style.set_content_margin_all(32)
+	style.content_margin_left = 72
 	add_theme_stylebox_override("panel", style)
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 12)
 	add_child(root)
-	var title := Label.new()
-	title.text = "SETTINGS_TITLE"
-	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", Color(0.35, 0.9, 1.0))
-	root.add_child(title)
+	root.add_child(UiStyle.label("SETTINGS_TITLE", &"HeaderLabel"))
 	var tabs := TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(tabs)
@@ -65,9 +62,9 @@ func _init() -> void:
 		tabs.add_child(_build_tab(tab, SCHEMA[tab]))
 	if not Platform.is_mobile():
 		tabs.add_child(_build_keys_tab())
-	var done := Button.new()
-	done.text = "SETTINGS_DONE"
-	done.custom_minimum_size = Vector2(240, 56)
+	var done := UiStyle.menu_button("SETTINGS_DONE", &"PrimaryButton")
+	done.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	done.custom_minimum_size.x = 260
 	done.size_flags_horizontal = Control.SIZE_SHRINK_END
 	done.pressed.connect(close)
 	root.add_child(done)

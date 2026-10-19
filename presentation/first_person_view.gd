@@ -3,109 +3,201 @@ extends Node3D
 ## Local player's camera and weapon viewmodel. The camera's rotation comes
 ## straight from the input's live look angles every render frame; its position
 ## is interpolated between simulation ticks (PLAN §3.3.4).
+##
+## Feel (presentation only, never affects aim): weapon sway from look speed,
+## walk bob, sprint pose, crouch/slide tilt, jump lift and landing dip,
+## spring recoil, reload and switch animations, muzzle flash with a short
+## light, and camera FOV kicks for sprint and slide. "Reduce screen shake"
+## scales the camera-side effects down.
 
-const WEAPON_COLORS := {
-	&"pulse_rifle": Color(0.75, 0.78, 0.82),
-	&"arc_launcher": Color(0.95, 0.55, 0.2),
-	&"mag_pistol": Color(0.35, 0.4, 0.48),
-}
+const SPRINT_FOV := 6.0
+const SLIDE_FOV := 9.0
 
 var camera := Camera3D.new()
-var _viewmodel := Node3D.new()
-var _gun := MeshInstance3D.new()
-var _gun_material := StandardMaterial3D.new()
-var _muzzle := Node3D.new()
+var _viewmodel := Node3D.new()  ## pose root, animated every frame
+var _models: Dictionary = {}  ## weapon id -> Node3D
+var _current_id: StringName = &""
+var _muzzle: Node3D
 var _flash := MeshInstance3D.new()
+var _flash_light := OmniLight3D.new()
 var _eye_height: float = 1.6
-var _kick: float = 0.0
+var _base_fov: float = 68.0
+var _fov_extra: float = 0.0
 var _flash_time: float = 0.0
 var _last_yaw: float = 0.0
 var _last_pitch: float = 0.0
 var _sway := Vector2.ZERO
+var _bob_phase: float = 0.0
+var _bob_amount: float = 0.0
+var _land_dip: float = 0.0
+var _was_airborne: bool = false
+var _last_vy: float = 0.0
+var _recoil: float = 0.0  ## spring: displacement
+var _recoil_vel: float = 0.0
+var _recoil_roll: float = 0.0
+var _pose := Vector3.ZERO  ## smoothed [sprint, crouch/slide, reload/switch] blend
+var _cam_dip: float = 0.0
 
 
 func _ready() -> void:
-	# Vertical FOV (Godot keeps height): 68° ≈ 100° horizontal at 16:9.
-	camera.fov = float(Settings.get_value("video", "fov"))
+	_base_fov = float(Settings.get_value("video", "fov"))
+	camera.fov = _base_fov
 	Events.settings_changed.connect(func(section: String, key: String, value: Variant) -> void:
 		if section == "video" and key == "fov":
-			camera.fov = float(value))
-	camera.near = 0.05
+			_base_fov = float(value))
+	camera.near = 0.03
 	add_child(camera)
 	camera.add_child(_viewmodel)
-	var box := BoxMesh.new()
-	box.size = Vector3(0.045, 0.055, 0.3)
-	_gun.mesh = box
-	_gun_material.roughness = 0.4
-	_gun_material.metallic = 0.3
-	_gun.material_override = _gun_material
-	_gun.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_viewmodel.add_child(_gun)
-	var strip := MeshInstance3D.new()
-	var strip_mesh := BoxMesh.new()
-	strip_mesh.size = Vector3(0.047, 0.01, 0.2)
-	strip.mesh = strip_mesh
-	var strip_mat := StandardMaterial3D.new()
-	strip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	strip_mat.albedo_color = Color(0.35, 0.9, 1.0)
-	strip.material_override = strip_mat
-	strip.position = Vector3(0.0, 0.031, 0.0)
-	_viewmodel.add_child(strip)
-	_muzzle.position = Vector3(0.0, 0.0, -0.17)
-	_viewmodel.add_child(_muzzle)
-	var flash_mesh := SphereMesh.new()
-	flash_mesh.radius = 0.035
-	flash_mesh.height = 0.07
-	_flash.mesh = flash_mesh
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.16, 0.16)
+	_flash.mesh = quad
 	var flash_mat := StandardMaterial3D.new()
 	flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flash_mat.albedo_color = Color(0.7, 0.95, 1.0)
+	flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	flash_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	flash_mat.albedo_texture = _flash_texture()
+	flash_mat.albedo_color = Color(0.6, 0.95, 1.0)
 	_flash.material_override = flash_mat
+	_flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_flash.visible = false
-	_muzzle.add_child(_flash)
+	_flash_light.light_color = Color(0.45, 0.9, 1.0)
+	_flash_light.omni_range = 4.0
+	_flash_light.light_energy = 0.0
+	_flash_light.shadow_enabled = false
+	add_child(_flash_light)
+
+
+## Soft round spark for the muzzle flash.
+static func _flash_texture() -> Texture2D:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(0.7, 0.95, 1.0, 0.8), Color(0.3, 0.8, 1.0, 0.0)])
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(0.5, 0.0)
+	t.width = 64
+	t.height = 64
+	return t
 
 
 func muzzle_position() -> Vector3:
-	return _muzzle.global_position
+	return _muzzle.global_position if _muzzle != null else camera.global_position
 
 
 func kick(strength: float = 1.0) -> void:
-	if Settings.get_value("accessibility", "reduce_screen_shake"):
-		strength *= 0.3
-	_kick = minf(_kick + 0.6 * strength, 1.5)
-	_flash_time = 0.04
+	_recoil_vel += 9.0 * strength
+	_recoil_roll = randf_range(-1.0, 1.0) * 0.04 * strength
+	var shake: float = 0.3 if Settings.get_value("accessibility", "reduce_screen_shake") else 1.0
+	_cam_dip += 0.006 * strength * shake
+	_flash_time = 0.05
+	_flash.rotation.z = randf() * TAU
+	_flash.scale = Vector3.ONE * randf_range(0.8, 1.25) * (1.6 if strength > 1.5 else 1.0)
+
+
+func _show_weapon(id: StringName) -> void:
+	if id == _current_id:
+		return
+	_current_id = id
+	for m: Node3D in _models.values():
+		m.visible = false
+	if not _models.has(id):
+		var m := WeaponModels.instantiate(id)
+		if m == null:
+			return
+		_viewmodel.add_child(m)
+		_models[id] = m
+	var model: Node3D = _models[id]
+	model.visible = true
+	_muzzle = model.get_node("Muzzle")
+	if _flash.get_parent() != null:
+		_flash.get_parent().remove_child(_flash)
+	_muzzle.add_child(_flash)
 
 
 func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: PlayerSimState, weapon: WeaponData, delta: float) -> void:
+	var shake: float = 0.3 if Settings.get_value("accessibility", "reduce_screen_shake") else 1.0
 	_eye_height = lerpf(_eye_height, eye_height, minf(1.0, delta * 14.0))
-	global_position = feet + Vector3(0.0, _eye_height, 0.0)
-	camera.rotation = Vector3(pitch, yaw, 0.0)
+	# Landing: a dip proportional to the fall speed.
+	var airborne := s.move_state == PlayerSimState.Move.AIR
+	if _was_airborne and not airborne and _last_vy < -3.0:
+		_land_dip = clampf(-_last_vy * 0.012, 0.0, 0.12)
+	_was_airborne = airborne
+	_last_vy = s.velocity.y
+	_land_dip = move_toward(_land_dip, 0.0, delta * 0.5)
+	_cam_dip = move_toward(_cam_dip, 0.0, delta * 0.08)
+	global_position = feet + Vector3(0.0, _eye_height - _land_dip * 0.6 * shake, 0.0)
 
-	# Sway from look speed, recoil kick and reload/switch dips.
+	# Walk bob: phase advances with ground speed.
+	var speed := Vector2(s.velocity.x, s.velocity.z).length()
+	var grounded := s.move_state == PlayerSimState.Move.GROUND
+	var bob_target := clampf(speed / 6.0, 0.0, 1.4) if grounded else 0.0
+	_bob_amount = lerpf(_bob_amount, bob_target, minf(1.0, delta * 8.0))
+	_bob_phase += delta * (6.0 + speed * 0.9)
+	var bob := Vector2(sin(_bob_phase) * 0.012, -absf(cos(_bob_phase)) * 0.014) * _bob_amount
+	camera.rotation = Vector3(pitch + _cam_dip, yaw, sin(_bob_phase) * 0.004 * _bob_amount * shake)
+	camera.position.y = bob.y * 0.5 * shake
+
+	# FOV kicks
+	var fov_target := 0.0
+	if s.move_state == PlayerSimState.Move.SLIDE:
+		fov_target = SLIDE_FOV
+	elif s.sprinting:
+		fov_target = SPRINT_FOV
+	_fov_extra = lerpf(_fov_extra, fov_target * (0.5 + 0.5 * shake), minf(1.0, delta * 6.0))
+	camera.fov = _base_fov + _fov_extra
+
+	# Sway from look speed (the weapon lags the view).
 	var look_delta := Vector2(angle_difference(_last_yaw, yaw), pitch - _last_pitch)
 	_last_yaw = yaw
 	_last_pitch = pitch
-	_sway = _sway.lerp(look_delta * 3.0, minf(1.0, delta * 10.0))
-	_kick = move_toward(_kick, 0.0, delta * 6.0)
-	var dip := 0.0
-	if s.switch_ticks > 0:
-		dip = 0.25
-	elif s.reload[s.weapon_slot] > 0:
-		dip = 0.12
-	elif s.sprinting:
-		dip = 0.08
-	_viewmodel.position = Vector3(0.17 - _sway.x * 0.15, -0.16 - dip + _sway.y * 0.15, -0.52 + _kick * 0.04)
-	_viewmodel.rotation = Vector3(_kick * 0.08, 0.0, 0.0)
+	_sway = _sway.lerp((look_delta / maxf(delta, 0.001)) * 0.012, minf(1.0, delta * 9.0))
+	_sway = _sway.limit_length(0.6)
+
+	# Recoil spring (critically damped-ish).
+	_recoil_vel += (-_recoil * 180.0 - _recoil_vel * 22.0) * delta
+	_recoil += _recoil_vel * delta
+	_recoil_roll = move_toward(_recoil_roll, 0.0, delta * 0.4)
+
+	# Poses: sprint, crouch/slide, reload/switch.
+	var reloading := weapon != null and s.reload[s.weapon_slot] > 0
+	var pose_target := Vector3(1.0 if s.sprinting and grounded else 0.0,
+			1.0 if s.stance != PlayerSimState.Stance.STAND else 0.0,
+			1.0 if s.switch_ticks > 0 else (0.6 if reloading else 0.0))
+	_pose = _pose.lerp(pose_target, minf(1.0, delta * 10.0))
+
 	if weapon != null:
-		_gun_material.albedo_color = WEAPON_COLORS.get(weapon.id, Color.WHITE)
+		_show_weapon(weapon.id)
+	var hip := WeaponModels.hip_offset(_current_id)
+	var pos := hip
+	pos += Vector3(-_sway.x * 0.03, _sway.y * 0.03, 0.0)
+	pos += Vector3(bob.x, bob.y, 0.0)
+	pos += Vector3(-0.04, -0.05, 0.03) * _pose.x
+	pos += Vector3(-0.02, 0.01, 0.0) * _pose.y
+	pos += Vector3(0.0, -0.16, 0.05) * _pose.z
+	pos += Vector3(0.0, -_land_dip * 0.4, 0.0)
+	pos.z += _recoil * 0.05
+	_viewmodel.position = pos
+	_viewmodel.rotation = Vector3(
+		_recoil * 0.12 - _pose.x * 0.35 - _pose.z * 0.5 + _sway.y * 0.15,
+		_sway.x * 0.2 + _pose.x * 0.6,
+		_recoil_roll + _pose.y * 0.25 + _pose.z * 0.4 - _sway.x * 0.1)
+
 	_flash_time -= delta
 	_flash.visible = _flash_time > 0.0
+	_flash_light.light_energy = 2.5 if _flash_time > 0.0 else 0.0
+	if _muzzle != null:
+		_flash_light.global_position = _muzzle.global_position
 	_viewmodel.visible = s.alive
 
 
 ## Death cam (PLAN §2.6): from where we died, looking at the killer.
 func death_cam(from: Vector3, target: Vector3, delta: float) -> void:
 	global_position = from
+	camera.position = Vector3.ZERO
+	camera.fov = _base_fov
 	var to := target - global_position
 	if to.length_squared() > 0.01:
 		var yaw := atan2(-to.x, -to.z)
@@ -113,3 +205,4 @@ func death_cam(from: Vector3, target: Vector3, delta: float) -> void:
 		camera.rotation = Vector3(lerp_angle(camera.rotation.x, pitch, minf(1.0, delta * 6.0)),
 				lerp_angle(camera.rotation.y, yaw, minf(1.0, delta * 6.0)), 0.0)
 	_viewmodel.visible = false
+	_flash_light.light_energy = 0.0
