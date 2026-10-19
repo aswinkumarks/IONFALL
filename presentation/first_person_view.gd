@@ -7,6 +7,7 @@ extends Node3D
 const WEAPON_COLORS := {
 	&"pulse_rifle": Color(0.75, 0.78, 0.82),
 	&"arc_launcher": Color(0.95, 0.55, 0.2),
+	&"mag_pistol": Color(0.35, 0.4, 0.48),
 }
 
 var camera := Camera3D.new()
@@ -95,3 +96,15 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	_flash_time -= delta
 	_flash.visible = _flash_time > 0.0
 	_viewmodel.visible = s.alive
+
+
+## Death cam (PLAN §2.6): from where we died, looking at the killer.
+func death_cam(from: Vector3, target: Vector3, delta: float) -> void:
+	global_position = from
+	var to := target - global_position
+	if to.length_squared() > 0.01:
+		var yaw := atan2(-to.x, -to.z)
+		var pitch := atan2(to.y, Vector2(to.x, to.z).length())
+		camera.rotation = Vector3(lerp_angle(camera.rotation.x, pitch, minf(1.0, delta * 6.0)),
+				lerp_angle(camera.rotation.y, yaw, minf(1.0, delta * 6.0)), 0.0)
+	_viewmodel.visible = false

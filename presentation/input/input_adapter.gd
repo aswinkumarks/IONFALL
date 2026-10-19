@@ -126,6 +126,7 @@ static func _ensure_actions() -> void:
 		"weapon_1": [KEY_1],
 		"weapon_2": [KEY_2],
 		"weapon_3": [KEY_3],
+		"scoreboard": [KEY_TAB],
 	}
 	for action in keys:
 		if InputMap.has_action(action):

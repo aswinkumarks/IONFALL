@@ -65,6 +65,7 @@ var _pings_sent: int = 0
 var _arrival_jitter := FrameStats.new(60)
 var _metrics_start_ms: int = 0
 var _last_packet_ms: int = 0
+var _last_remote_states: Dictionary = {}  ## as rendered (optimistic hit markers)
 
 
 func join(address: String, port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D]) -> Error:
@@ -99,7 +100,8 @@ func is_predicting() -> bool:
 
 ## Remote players at the current render time.
 func remote_states() -> Dictionary:
-	return interpolator.sample(render_tick())
+	_last_remote_states = interpolator.sample(render_tick())
+	return _last_remote_states
 
 
 func render_tick() -> float:
@@ -202,9 +204,21 @@ func _predicted_fire_event(shot: WeaponSim.Shot) -> Dictionary:
 		var space := pred.get_world_3d().direct_space_state
 		var end := shot.origin + shot.direction * shot.weapon.max_range
 		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(shot.origin, end, Sim.LAYER_WORLD))
-		e["end"] = hit.position if not hit.is_empty() else end
-		e["hit_world"] = not hit.is_empty()
-		e["hit_player"] = false
+		var world_dist := shot.origin.distance_to(hit.position) if not hit.is_empty() else shot.weapon.max_range
+		# Optimistic hit marker (PLAN §2.6): test the remote players we're
+		# showing; the server's hit event confirms it later.
+		var best := world_dist
+		for id in _last_remote_states:
+			var st: PlayerSimState = _last_remote_states[id]
+			if not st.alive:
+				continue
+			var h := Hitbox.intersect(st.position, st.stance, shot.origin, shot.direction, best)
+			if h != null and h.distance < best:
+				best = h.distance
+		e["predicted_hit"] = best < world_dist
+		e["end"] = shot.origin + shot.direction * best if best < world_dist else (hit.position if not hit.is_empty() else end)
+		e["hit_world"] = not hit.is_empty() and best >= world_dist
+		e["hit_player"] = best < world_dist
 	return e
 
 

@@ -14,6 +14,7 @@ const BOT_COLOR := Color(0.95, 0.5, 0.2)
 ## A client suspended this long reconnects instead of waiting for the old
 ## connection (the server times it out after 10 s).
 const RECONNECT_AFTER_MS := 5000
+const DEATH_CAM_SECONDS := 3.0
 const PLAYER_COLORS := [Color(0.55, 0.45, 1.0), Color(0.3, 0.85, 0.5), Color(0.95, 0.4, 0.6), Color(0.9, 0.85, 0.3)]
 
 var config: MatchConfig
@@ -40,6 +41,17 @@ var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
 var _confirm_panel: Control
 var _autopilot: WanderInput
+var _kill_feed: KillFeed
+var _scoreboard: MatchPanel
+var _results: MatchPanel
+var _death_label: Label
+var _scores_button: Button
+var _results_until: float = 0.0
+## Death cam (PLAN §2.6): {pos, killer, until} while active.
+var _death_cam: Dictionary = {}
+var _life_dealt: float = 0.0
+var _life_taken: float = 0.0
+var _remote_cache: Dictionary = {}  ## client: latest remote render states
 var _perf_ms := FrameStats.new(7200)  ## frame times of the current minute
 var _perf_minute_start_ms: int = 0
 var _perf_frames: int = 0
@@ -218,6 +230,7 @@ func _process(delta: float) -> void:
 		if client.is_predicting():
 			_render_client(delta)
 	_update_banner()
+	_update_match_ui(delta)
 
 
 ## Host-loss detection on the client (PLAN §3.5.1): 3 s without packets shows
@@ -274,6 +287,7 @@ func _render_client(delta: float) -> void:
 		names[p.id] = p
 	var seen := {}
 	var states := client.remote_states()
+	_remote_cache = states
 	for id in states:
 		var info: Dictionary = names.get(id, {"name": "?", "bot": false})
 		seen[id] = true
@@ -326,6 +340,84 @@ func _log_perf(delta: float) -> void:
 	_perf_minute_start_ms = now
 
 
+# --- Match UI: kill feed, death cam, scoreboard, results, timer ---
+
+func _roster() -> Array:
+	return server.roster() if server != null else client.roster
+
+
+func _display_name(id: int) -> String:
+	for p in _roster():
+		if p.id == id:
+			return ("[BOT] " if p.bot else "") + p.name
+	return "?"
+
+
+## Where another player is rendered right now (Vector3.INF if unknown).
+func _position_of(id: int) -> Vector3:
+	if server != null:
+		var p: SimPlayer = server.world.players.get(id)
+		return p.state.position if p != null else Vector3.INF
+	var st: PlayerSimState = _remote_cache.get(id)
+	return st.position if st != null else Vector3.INF
+
+
+func _vitals_of(id: int) -> Vector2:
+	if server != null:
+		var p: SimPlayer = server.world.players.get(id)
+		return Vector2(p.state.shield, p.state.health) if p != null else Vector2.ZERO
+	var st: PlayerSimState = _remote_cache.get(id)
+	return Vector2(st.shield, st.health) if st != null else Vector2.ZERO
+
+
+func _update_match_ui(delta: float) -> void:
+	hud.set_view(view.global_position, input.look_yaw)
+	var phase := server.phase if server != null else client.phase
+	var ends := server.phase_ends_tick if server != null else client.phase_ends_tick
+	var now := float(server.world.tick) if server != null else client.clock.server_time()
+	var playing := phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH
+	hud.set_timer(maxi(ceili((ends - now) / Sim.TICK_RATE), 0), playing)
+	var me := _local_player()
+	if me != null:
+		var names := PackedStringArray()
+		for w: WeaponData in me.loadout:
+			names.append(KillFeed.WEAPON_TAGS.get(w.id, w.display_name))
+		hud.set_slots(names, me.state.weapon_slot)
+	# Death cam: 3 s looking at the killer from where we died.
+	var dead := me != null and not me.state.alive
+	if dead and not _death_cam.is_empty() and _time < _death_cam.until:
+		var killer_pos := _position_of(_death_cam.killer)
+		if not _death_cam.suicide and killer_pos != Vector3.INF:
+			view.death_cam(_death_cam.pos, killer_pos + Vector3(0.0, 1.3, 0.0), delta)
+			var v := _vitals_of(_death_cam.killer)
+			_death_label.text = "%s\n%s\n%s" % [tr("DEATH_KILLED_BY") % _display_name(_death_cam.killer),
+					tr("DEATH_KILLER_STATUS") % [ceili(v.x), ceili(v.y)],
+					tr("DEATH_DAMAGE") % [roundi(_life_dealt), roundi(_life_taken)]]
+		else:
+			_death_label.text = tr("DEATH_SUICIDE")
+		_death_label.visible = true
+	else:
+		_death_label.visible = false
+	# Results until the next match starts; the scoreboard while held.
+	if _results.visible:
+		if phase != MatchPhase.POST_MATCH:
+			_results.visible = false
+		else:
+			_results.footer.text = tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
+	var want_scores := (Input.is_action_pressed("scoreboard") or _scores_button.button_pressed) and not _results.visible
+	if want_scores:
+		_scoreboard.show_scoreboard(_roster(), local_id(),
+				tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else "")
+	else:
+		_scoreboard.visible = false
+
+
+func _local_player() -> SimPlayer:
+	if server != null:
+		return server.world.get_player(ServerSession.LOCAL_PLAYER_ID)
+	return client.pred
+
+
 func _visual_for(id: int, display_name: String, is_bot: bool) -> PlayerVisual:
 	var v: PlayerVisual = _visuals.get(id)
 	if v == null:
@@ -367,6 +459,8 @@ func _handle_event(e: Dictionary) -> void:
 			var local: bool = e.shooter == me
 			if local:
 				view.kick(2.0 if e.weapon == &"arc_launcher" else 1.0)
+				if e.get("predicted_hit", false):
+					hud.on_hit_marker(false, false)
 			if e.has("end"):
 				var from: Vector3 = view.muzzle_position() if local else e.origin
 				effects.tracer(from, e.end)
@@ -376,13 +470,31 @@ func _handle_event(e: Dictionary) -> void:
 			effects.explosion(e.position, 4.0)
 		"hit":
 			if e.attacker == me and e.target != me:
-				hud.on_hit_confirmed(e.killed)
+				hud.on_hit_marker(true, e.killed)
+				_life_dealt += e.amount
 			if e.target == me:
-				hud.on_damaged()
+				_life_taken += e.amount
+				if e.attacker != me and _position_of(e.attacker) != Vector3.INF:
+					hud.on_damaged_from(_position_of(e.attacker))
+				else:
+					hud.on_damaged()
+				if e.shield_broken:
+					hud.on_shield_broken()
+		"death":
+			_kill_feed.add_death(e, _display_name, me)
+			if e.victim == me:
+				_death_cam = {"pos": e.position + Vector3(0.0, 1.6, 0.0), "killer": e.killer,
+						"until": _time + DEATH_CAM_SECONDS, "suicide": e.suicide}
+		"results":
+			_results.show_results(e, me)
+			_results_until = _time + MatchPhase.POST_MATCH_TICKS / float(Sim.TICK_RATE)
 		"spawn":
 			if e.player == me:
 				input.look_yaw = e.yaw
 				input.look_pitch = 0.0
+				_death_cam = {}
+				_life_dealt = 0.0
+				_life_taken = 0.0
 
 
 func _net_info() -> String:
@@ -426,8 +538,36 @@ func _build_ui() -> void:
 	_info.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_info.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	layer.add_child(_info)
+	_kill_feed = KillFeed.new()
+	_kill_feed.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_kill_feed.offset_left = -560.0
+	_kill_feed.offset_right = -24.0
+	_kill_feed.offset_top = 150.0 if DisplayServer.is_touchscreen_available() else 24.0
+	_kill_feed.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	layer.add_child(_kill_feed)
+	_death_label = _make_label(26, Color(1.0, 0.85, 0.8))
+	_death_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_death_label.offset_top = 80.0
+	_death_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_death_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_death_label.visible = false
+	layer.add_child(_death_label)
+	_scoreboard = MatchPanel.new()
+	layer.add_child(_scoreboard)
+	_results = MatchPanel.new()
+	layer.add_child(_results)
 	touch.input = input
 	layer.add_child(touch)
+	# Touch: hold to see the scoreboard (Tab on keyboards).
+	_scores_button = Button.new()
+	_scores_button.text = "TOUCH_SCORES"
+	_scores_button.toggle_mode = false
+	_scores_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	_scores_button.custom_minimum_size = Vector2(110, 56)
+	_scores_button.position = Vector2(140, 25)
+	_scores_button.visible = DisplayServer.is_touchscreen_available()
+	_scores_button.focus_mode = Control.FOCUS_NONE
+	layer.add_child(_scores_button)
 	_pause_panel = _make_pause_panel()
 	layer.add_child(_pause_panel)
 	_confirm_panel = _make_confirm_panel()

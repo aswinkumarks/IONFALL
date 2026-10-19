@@ -1,7 +1,7 @@
 extends Control
 ## Main menu. Every visible string is a translation key (PLAN §3.16).
 ##
-## Quick test launches (desktop): `-- --host`, `-- --join <address>` and
+## Quick test launches (desktop): `-- --play`, `-- --host`, `-- --join <address>` and
 ## `-- --name <name>` skip the menu.
 
 const MATCH := "res://game/match.tscn"
@@ -51,7 +51,9 @@ func _ready() -> void:
 	_play_button.grab_focus()
 	if _try_join_link():
 		return
-	if Platform.user_args.has("--host"):
+	if Platform.user_args.has("--play"):
+		_start.call_deferred(MatchConfig.Mode.OFFLINE)
+	elif Platform.user_args.has("--host"):
 		_start.call_deferred(MatchConfig.Mode.HOST)
 	elif Platform.user_args.has("--join") and not Platform.user_args.has("--test-clients"):
 		_address_edit.text = Platform.get_user_arg("--join", "127.0.0.1")

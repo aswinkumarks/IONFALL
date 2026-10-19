@@ -22,6 +22,13 @@ func _ready() -> void:
 	_overlay = OVERLAY_SCENE.instantiate()
 	_overlay.visible = false
 	add_child(_overlay)
+	# Automated visual checks: `-- --shot file.png --shot-after 8` saves a
+	# screenshot after that many seconds and quits.
+	var shot := Platform.get_user_arg("--shot")
+	if not shot.is_empty() and not Platform.user_args.has("--lighting-test"):
+		await get_tree().create_timer(Platform.get_user_arg("--shot-after", "5").to_float()).timeout
+		get_viewport().get_texture().get_image().save_png(shot)
+		get_tree().quit()
 
 
 func _process(delta: float) -> void:

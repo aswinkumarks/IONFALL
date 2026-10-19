@@ -49,3 +49,21 @@ MENU_LAN_GAMES,Games on this network
 MENU_LAN_UNAVAILABLE,"Can't search this network, enter an address"
 MENU_LAN_OTHER_VERSION,different version (%s)
 NET_UNREACHABLE,"Couldn't reach the host. Both devices must be on the same network; guest Wi-Fi and access-point isolation block LAN games."
+SCOREBOARD_TITLE,Scoreboard
+COL_PLAYER,Player
+COL_SCORE,Score
+COL_KILLS,K
+COL_DEATHS,D
+COL_ASSISTS,A
+COL_ACCURACY,Acc
+COL_DAMAGE,Damage
+RESULTS_VICTORY,Victory
+RESULTS_DRAW,Draw
+RESULTS_WINNER,%s wins
+RESULTS_NEXT_MATCH,Next match in %d
+PHASE_SUDDEN_DEATH,"Sudden death: next point wins"
+DEATH_KILLED_BY,Killed by %s
+DEATH_KILLER_STATUS,"Their shield %d · health %d"
+DEATH_DAMAGE,"You dealt %d · took %d"
+DEATH_SUICIDE,You died
+TOUCH_SCORES,Scores
