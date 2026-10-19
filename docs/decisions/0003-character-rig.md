@@ -73,3 +73,30 @@ The undersuit body is now the Quaternius Universal Base Characters
 a bulkier silhouette. Animation-library clips are retargeted at load
 (rotation tracks only; the pelvis position is scaled to this body's hip
 height) and the armour plates are sized up to match.
+
+## Update 4 (2026-10-19): Cybernetic Sentinel
+
+The default is now `SentinelRig`: the Meshy community model "Cybernetic
+Sentinel" by tborcen (CC0). The source is 2M triangles; local decimation
+broke its fragmented UV atlas (blotchy texture), so it was reduced to
+15,593 triangles / 22,561 vertices inside Meshy (which re-bakes the
+texture) and auto-rigged with `meshy_rig` (5 credits; 24-bone humanoid in
+centimetres, A-pose, no fingers). Textures are 2048 px (baked down from 4K).
+
+Animation reuses ArmoredRig's AnimationTree and the same Universal
+Animation Library clips, retargeted at load in model space: for each
+mapped bone, target global = (source global pose x source global rest^-1)
+x rest correction x target global rest, where the rest correction turns the
+Sentinel's bone direction into the library's (A-pose to T-pose). Hips
+position is scaled by the hip-height ratio. Clips are baked at 30 fps once
+per process. The weapon grip is carried into the Sentinel's hand space the
+same way.
+
+Player colour: `sentinel.gdshader` swaps the hue of the blue/cyan panels and
+light strips to the player's colour (keeping value) and makes the strips
+emissive; hit flash and spawn glow are shader parameters. One draw per
+character plus the weapon.
+
+Budget: ~78k triangles for five characters with shadows (PLAN §3.10 caps
+the frame at 300k on the Mi 11X). Laptop, 8 characters, shadows on: GPU
+p50 6.96 ms (armoured rig 6.59 ms). Mi 11X measurement pending.

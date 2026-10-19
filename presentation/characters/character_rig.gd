@@ -1,17 +1,20 @@
 class_name CharacterRig
 extends Node3D
 ## Third-person body of a player (presentation only; hitboxes come from the
-## simulation). Subclasses: ArmoredRig (default: armoured soldier on the
+## simulation). Subclasses: SentinelRig (default: Meshy Cybernetic Sentinel
+## on the animation-library clips), ArmoredRig (armoured soldier on the
 ## Quaternius animation-library mannequin), AstronautRig (Quaternius astronauts),
 ## SkinnedRig (Kenney character in a painted suit), PartsRig (rigid parts)
 ## and CapsuleRig (greybox). Skinned won the on-device comparison
 ## (docs/decisions/0003-character-rig.md).
 
-const STYLES := ["armored", "astronaut", "skinned", "parts", "capsule"]
+const STYLES := ["sentinel", "armored", "astronaut", "skinned", "parts", "capsule"]
 
 
 static func create(style: String, variant: int = 0) -> CharacterRig:
 	match style:
+		"sentinel":
+			return SentinelRig.new()
 		"armored":
 			return ArmoredRig.new()
 		"astronaut":
@@ -24,7 +27,7 @@ static func create(style: String, variant: int = 0) -> CharacterRig:
 			return PartsRig.new()
 		"capsule":
 			return CapsuleRig.new()
-	return ArmoredRig.new()
+	return SentinelRig.new()
 
 
 func setup(_color: Color) -> void:

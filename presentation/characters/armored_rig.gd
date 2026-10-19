@@ -76,7 +76,7 @@ func setup(color: Color) -> void:
 	_hand = BoneAttachment3D.new()
 	_hand.bone_name = "hand_r"
 	_skeleton.add_child(_hand)
-	_build_tree()
+	_build_tree(_retargeted(_skeleton), UPPER_BONES)
 
 
 # --- Armour mesh ---
@@ -204,10 +204,12 @@ func _armor() -> Dictionary:
 
 # --- Animation ---
 
-func _build_tree() -> void:
+## Layers `library` (the CLIPS, for this skeleton) in an AnimationTree; aim
+## and shoot drive only `upper_bones`.
+func _build_tree(library: AnimationLibrary, upper_bones: Array) -> void:
 	var player := AnimationPlayer.new()
 	_model.add_child(player)
-	player.add_animation_library("", _retargeted(_skeleton))
+	player.add_animation_library("", library)
 	var bt := AnimationNodeBlendTree.new()
 	var loco := AnimationNodeBlendSpace1D.new()
 	for pt in [["Idle", 0.0], ["Walk", 1.8], ["Jog_Fwd", 4.6], ["Sprint", 7.5]]:
@@ -246,7 +248,7 @@ func _build_tree() -> void:
 	shoot.fadein_time = 0.03
 	shoot.fadeout_time = 0.12
 	var skel_path := String(_model.get_path_to(_skeleton))
-	for b: String in UPPER_BONES:
+	for b: String in upper_bones:
 		upper.set_filter_path(NodePath(skel_path + ":" + b), true)
 		shoot.set_filter_path(NodePath(skel_path + ":" + b), true)
 	bt.add_node("upper", upper)

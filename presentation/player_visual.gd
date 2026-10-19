@@ -5,7 +5,7 @@ extends Node3D
 
 ## Body style for new visuals (CharacterRig.STYLES); set by the character
 ## comparison bench and the diagnostics overlay.
-static var style: String = "armored"
+static var style: String = "sentinel"
 
 var rig: CharacterRig
 var color := Color.WHITE

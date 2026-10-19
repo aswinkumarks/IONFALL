@@ -41,3 +41,18 @@ func test_skinned_clips() -> void:
 	assert_eq(anim.current_animation, "jump")
 	rig.animate(_state(PlayerSimState.Move.GROUND, Vector3.ZERO), 0.016, 1.8)
 	assert_eq(anim.current_animation, "idle")
+
+
+func test_sentinel_retarget() -> void:
+	var rig := SentinelRig.new()
+	add_child_autofree(rig)
+	rig.setup(Color.ORANGE)
+	var lib: AnimationLibrary = SentinelRig._sentinel_library
+	for clip: String in ArmoredRig.CLIPS:
+		assert_true(lib.has_animation(clip), clip)
+	var idle := lib.get_animation("Idle")
+	assert_eq(idle.get_track_count(), SentinelRig.BONE_MAP.size() + 1, "a rotation per mapped bone plus hips position")
+	var hips: Vector3 = idle.track_get_key_value(idle.get_track_count() - 1, 0)
+	assert_between(hips.y, 85.0, 110.0, "hips stay near the model's rest height (cm)")
+	rig.set_weapon(Loadouts.PISTOL.id)
+	assert_almost_eq(SentinelRig._grip.basis.get_scale().x, SentinelRig.GRIP_SCALE * 100.0, 0.5, "grip scaled into centimetres")
