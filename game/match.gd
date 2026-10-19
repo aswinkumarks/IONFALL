@@ -256,8 +256,11 @@ func _handle_event(e: Dictionary) -> void:
 func _net_info() -> String:
 	if client != null:
 		var st := client.transport.stats
-		return "NET client id %d  rtt %.0f ms  interp %d  rate %.3f\nin %.1f kB/s  out %.1f kB/s (wire)  snapshot p50 %d max %d B\ncorrections %d  visible %d  snaps %d  bad snapshots %d" % [
+		var last_cmd := client.latest_snapshot.last_cmd_tick if client.latest_snapshot != null else 0
+		return "NET client id %d  rtt %.0f ms  interp %d  rate %.3f\nlead %.1f ticks (pred %d, server %.1f, last cmd %d)  clock samples %d\nin %.1f kB/s  out %.1f kB/s (wire)  snapshot p50 %d max %d B\ncorrections %d  visible %d  snaps %d  bad snapshots %d" % [
 			client.local_id, client.clock.rtt_ms, client.interp_ticks, client.rate(),
+			client.pred_tick - client.clock.server_time(), client.pred_tick, client.clock.server_time(), last_cmd,
+			client.clock.sample_count(),
 			st.wire_bytes_in_per_s() / 1000.0, st.wire_bytes_out_per_s() / 1000.0,
 			st.snapshot_sizes.percentile(50.0), st.max_snapshot,
 			client.corrections, client.visible_corrections, client.snaps, client.undecodable_snapshots]

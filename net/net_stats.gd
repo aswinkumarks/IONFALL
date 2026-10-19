@@ -38,15 +38,23 @@ func on_snapshot(size: int) -> void:
 
 
 func wire_bytes_in_per_s() -> int:
+	_roll()
 	return bytes_in_per_s + packets_in_per_s * WIRE_OVERHEAD
 
 
 func wire_bytes_out_per_s() -> int:
+	_roll()
 	return bytes_out_per_s + packets_out_per_s * WIRE_OVERHEAD
 
 
 func _roll() -> void:
 	var now := Time.get_ticks_msec()
+	if now - _window_start >= 2000:
+		# Idle for a whole window: nothing was sent or received.
+		_bi = 0
+		_bo = 0
+		_pi = 0
+		_po = 0
 	if now - _window_start >= 1000:
 		bytes_in_per_s = _bi
 		bytes_out_per_s = _bo

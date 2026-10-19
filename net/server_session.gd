@@ -10,7 +10,11 @@ signal phase_changed(phase: int)
 signal stepped
 
 const SNAPSHOT_INTERVAL := 2
+## Command buffer target per client, in ticks: the minimum on a clean
+## network; on jittery links (Wi-Fi power saving bunches packets) it grows
+## with the measured arrival jitter, up to MAX_TARGET_BUFFER.
 const TARGET_BUFFER := 2
+const MAX_TARGET_BUFFER := 6.0
 const MAX_FUTURE_TICKS := 8
 const REPEAT_LIMIT := 6
 const VIEW_TOLERANCE_TICKS := 2.0
@@ -70,6 +74,8 @@ class Client:
 	var sent: Dictionary = {}  ## snapshot id -> {entity id -> NetEntity}
 	var pending: Array = []  ## [event bytes, first snapshot id or -1]
 	var buffer_avg: float = TARGET_BUFFER
+	var target_buffer: float = TARGET_BUFFER
+	var arrival_offsets := FrameStats.new(120)  ## (arrival time - command tick) of new commands
 	var view_bias: float = 0.0
 	var view_samples: int = 0
 	var view_anomalies: int = 0
@@ -192,6 +198,11 @@ func _next_command(c: Client) -> PlayerCommand:
 		if t > c.last_processed and (next_tick < 0 or t < next_tick):
 			next_tick = t
 	c.buffer_avg = lerpf(c.buffer_avg, c.queue.size(), 0.05)
+	if world.tick % 30 == 0 and c.arrival_offsets.count() >= 30:
+		var jitter := c.arrival_offsets.percentile(95.0) - c.arrival_offsets.percentile(5.0)
+		var wanted := clampf(TARGET_BUFFER + jitter, TARGET_BUFFER, MAX_TARGET_BUFFER)
+		# Grow at once, shrink slowly.
+		c.target_buffer = wanted if wanted > c.target_buffer else lerpf(c.target_buffer, wanted, 0.1)
 	if next_tick < 0:
 		if c.last_cmd == null:
 			return null
@@ -240,7 +251,10 @@ func validate_view_tick(claimed: float, arrived: float, rtt_ms: float, interp_ti
 		c.view_samples += 1
 		c.view_bias = clampf(lerpf(c.view_bias, error, 1.0 / c.view_samples), -MAX_VIEW_BIAS_TICKS, MAX_VIEW_BIAS_TICKS)
 		return claimed
-	if absf(error - bias) <= VIEW_TOLERANCE_TICKS:
+	# Arrival times on jittery links (measured as the buffer growth) blur the
+	# expected value by the same amount.
+	var tolerance := VIEW_TOLERANCE_TICKS + (c.target_buffer - TARGET_BUFFER if c != null else 0.0)
+	if absf(error - bias) <= tolerance:
 		if c != null:
 			c.view_bias = clampf(lerpf(c.view_bias, error, 0.05), -MAX_VIEW_BIAS_TICKS, MAX_VIEW_BIAS_TICKS)
 		return claimed
@@ -414,11 +428,12 @@ func _on_commands(c: Client, data: PackedByteArray) -> void:
 			c.last_processed = cmd.tick - 1
 		if cmd.tick <= c.last_processed or c.queue.has(cmd.tick):
 			continue  # duplicate or late: later commands carry its presses
-		if cmd.tick > c.last_processed + TARGET_BUFFER + MAX_FUTURE_TICKS:
+		if cmd.tick > c.last_processed + MAX_TARGET_BUFFER + MAX_FUTURE_TICKS:
 			anomalies += 1
 			continue
 		c.queue[cmd.tick] = cmd
 		c.arrival[cmd.tick] = now
+		c.arrival_offsets.add(now - cmd.tick)
 
 
 func _send_snapshot(c: Client) -> void:
@@ -427,8 +442,8 @@ func _send_snapshot(c: Client) -> void:
 	snap.match_id = match_id
 	snap.phase_seq = phase_seq
 	snap.baseline_id = c.ack if c.sent.has(c.ack) else 0
-	snap.last_cmd_tick = c.last_processed
-	snap.buffer_delta = clampi(roundi((c.buffer_avg - TARGET_BUFFER) * 10.0), -127, 127)
+	snap.last_cmd_tick = c.last_processed if c.last_processed >= 0 else Snapshot.NO_COMMAND
+	snap.buffer_delta = clampi(roundi((c.buffer_avg - c.target_buffer) * 10.0), -127, 127)
 	for id in world.players:
 		if id != c.player_id:
 			snap.entities[id] = NetEntity.from_player(world.players[id])

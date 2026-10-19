@@ -5,6 +5,8 @@ extends RefCounted
 ## reconciliation, projectiles and cosmetic events.
 
 const MAX_EVENTS := 8
+## `last_cmd_tick` before the server has processed any command from this client.
+const NO_COMMAND := 0xFFFFFFFF
 
 var id: int = 0  ## = server tick
 var match_id: int = 0

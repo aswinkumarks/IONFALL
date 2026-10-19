@@ -69,8 +69,23 @@ func _process(delta: float) -> void:
 ## One-line health summary for logs and soak tests.
 func status_line() -> String:
 	var st := server.transport.stats
-	return "IONFALL status: up %ds tick %d phase %s clients %d players %d | out %.1f kB/s in %.1f kB/s | snapshot max %d B | anomalies %d ingress_drops %d | step p50 %.2f p99 %.2f ms | mem %.0f MiB" % [
+	var per_client := PackedStringArray()
+	for c: ServerSession.Client in server.clients.values():
+		per_client.append("%s rtt %.0f buf %.1f/%.1f synth %d view_anom %d" % [c.name, c.rtt_ms, c.buffer_avg, c.target_buffer, c.synthesized, c.view_anomalies])
+	return "IONFALL status: up %ds tick %d phase %s clients %d players %d | out %.1f kB/s in %.1f kB/s | snapshot max %d B | anomalies %d ingress_drops %d | step p50 %.2f p99 %.2f ms | rss %.0f MiB" % [
 		(Time.get_ticks_msec() - _started_ms) / 1000, server.world.tick, MatchPhase.label_key(server.phase),
 		server.clients.size(), server.world.players.size(), st.wire_bytes_out_per_s() / 1000.0,
 		st.wire_bytes_in_per_s() / 1000.0, st.max_snapshot, server.anomalies, server.transport.ingress_drops,
-		_step_ms.percentile(50.0), _step_ms.percentile(99.0), OS.get_static_memory_usage() / 1048576.0]
+		_step_ms.percentile(50.0), _step_ms.percentile(99.0), _rss_mib()] \
+		+ ("" if per_client.is_empty() else "\n  " + "\n  ".join(per_client))
+
+
+## Resident memory from /proc (static-memory counters are debug-only).
+static func _rss_mib() -> float:
+	var f := FileAccess.open("/proc/self/status", FileAccess.READ)
+	if f == null:
+		return OS.get_static_memory_usage() / 1048576.0
+	for line in f.get_as_text().split("\n"):
+		if line.begins_with("VmRSS:"):
+			return line.split(":")[1].strip_edges().to_int() / 1024.0
+	return 0.0

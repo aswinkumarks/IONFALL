@@ -26,6 +26,8 @@ func before_each() -> void:
 	script_input = SimHarness.CommandScript.new()
 	presses_at = {}
 	client.input_source = _scripted_input
+	if gut.get_current_test_object().name == "test_join_under_latency":
+		client.transport.conditioner.rtt_ms = 150.0
 	assert_eq(client.join("127.0.0.1", port, SimHarness.MOVEMENT, SimHarness.loadout(), TestArenaLayout.spawn_points()), OK)
 	await wait_until(func() -> bool: return client.is_predicting(), 5.0)
 	if not client.is_predicting():
@@ -97,6 +99,34 @@ func test_corrections_at_100ms_rtt_2pct_loss() -> void:
 			per_min, client.snaps, client.corrections, client.clock.rtt_ms, client.interp_ticks])
 	assert_lte(per_min, 1.0, "visible corrections <= 1/min (PLAN §3.2)")
 	assert_eq(client.snaps, 0, "no snaps outside respawn/teleport")
+
+
+## Regression (found on Wi-Fi): snapshots that arrive before the server has
+## processed any command must not move the prediction tick.
+func test_join_under_latency() -> void:
+	await wait_seconds(3.0)
+	var c: ServerSession.Client = server.clients.values()[0]
+	var synth_before := c.synthesized
+	await wait_seconds(2.0)
+	assert_lt(client.pred_tick, server.world.tick + 60, "prediction tick stays near server time")
+	assert_lt(c.synthesized - synth_before, 10, "the server uses the client's own commands")
+	assert_gt(c.buffer_avg, 0.5, "commands arrive ahead of time")
+
+
+## Wi-Fi bunches packets: the server grows the client's command buffer
+## instead of synthesizing commands (found on the Mi 11X).
+func test_jittery_link_grows_command_buffer() -> void:
+	client.transport.conditioner.rtt_ms = 30.0
+	client.transport.conditioner.jitter_ms = 40.0
+	await wait_seconds(5.0)
+	var c: ServerSession.Client = server.clients.values()[0]
+	var synth_before := c.synthesized
+	client.reset_metrics()
+	await wait_seconds(5.0)
+	gut.p("target buffer %.2f, avg %.2f, synthesized in 5 s: %d, visible corrections %d" % [
+			c.target_buffer, c.buffer_avg, c.synthesized - synth_before, client.visible_corrections])
+	assert_gt(c.target_buffer, float(ServerSession.TARGET_BUFFER), "buffer target grew")
+	assert_lt(c.synthesized - synth_before, 15, "few synthesized commands once adapted")
 
 
 func test_snapshots_keep_decoding_under_heavy_loss() -> void:

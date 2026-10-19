@@ -275,6 +275,8 @@ func _reconcile(snap: Snapshot) -> void:
 		_ready_to_predict = true
 		return
 	pred.entity_gen = snap.owner_gen
+	if snap.last_cmd_tick == Snapshot.NO_COMMAND:
+		return  # our first commands are still in flight: nothing to reconcile yet
 	var server := snap.owner_state
 	var c := snap.last_cmd_tick
 	# Keep the prediction a sane distance ahead of the server; resync if not.
