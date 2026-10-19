@@ -80,3 +80,21 @@ tools/check_16kb.sh build/android/ionfall.aab
 
 - **Dedicated-server exports and CSV translations:** with the `customized` / `strip` export mode, Godot 4.7.2 logs "Failed loading resource: res://locale/strings.csv" (multi-locale CSV imports have no single import path). Server presets therefore exclude `locale/*`, and `project.godot` sets `locale/translations.dedicated_server` to an empty list.
 - **First import on a fresh checkout** logs `Cannot open file 'res://locale/strings.en.translation'`. `project.godot` references the translation that the CSV import generates (it's gitignored as a build artifact), so the very first project load can't find it yet. It's harmless: the import creates it, and every later load is clean.
+- **ENet server bandwidth bug:** `ENetMultiplayerPeer.create_server(port, peers, channels)` passes `channels` as the incoming bandwidth limit, so clients throttle their unreliable packets. `Transport.host()` calls `peer.host.bandwidth_limit(0, 0)` right after creating the server. See decision 0002.
+- **New `class_name` scripts** aren't visible to command-line runs until the global class cache is refreshed: run `godot --headless --import` after adding one.
+- **Android launch arguments:** exported activities drop intent command-line extras, so device-only checks are started from the diagnostics overlay (F3 / three-finger tap), e.g. the replay check. Results go to `adb logcat -s godot`.
+
+## Multiplayer testing
+
+```bash
+godot -- --host                          # PC: host from the menu flow
+godot -- --join 192.168.0.9 --name Alice # PC: join a host
+godot --headless -- --server --bots 2    # dedicated server (port 47710)
+godot --headless -- --test-clients 8 --join 127.0.0.1 --duration 600
+godot --headless -- --replay-check > linux.log   # then compare:
+tools/compare_replay.py linux.log android.log    # android.log from adb logcat
+```
+
+On the phone: Join Game, type the host's address (shown at the bottom of the
+host's screen). The overlay's NET rows show RTT, interpolation, time
+dilation, prediction lead, bandwidth and corrections.

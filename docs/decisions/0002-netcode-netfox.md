@@ -19,3 +19,35 @@
   - Admission uses SceneMultiplayer's auth step (`auth_callback`): a peer stays invisible to the game until the handshake (magic, protocol version, compat hash) succeeds (§3.20 rule 2, admission).
   - `server_relay` is disabled.
 - **Ideas borrowed:** median-of-samples clock offset (also in the plan).
+
+## Implementation notes (M1b)
+
+Choices made while building and testing the custom netcode, and where they
+differ from PLAN §3.3:
+
+- **Godot 4.7.2 ENet bug.** `ENetMultiplayerPeer.create_server()` passes the
+  channel count as ENet's *incoming bandwidth* (bytes/s). Clients then
+  throttle unreliable packets to ~1/32 for about half a second every second
+  (measured: ~25 % of commands lost on localhost). `Transport.host()` resets
+  the limit with `host.bandwidth_limit(0, 0)`; RTT-based throttling is also
+  disabled per peer (`throttle_configure(100, 32, 0)`).
+- **One acknowledged baseline per snapshot** instead of per-entity
+  baselines: deltas are against the newest snapshot the client acked; lost
+  snapshots never break decoding (test at 30 % loss).
+- **`last_cmd_tick` = NO_COMMAND** until the server processed a command from
+  the client. Found on Wi-Fi: before the fix the client read -1 as tick 2^32
+  and its commands were all dropped as late.
+- **Adaptive command buffer.** The server's target is 2 ticks, growing to at
+  most 6 with the measured command-arrival jitter (p95 − p5); the client's
+  time dilation (±5 %) steers to it. On the Mi 11X over home Wi-Fi it
+  settles at ~4–5 ticks (~75 ms); about 0.5 % of ticks are still synthesized
+  during Wi-Fi spikes. Android's low-latency Wi-Fi lock (O3 plugin) should
+  shrink this.
+- **View-tick validation** learns a per-client bias (≤ ±3 ticks, from the
+  first 60 commands, then slowly), accepts ±2 ticks around it, widened by
+  the jitter the buffer measured. A forged claim still gains at most
+  3 + 2 + 4 ticks of extra rewind, within the 15-tick cap.
+- **Interpolation delay** adapts from snapshot arrival jitter within 3–9
+  ticks.
+- Sizes and rates against the §3.3.5 worksheet: `docs/net/wire-layout.md`.
+  Priority-based snapshot splitting is still to do before 16-player matches.
