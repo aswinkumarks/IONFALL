@@ -175,4 +175,9 @@ static func key_name(action: String) -> String:
 	if events.is_empty():
 		return "-"
 	var ev := events[0] as InputEventKey
-	return OS.get_keycode_string(DisplayServer.keyboard_get_keycode_from_physical(ev.physical_keycode)) if ev else "-"
+	if ev == null:
+		return "-"
+	# Show the key for the user's keyboard layout where the platform can say.
+	if DisplayServer.get_name() == "headless" or Platform.is_mobile() or Platform.is_web():
+		return OS.get_keycode_string(ev.physical_keycode)
+	return OS.get_keycode_string(DisplayServer.keyboard_get_keycode_from_physical(ev.physical_keycode))
