@@ -149,12 +149,26 @@ text = "0 / 500 XP"
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 
-[node name="PlayButton" type="Button" parent="Margin/Center"]
+[node name="PlayRow" type="HBoxContainer" parent="Margin/Center"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PlayButton" type="Button" parent="Margin/Center/PlayRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "MENU_PLAY"
+alignment = 0
+
+[node name="MapButton" type="Button" parent="Margin/Center/PlayRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.2
+text = "MAP"
 alignment = 0
 
 [node name="HostButton" type="Button" parent="Margin/Center"]

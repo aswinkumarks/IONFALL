@@ -17,6 +17,7 @@ var map: String = Maps.DEFAULT
 var bots: int = 3  ## dummies alongside the local player; they leave as humans join
 var character: int = 0  ## index into CharacterRig.SELECTABLE
 var color: int = 0  ## index into PlayerVisual.PALETTE (0 = auto)
+var map_retried: bool = false  ## joined once already and reloaded with the host's map
 
 
 ## PLAN §3.5.1: a phone host is limited to 4 combatants until it passes the
@@ -30,7 +31,8 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	c.mode = p_mode
 	c.player_name = p_name
 	c.bots = p_bots
-	c.map = Maps.from_args()
+	var saved: Variant = Settings.get_value("profile", "map")
+	c.map = Maps.from_args(saved if saved is String else Maps.DEFAULT)
 	c.character = profile_character()
 	c.color = profile_color()
 	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches

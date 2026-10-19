@@ -10,6 +10,7 @@ const DEFAULTS := {
 		"uuid": "",
 		"character": "sentinel",  ## CharacterRig.SELECTABLE
 		"color": 0,  ## PlayerVisual.PALETTE index, 0 = auto
+		"map": "station",  ## Maps.PLAYABLE, for Play and Host
 	},
 	"video": {
 		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive
@@ -45,10 +46,16 @@ const DEFAULTS := {
 }
 
 var _cfg := ConfigFile.new()
+## `--quality <preset>` (debug builds): this session uses that preset's
+## video values without saving them, for performance tests.
+var _quality_override: String = ""
 
 
 func _ready() -> void:
 	load_settings()
+	var q := Platform.get_user_arg("--quality")
+	if OS.is_debug_build() and QUALITY.has(q):
+		_quality_override = q
 	apply_video()
 	apply_audio()
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
@@ -178,6 +185,8 @@ func resolution_options() -> Array:
 
 
 func get_value(section: String, key: String) -> Variant:
+	if section == "video" and not _quality_override.is_empty() and (key == "quality" or QUALITY[_quality_override].has(key)):
+		return _quality_override if key == "quality" else QUALITY[_quality_override][key]
 	if section == "video" and not _cfg.has_section_key(section, key):
 		# Video defaults follow the platform's quality preset.
 		var q := default_quality()

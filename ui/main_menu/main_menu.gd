@@ -45,6 +45,8 @@ func _ready() -> void:
 	var last: Variant = Settings.get_value("profile", "last_address")
 	_address_edit.text = last if last is String else ""
 	_play_button.pressed.connect(_start.bind(MatchConfig.Mode.OFFLINE))
+	%MapButton.pressed.connect(_next_map)
+	_update_map_button()
 	_host_button.pressed.connect(_start.bind(MatchConfig.Mode.HOST))
 	_join_button.pressed.connect(_show_join.bind(true))
 	_back_button.pressed.connect(_show_join.bind(false))
@@ -84,6 +86,20 @@ func _ready() -> void:
 	elif Platform.user_args.has("--join") and not Platform.user_args.has("--test-clients"):
 		_address_edit.text = Platform.get_user_arg("--join", "127.0.0.1")
 		_start.call_deferred(MatchConfig.Mode.JOIN)
+
+
+## Play and Host use the saved map; the button cycles Maps.PLAYABLE.
+func _next_map() -> void:
+	var current: String = Maps.from_args(Settings.get_value("profile", "map"))
+	var i := Maps.PLAYABLE.find(current)
+	Settings.set_value("profile", "map", Maps.PLAYABLE[(i + 1) % Maps.PLAYABLE.size()])
+	Settings.save_settings()
+	_update_map_button()
+
+
+func _update_map_button() -> void:
+	var id := Maps.from_args(Settings.get_value("profile", "map"))
+	%MapButton.text = tr("MENU_MAP") % tr(Maps.LIST[id].name)
 
 
 ## Level badge and XP progress from the local profile (PLAN §3.13).
@@ -139,7 +155,7 @@ func _show_join(show: bool) -> void:
 	elif not show and _browser != null:
 		_browser.queue_free()
 		_browser = null
-	for b: Control in [_play_button, _host_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
+	for b: Control in [_play_button, %MapButton, _host_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
 		b.visible = not show and (b != _quit_button or not (Platform.is_web() or Platform.is_mobile()))
 	if show:
 		_address_edit.grab_focus()
@@ -157,19 +173,22 @@ func _refresh_games() -> void:
 		_lan_label.text = tr("MENU_LAN_SEARCHING") if games.is_empty() else tr("MENU_LAN_GAMES")
 	for b: Discovery.Beacon in games:
 		var row := Button.new()
-		row.text = "%s · %s · %d/%d" % [b.name, b.map, b.combatants, b.max_combatants]
+		var map_name := tr(Maps.LIST[b.map].name) if Maps.has(b.map) else b.map
+		row.text = "%s · %s · %d/%d" % [b.name, map_name, b.combatants, b.max_combatants]
 		if not b.compatible():
 			row.text += " · " + tr("MENU_LAN_OTHER_VERSION") % b.build
 			row.disabled = true
 		var address := b.address
 		var port := b.game_port
+		var map := b.map
 		row.pressed.connect(func() -> void:
 			_address_edit.text = address
-			_start(MatchConfig.Mode.JOIN, port))
+			_start(MatchConfig.Mode.JOIN, port, map))
 		_game_list.add_child(row)
 
 
-func _start(mode: int, port: int = Protocol.DEFAULT_PORT) -> void:
+## `map`: the host's map when known (LAN list), so a client loads it first.
+func _start(mode: int, port: int = Protocol.DEFAULT_PORT, map: String = "") -> void:
 	var player_name := ServerSession.sanitize_name(_name_edit.text)
 	if player_name != MatchConfig.profile_name():
 		Settings.set_value("profile", "name", player_name)
@@ -187,6 +206,8 @@ func _start(mode: int, port: int = Protocol.DEFAULT_PORT) -> void:
 			return
 		config.address = address
 		config.port = port
+		if Maps.has(map):
+			config.map = map
 		Settings.set_value("profile", "last_address", address)
 	Settings.save_settings()
 	MatchConfig.pending = config

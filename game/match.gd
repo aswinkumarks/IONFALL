@@ -163,7 +163,15 @@ func _start_client(token: int) -> bool:
 		# Clients load the map before joining (prediction needs its collision).
 		if client.map_id != config.map:
 			client.leave()
-			_fail(tr("NET_MAP_MISMATCH") % client.map_id))
+			if Maps.has(client.map_id) and not config.map_retried:
+				# Load the host's map and join again (manual address joins
+				# don't know it beforehand).
+				config.map = client.map_id
+				config.map_retried = true
+				MatchConfig.pending = config
+				get_tree().reload_current_scene.call_deferred()
+			else:
+				_fail(tr("NET_MAP_MISMATCH") % client.map_id))
 	client.failed.connect(_on_client_lost)
 	client.left.connect(_on_client_lost)
 	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns)

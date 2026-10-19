@@ -1,0 +1,413 @@
+[gd_scene format=3 uid="uid://dvnimetboojw0"]
+
+[ext_resource type="Shader" uid="uid://djr60vna1l3fr" path="res://maps/station/space_sky.gdshader" id="1_2b12t"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/slab.res" id="2_u8je7"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/wall.res" id="3_fk1e4"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/cover.res" id="4_okgc6"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/trim_cyan.res" id="5_g6yyq"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/trim_orange.res" id="6_hiha0"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/spire_glow.res" id="7_co00d"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_blue_wn.res" id="8_4nksp"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_01_basecolor_wn.res" id="9_3t63l"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_01_basecolor_ws.res" id="10_remnl"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_blue_ws.res" id="11_lds5a"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_wn.res" id="12_liroa"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_ws.res" id="13_8vhvu"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_en.res" id="14_nhpqt"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_blue_en.res" id="15_e1ixm"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_01_basecolor_en.res" id="16_uikl2"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_01_basecolor_es.res" id="17_xqbjb"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_blue_es.res" id="18_r6tau"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_02_basecolor_es.res" id="19_2ygo8"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_decals_ws.res" id="20_ufv3g"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_decals_wn.res" id="21_5ewxr"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_decals_es.res" id="22_l1sex"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_decals_en.res" id="23_1r7ug"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_basecolor_wn.res" id="24_ippgy"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_cables_wn.res" id="25_glb6x"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_basecolor_ws.res" id="26_taqn4"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_cables_ws.res" id="27_nt47p"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_basecolor_en.res" id="28_agf74"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_cables_en.res" id="29_swsy4"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_basecolor_es.res" id="30_aqsys"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_trim_03_cables_es.res" id="31_fhohi"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_props_crates_basecolor_wn.res" id="32_7psef"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_props_crates_basecolor_ws.res" id="33_dlvm4"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_props_crates_basecolor_en.res" id="34_7jmd3"]
+[ext_resource type="ArrayMesh" path="res://maps/spire/meshes/kit_t_props_crates_basecolor_es.res" id="35_bltcs"]
+[ext_resource type="LightmapGIData" uid="uid://c03js8r1jypk6" path="res://maps/spire/presentation.lmbake" id="36_u8je7"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_60nlr"]
+shader = ExtResource("1_2b12t")
+shader_parameter/space_color = Color(0.01, 0.015, 0.03, 1)
+shader_parameter/nebula_color = Color(0.1, 0.18, 0.35, 1)
+shader_parameter/planet_color = Color(0.12, 0.3, 0.5, 1)
+shader_parameter/rim_color = Color(0.45, 0.8, 1, 1)
+shader_parameter/star_density = 0.004
+
+[sub_resource type="Sky" id="Sky_2hp44"]
+sky_material = SubResource("ShaderMaterial_60nlr")
+radiance_size = 1
+
+[sub_resource type="Environment" id="Environment_r8b1k"]
+background_mode = 2
+sky = SubResource("Sky_2hp44")
+ambient_light_source = 2
+ambient_light_color = Color(0.32, 0.37, 0.48, 1)
+ambient_light_energy = 0.9
+reflected_light_source = 2
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.8
+glow_bloom = 0.05
+fog_enabled = true
+fog_light_color = Color(0.25, 0.33, 0.46, 1)
+fog_density = 0.004
+fog_sky_affect = 0.0
+
+[node name="SpirePresentation" type="Node3D" unique_id=1236028746]
+metadata/layout_hash = "ec478350d8137d9137a297cfe36b3db62e66a1f92a754a0be1c9adc1a220b915"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=440484808]
+environment = SubResource("Environment_r8b1k")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=860710735]
+transform = Transform3D(0.8660254, 0.37157243, -0.33456528, 0, 0.66913056, 0.74314487, 0.5, -0.64358234, 0.57948405, 0, 0, 0)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 1.3
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 40.0
+
+[node name="Accent0" type="OmniLight3D" parent="." unique_id=738539597]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, 0)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 18.0
+
+[node name="Accent1" type="OmniLight3D" parent="." unique_id=292252128]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -26, 3.2, 0)
+light_color = Color(1, 0.6, 0.25, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 11.0
+
+[node name="Accent2" type="OmniLight3D" parent="." unique_id=271525817]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3.2, 4)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 4.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent3" type="OmniLight3D" parent="." unique_id=1287792320]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3, -4)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 4.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent4" type="OmniLight3D" parent="." unique_id=1796188163]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 4, -20)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 1.5
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent5" type="OmniLight3D" parent="." unique_id=872138468]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 2.5, -12)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 0.8
+light_bake_mode = 1
+omni_range = 6.0
+
+[node name="Accent6" type="OmniLight3D" parent="." unique_id=748762104]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3, 4)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 4.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent7" type="OmniLight3D" parent="." unique_id=1664505911]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 4, 20)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 1.5
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent8" type="OmniLight3D" parent="." unique_id=1045086952]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 2.5, 12)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 0.8
+light_bake_mode = 1
+omni_range = 6.0
+
+[node name="Accent9" type="OmniLight3D" parent="." unique_id=1484088184]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 3.2, 0)
+light_color = Color(1, 0.6, 0.25, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 11.0
+
+[node name="Accent10" type="OmniLight3D" parent="." unique_id=753991981]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 3.2, 4)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 4.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent11" type="OmniLight3D" parent="." unique_id=1961419803]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3, -4)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 4.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent12" type="OmniLight3D" parent="." unique_id=1477733905]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 4, -20)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 1.5
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent13" type="OmniLight3D" parent="." unique_id=412654397]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2.5, -12)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 0.8
+light_bake_mode = 1
+omni_range = 6.0
+
+[node name="Accent14" type="OmniLight3D" parent="." unique_id=1356670169]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3, 4)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 4.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent15" type="OmniLight3D" parent="." unique_id=1860113967]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 4, 20)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 1.5
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent16" type="OmniLight3D" parent="." unique_id=166862401]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2.5, 12)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 0.8
+light_bake_mode = 1
+omni_range = 6.0
+
+[node name="Accent17" type="OmniLight3D" parent="." unique_id=580895133]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.1, -24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent18" type="OmniLight3D" parent="." unique_id=471403033]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.1, -24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent19" type="OmniLight3D" parent="." unique_id=1985047181]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, -24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent20" type="OmniLight3D" parent="." unique_id=1744050631]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.1, -24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent21" type="OmniLight3D" parent="." unique_id=1227074876]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.1, -24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent22" type="OmniLight3D" parent="." unique_id=814400990]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.1, 24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent23" type="OmniLight3D" parent="." unique_id=1188346116]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.1, 24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent24" type="OmniLight3D" parent="." unique_id=1308312495]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent25" type="OmniLight3D" parent="." unique_id=1228707368]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.1, 24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Accent26" type="OmniLight3D" parent="." unique_id=1860528863]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.1, 24.5)
+light_color = Color(0.35, 0.9, 1, 1)
+light_energy = 5.0
+light_bake_mode = 1
+omni_range = 9.0
+
+[node name="Slab" type="MeshInstance3D" parent="." unique_id=1419213406]
+cast_shadow = 0
+mesh = ExtResource("2_u8je7")
+
+[node name="Wall" type="MeshInstance3D" parent="." unique_id=1634325423]
+cast_shadow = 0
+mesh = ExtResource("3_fk1e4")
+
+[node name="Cover" type="MeshInstance3D" parent="." unique_id=1335402874]
+cast_shadow = 0
+mesh = ExtResource("4_okgc6")
+
+[node name="TrimCyan" type="MeshInstance3D" parent="." unique_id=698096623]
+cast_shadow = 0
+mesh = ExtResource("5_g6yyq")
+
+[node name="TrimOrange" type="MeshInstance3D" parent="." unique_id=282724258]
+cast_shadow = 0
+mesh = ExtResource("6_hiha0")
+
+[node name="SpireGlow" type="MeshInstance3D" parent="." unique_id=1360680183]
+cast_shadow = 0
+mesh = ExtResource("7_co00d")
+
+[node name="KitTTrim02BasecolorBlueWn" type="MeshInstance3D" parent="." unique_id=287169944]
+cast_shadow = 0
+mesh = ExtResource("8_4nksp")
+
+[node name="KitTTrim01BasecolorWn" type="MeshInstance3D" parent="." unique_id=90820711]
+cast_shadow = 0
+mesh = ExtResource("9_3t63l")
+
+[node name="KitTTrim01BasecolorWs" type="MeshInstance3D" parent="." unique_id=1798554457]
+cast_shadow = 0
+mesh = ExtResource("10_remnl")
+
+[node name="KitTTrim02BasecolorBlueWs" type="MeshInstance3D" parent="." unique_id=947607543]
+cast_shadow = 0
+mesh = ExtResource("11_lds5a")
+
+[node name="KitTTrim02BasecolorWn" type="MeshInstance3D" parent="." unique_id=1914279502]
+cast_shadow = 0
+mesh = ExtResource("12_liroa")
+
+[node name="KitTTrim02BasecolorWs" type="MeshInstance3D" parent="." unique_id=1126877875]
+cast_shadow = 0
+mesh = ExtResource("13_8vhvu")
+
+[node name="KitTTrim02BasecolorEn" type="MeshInstance3D" parent="." unique_id=1075813271]
+cast_shadow = 0
+mesh = ExtResource("14_nhpqt")
+
+[node name="KitTTrim02BasecolorBlueEn" type="MeshInstance3D" parent="." unique_id=2081415339]
+cast_shadow = 0
+mesh = ExtResource("15_e1ixm")
+
+[node name="KitTTrim01BasecolorEn" type="MeshInstance3D" parent="." unique_id=463436303]
+cast_shadow = 0
+mesh = ExtResource("16_uikl2")
+
+[node name="KitTTrim01BasecolorEs" type="MeshInstance3D" parent="." unique_id=1482811281]
+cast_shadow = 0
+mesh = ExtResource("17_xqbjb")
+
+[node name="KitTTrim02BasecolorBlueEs" type="MeshInstance3D" parent="." unique_id=158310261]
+cast_shadow = 0
+mesh = ExtResource("18_r6tau")
+
+[node name="KitTTrim02BasecolorEs" type="MeshInstance3D" parent="." unique_id=933273418]
+cast_shadow = 0
+mesh = ExtResource("19_2ygo8")
+
+[node name="KitTDecalsWs" type="MeshInstance3D" parent="." unique_id=1624031358]
+cast_shadow = 0
+mesh = ExtResource("20_ufv3g")
+
+[node name="KitTDecalsWn" type="MeshInstance3D" parent="." unique_id=983544472]
+cast_shadow = 0
+mesh = ExtResource("21_5ewxr")
+
+[node name="KitTDecalsEs" type="MeshInstance3D" parent="." unique_id=1636546277]
+cast_shadow = 0
+mesh = ExtResource("22_l1sex")
+
+[node name="KitTDecalsEn" type="MeshInstance3D" parent="." unique_id=269219848]
+cast_shadow = 0
+mesh = ExtResource("23_1r7ug")
+
+[node name="KitTTrim03BasecolorWn" type="MeshInstance3D" parent="." unique_id=366306435]
+cast_shadow = 0
+mesh = ExtResource("24_ippgy")
+
+[node name="KitTTrim03CablesWn" type="MeshInstance3D" parent="." unique_id=1209207990]
+cast_shadow = 0
+mesh = ExtResource("25_glb6x")
+
+[node name="KitTTrim03BasecolorWs" type="MeshInstance3D" parent="." unique_id=205831232]
+cast_shadow = 0
+mesh = ExtResource("26_taqn4")
+
+[node name="KitTTrim03CablesWs" type="MeshInstance3D" parent="." unique_id=1227696733]
+cast_shadow = 0
+mesh = ExtResource("27_nt47p")
+
+[node name="KitTTrim03BasecolorEn" type="MeshInstance3D" parent="." unique_id=82416814]
+cast_shadow = 0
+mesh = ExtResource("28_agf74")
+
+[node name="KitTTrim03CablesEn" type="MeshInstance3D" parent="." unique_id=947559965]
+cast_shadow = 0
+mesh = ExtResource("29_swsy4")
+
+[node name="KitTTrim03BasecolorEs" type="MeshInstance3D" parent="." unique_id=886236776]
+cast_shadow = 0
+mesh = ExtResource("30_aqsys")
+
+[node name="KitTTrim03CablesEs" type="MeshInstance3D" parent="." unique_id=1219897524]
+cast_shadow = 0
+mesh = ExtResource("31_fhohi")
+
+[node name="KitTPropsCratesBasecolorWn" type="MeshInstance3D" parent="." unique_id=2069090593]
+cast_shadow = 0
+mesh = ExtResource("32_7psef")
+
+[node name="KitTPropsCratesBasecolorWs" type="MeshInstance3D" parent="." unique_id=1249586553]
+cast_shadow = 0
+mesh = ExtResource("33_dlvm4")
+
+[node name="KitTPropsCratesBasecolorEn" type="MeshInstance3D" parent="." unique_id=1861978132]
+cast_shadow = 0
+mesh = ExtResource("34_7jmd3")
+
+[node name="KitTPropsCratesBasecolorEs" type="MeshInstance3D" parent="." unique_id=1784425813]
+cast_shadow = 0
+mesh = ExtResource("35_bltcs")
+
+[node name="LightmapGI" type="LightmapGI" parent="." unique_id=1977375542]
+bounces = 2
+shadowmask_mode = 2
+environment_mode = 3
+environment_custom_color = Color(0.34, 0.38, 0.5, 1)
+environment_custom_energy = 1.1
+light_data = ExtResource("36_u8je7")
