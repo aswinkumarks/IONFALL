@@ -23,7 +23,7 @@ PROTOCOL_VERSION = 1
 # Directories whose contents define simulation behaviour.
 COMPAT_DIRS = ["sim", "net", "modes", "bots", "data"]
 # Map gameplay scenes (collision, spawns) also define simulation behaviour.
-COMPAT_GLOBS = ["maps/*/gameplay.tscn", "maps/*/*.res"]
+COMPAT_GLOBS = ["maps/*/gameplay.tscn", "maps/*/gameplay.gd", "maps/*/*_layout.gd", "maps/*/*.res"]
 COMPAT_IGNORE_SUFFIXES = {".import", ".uid", ".gitkeep", ".md"}
 
 

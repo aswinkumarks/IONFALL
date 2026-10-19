@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://sim/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"pulse_rifle"
+display_name = "Pulse Rifle"
+fire_mode = 0
+is_power_weapon = false
+ticks_between_shots = 6
+burst_count = 1
+burst_spacing_ticks = 0
+reload_ticks = 120
+raise_ticks = 24
+damage = 18.0
+headshot_multiplier = 1.5
+precision = false
+spread_degrees = 0.6
+mag_size = 36
+reserve = 180
+

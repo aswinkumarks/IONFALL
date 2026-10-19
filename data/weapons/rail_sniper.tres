@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://sim/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"rail_sniper"
+display_name = "Rail Sniper"
+fire_mode = 1
+is_power_weapon = true
+ticks_between_shots = 72
+burst_count = 1
+burst_spacing_ticks = 0
+reload_ticks = 150
+raise_ticks = 36
+damage = 110.0
+headshot_multiplier = 2.0
+precision = true
+spread_degrees = 0.0
+mag_size = 4
+reserve = 8
+full_damage_range = 200.0
+min_damage_range = 300.0
+max_range = 300.0
