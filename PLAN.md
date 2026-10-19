@@ -10,9 +10,9 @@
 
 | Area | Decision |
 |---|---|
-| Engine | Godot 4 (exact 4.x stable version, export templates and addons pinned in M0) |
+| Engine | **Godot 4.7.2-stable**, pinned exactly (editor, export templates, addons). Upgrade policy in §3.18 |
 | Language | GDScript; C++ GDExtension only for hot paths that profiling proves slow (§3.17) |
-| Platforms | Android, Linux, Windows; cross-play in the same LAN match |
+| Platforms | Android, Linux, Windows; cross-play in the same LAN match. **Web browser client** is a post-v1.0 target, and the architecture keeps it possible from day one (§3.20) |
 | Single-player | Bot matches on the multiplayer maps/modes |
 | Modes | FFA (internal MVP) → TDM (v1.0) → CTF, Co-op Waves (post-v1.0) |
 | Hosting | **Listen host**: PC up to 8 combatants, phone up to 4 *(provisional, raised only after the phone-host test passes)*. **Dedicated server** (Linux/Windows headless): 8 by default, up to 16 combatants. "Combatants" counts humans + bots |
@@ -149,6 +149,7 @@ Two layers, separated from **M0** onward (not retrofitted later):
   2. It runs headless and on Android
   3. It can be configured to match the target model. If its server-side rollback is used instead, then hitbox rewind is **not** applied as well, so there is no double compensation
   4. The phone-host CPU cost fits the budget in §3.10
+  5. It works over the composite multi-transport peer (§3.20), i.e. it uses only the generic `MultiplayerPeer` API and makes no ENet-specific assumptions
   
   Otherwise the custom implementation below is built; that path is budgeted separately in the M1 estimate. The choice is recorded as a decision note in `docs/decisions/`.
 - Transport: `ENetMultiplayerPeer` behind our own `Net` layer, so gameplay never calls ENet directly
@@ -265,7 +266,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 - Sent every 1 s with `set_broadcast_enabled(true)`, both to `255.255.255.255` and to each interface's directed broadcast address (this covers phone hotspots and PCs with several network adapters). The advertised endpoint is the address of the interface the beacon left from
 - **Client**: entries expire after 3.5 s. Parsing is bounded and rejects bad magic, oversize packets or invalid fields
 - **Android**: `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`. A multicast lock is held **only** while the server browser is open or while hosting. Newer Android versions add a runtime **local-network permission** (`ACCESS_LOCAL_NETWORK`, reported for target SDK 37+; *to be verified* when that target becomes required). The UI must handle the permission being denied
-- **Fallbacks**: manual IP:port entry; the host shows its IP and a **QR join code**. Manual IP works only when routing and firewalls allow it: AP/client isolation, guest Wi-Fi and different subnets without routing will block it, and the UI says so on failure
+- **Fallbacks**: manual IP:port entry and **join links** (`ionfall://join?host=…&port=…`; on the web, `?join=host:port`). Discovery is always optional, and every join path works without it; the host shows its IP and a **QR join code**. Manual IP works only when routing and firewalls allow it: AP/client isolation, guest Wi-Fi and different subnets without routing will block it, and the UI says so on failure
 - **Test matrix**: home router, phone hotspot (phone as host and as client), AP isolation on, PC with Ethernet + Wi-Fi, permission denied, firewall prompts on Windows
 
 ### 3.7 Security (LAN threat model)
@@ -425,6 +426,7 @@ Start with 100% GDScript. Move a system to GDExtension only when profiling on a 
 - Pin the NDK, run CI builds for all targets, and verify 16 KB page alignment of the Android libraries (§3.18)
 
 ### 3.18 Android & Play Store
+- **Engine version policy**: pinned to **4.7.2-stable**. At the M1 gate, consider 4.8.x only if it is stable with at least one bugfix release and fixes something we need; upgrade on a branch, re-run the M1 test suite, then merge. Never change engine versions mid-milestone
 - **Toolchain pinned in M0**: Godot version + export templates, JDK, Android SDK platform/build-tools, Gradle/AGP from Godot's Gradle template, NDK (when GDExtension arrives). Versions are recorded in `docs/toolchain.md`
 - **Gradle build** export from M0 (needed for the multicast-lock plugin and AAB)
 - arm64-v8a (x86_64 optional for emulators); landscape-locked; immersive mode
@@ -466,6 +468,30 @@ game/
   docs/                   # decisions/, toolchain.md, perf/
 ```
 
+### 3.20 Web client readiness (extensibility rules)
+**Goal:** a browser **client** that can join dedicated/Manager servers can be added later without restructuring the game. Hosting a match and LAN discovery can't work in a browser and are out of scope for the web client. Bot matches running locally in the browser tab are possible but optional.
+
+**Browser constraints the design accounts for:** no raw UDP (only **WebSocket**, which is TCP-based, or **WebRTC data channels**, UDP-like and encrypted, needing a signaling step); no UDP broadcast; the **Compatibility renderer** (WebGL 2) only; threads only with cross-origin isolation (unavailable over plain `http://` on a LAN IP); audio starts only after a user gesture; pages served over HTTPS can't open unencrypted `ws://`.
+
+**Rules enforced from M0:**
+1. **Transport-agnostic networking**: all networking goes through the `Net` layer, which exposes one `MultiplayerPeer` to the game. Gameplay never touches ENet APIs. The server's peer will later become a **composite peer** (`MultiplayerPeerExtension`) that accepts ENet clients and WebRTC/WebSocket clients into a single peer-ID space, so `@rpc`, snapshots and netfox (if adopted) work unchanged
+2. **Channel and reliability mapping is explicit**: our 3 channels (§3.3.3) map to ENet channels today and to 3 WebRTC data channels later (unreliable/unordered; reliable/ordered; reliable/ordered). The packet budget (≤ 1,100 bytes) already fits WebRTC limits. The netcode must *degrade gracefully* over an all-reliable WebSocket link (stale-snapshot dropping and baseline acks already handle this)
+3. **Discovery is optional**: every join path works from an address or a join link (§3.6)
+4. **No threads required for correctness**: the game must run correctly with threading disabled (single-threaded web export). Threads are used only as optional speedups (e.g. background loading)
+5. **Renderer-independent gameplay readability**: no gameplay-critical information depends on Mobile/Forward+-only features (glow, specific post-processing). Team markers, pickups, hit feedback and hazards must be readable in the Compatibility renderer. Custom shaders get a Compatibility-safe variant or fallback
+6. **Platform services behind interfaces**: storage (`user://`, which maps to IndexedDB on the web), Android plugins (multicast lock, thermal), file dialogs and OS calls go through a `Platform` service with no-op/web implementations. No OS-specific calls in `sim/` or `net/`
+7. **Input & lifecycle**: the input adapter (§3.11) handles pointer lock and its loss (Esc), browser-reserved keys, and tab focus loss (treated like Android backgrounding, §3.5.1). Audio starts after the first click
+8. **Security path**: WebRTC is always encrypted; signaling and WebSocket fall back to `wss://` with certificates when served over HTTPS. This fits the O1 rule in §3.8
+9. **Compatibility checks**: the web client sends the same handshake (`protocol_version`, `build_id`, `content_hash`), so §3.14 applies unchanged
+10. **Download size**: keep the client `.pck` small enough for a browser load (target ≤ 150 MB *(provisional)*). Web exports need desktop (S3TC/BPTC) and mobile (ETC2/ASTC) texture formats
+
+**Enforcement (so the rules don't rot):**
+- **M0**: a **web export preset** (Compatibility renderer, single-threaded) exists and CI builds it on every commit
+- **Every milestone**: a smoke test that opens the web build in Chrome and Firefox, reaches the main menu and renders the current test map with the Compatibility preset
+- **M5**: a **spike** proving the composite peer: one dedicated server accepting an ENet client and a WebSocket client in the same match
+
+**Web client milestone (post-v1.0):** composite peer + WebRTC transport (WebSocket as the simpler first step), signaling via the dedicated server/Manager, web UI flow (join by link/address), Compatibility visual preset, a page served by the dedicated server or Manager.
+
 ---
 
 ## 4. Art, audio & asset licensing
@@ -501,6 +527,8 @@ All assets are restyled with shared materials (team color, emissive trims, palet
 | **Cold start** | First match after install: shader stutter, load time | Per release |
 | **Human playtests** | Feel (movement, TTK), touch usability, UI clarity, accessibility options | Every milestone |
 | **Pseudolocalization** | Text expansion, missing keys | Per release |
+| **Web smoke test** | Web export loads in Chrome + Firefox, reaches the menu, renders the test map with the Compatibility preset | Every milestone from M0 |
+| **Multi-transport spike** | One server, one ENet client and one WebSocket client in the same match | M5 |
 
 ---
 
@@ -509,17 +537,17 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 
 | # | Milestone | Exit criteria |
 |---|---|---|
-| **M0** | Foundations & pipelines | Toolchain pinned + documented; git + LFS; application ID and upload key (backed up); versioning/build ID/content hash; export presets for Linux, Windows, Android (Gradle) **and the dedicated server**; **signed release AAB installed on the Mi 11X** with 16 KB check passing; CI builds; project skeleton with the `sim/` vs `presentation/` split; test framework; diagnostics overlay skeleton; `tr()` keys in the first menu |
+| **M0** | Foundations & pipelines | Toolchain pinned + documented; git + LFS; application ID and upload key (backed up); versioning/build ID/content hash; export presets for Linux, Windows, Android (Gradle) **and the dedicated server**; **signed release AAB installed on the Mi 11X** with 16 KB check passing; CI builds; project skeleton with the `sim/` vs `presentation/` split; test framework; diagnostics overlay skeleton; `tr()` keys in the first menu; **web export preset (Compatibility, single-threaded) built in CI** (§3.20) |
 | **M1** | **Vertical slice: prove the hard parts** | One greybox arena. Movement (sprint/slide/double-jump/mantle) built on the simulation contract. Pulse Rifle (hitscan) + Arc Launcher (projectile). Shield/health + spawn system. Minimal FFA match state machine. **Basic touch controls**. Listen host on **PC and phone**, headless **exported** dedicated server. Prediction, reconciliation, interpolation, lag compensation. **netfox decision** recorded. **DTLS spike**. LAN discovery + manual IP + QR. Character approach decided on device. **Measured**: bandwidth vs §3.3.5, correction rate, Mi 11X 20 min sustained as client (4 players) and as host. Cross-play PC↔Android at 100 ms RTT / 2% loss with no lost or duplicated actions. Replay determinism tests green |
 | **Gate** | Go/no-go + estimate | Review M1 numbers; adjust budgets marked provisional; estimate M2–M6; confirm cut lines |
 | **M2** | **Internal MVP** (playable game) | 1 map with first art pass, FFA, 2 weapons from M1 + Mag Pistol, bots (Normal) with traversal + stuck recovery, kill feed, death cam, HUD, results screen, profile/stats/XP with atomic saves + migration tests, settings, basic accessibility items, basic audio (buses, footsteps, occlusion v1). Playtested by humans |
 | **M3** | Release content | Remaining weapons per the balance table, grenades, melee, power-weapon pickups + loadouts, **TDM** + teams + balance, **map 2** (symmetric, CTF-ready), 4 bot difficulties, cosmetic unlocks, touch layout editor + aim assist + auto-fire option, reconnect |
 | **M4** | Art, audio & performance pass | Full lightmap pipeline on both maps, characters, VFX, audio pass, quality presets; all §3.10 targets met on the Mi 11X, min-spec phone, Iris Xe/Vega and a dedicated GPU (release builds, 20-min sustained); cold-start stutter test; phone host cap finalized |
-| **M5** | Dedicated server complete | `server.cfg`, standalone + managed modes, rotation, bot fill, admin console with security rules, logs, Linux + Windows server exports; **16 real test clients** soak 60 min within tick/bandwidth budgets; fuzz tests green |
+| **M5** | Dedicated server complete | `server.cfg`, standalone + managed modes, rotation, bot fill, admin console with security rules, logs, Linux + Windows server exports; **16 real test clients** soak 60 min within tick/bandwidth budgets; fuzz tests green; **multi-transport spike** (ENet + WebSocket client in one match) |
 | **M6** | **v1.0 LAN release** | Polish, full accessibility list, pseudoloc pass, desktop release builds (Linux, Windows), Play **closed testing track** started (14-day gate if required), Play checklist (§3.18) complete, Android release |
 | **M7** | Central server (LAN), **only if v1.0 is stable** | Manager, match list/create/join UI, port pool, playlists, lifecycle protocol, restart backoff, admission by headroom; capacity benchmark (§5) published in `docs/perf/` |
 | **O1–O4** | Internet play | As in §3.8, with O1 (secure identity + transport) before any internet exposure |
-| Post-v1.0 | Expansion | CTF, Co-op Waves, wall-run, spectator mode, gamepad, map 3+, Compatibility renderer, systemd/Docker, more weapons/cosmetics |
+| Post-v1.0 | Expansion | **Web browser client** (§3.20), CTF, Co-op Waves, wall-run, spectator mode, gamepad, map 3+, Compatibility (GLES3) preset for non-Vulkan Android, systemd/Docker, more weapons/cosmetics |
 
 **Cut lines if the estimate after M1 is too large** (cut in this order): 4 bot difficulties → 2; touch layout editor; map 2 (ship TDM on map 1); M7. The internal MVP (M2) is never cut.
 
@@ -541,6 +569,7 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 | Losing the signing key | Upload key + Play App Signing, two encrypted backups, named owner |
 | Asset license problems | Written license policy, per-asset records, license copies |
 | GDExtension build complexity | Only when profiling demands it; full target/variant matrix in CI |
+| Web client becomes impossible without a rewrite | Rules in §3.20 enforced from M0: web export built in CI, smoke test every milestone, multi-transport spike in M5 |
 | Internet security later | O1 rule: no exposure before encrypted, ticketed, hardened joins; DTLS spike in M1 |
 
 ---
