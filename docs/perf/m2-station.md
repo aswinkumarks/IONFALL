@@ -19,3 +19,18 @@ still to be checked by hand.
 
 Still to measure: a release APK, 8 combatants on the phone (the phone host is
 capped at 4), and a 20-minute sustained run (M4).
+
+## After the look-and-feel pass (2026-10-19)
+
+Same scenario on the Mi 11X (debug APK, 4 combatants, autopilot), now with
+the themed HUD, weapon viewmodels, particles, Quaternius astronauts and the
+3D menu backdrop:
+
+| Minute | fps avg | Frame p50 / p95 / p99 (ms) | Tick p99 (ms) |
+|---|---|---|---|
+| 1 (includes first-use shader compiles) | 57.6 | 16.7 / 16.7 / 25.0 | 1.82 |
+| 2 | 59.0 | 16.7 / 16.7 / 18.1 | 1.82 |
+
+Steady state matches the M2 baseline. The first-minute p99 comes from effects
+and materials compiling on first use; a shader warm-up during the countdown
+belongs to the M4 cold-start stutter work.
