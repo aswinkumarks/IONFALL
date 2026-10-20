@@ -72,6 +72,8 @@ var _sim_ms := FrameStats.new(3600)  ## host: of which simulation
 var _banner_phase: int = -1
 var _go_until: float = 0.0
 var _adaptive := AdaptiveQuality.new()
+var _perf_hitches: int = 0  ## frames over HITCH_MS this minute (cold-start stutter, PLAN §5)
+var _warming: bool = false
 var _perf_peaks := Vector3i.ZERO  ## this minute's most draw calls, primitives, live particles
 
 
@@ -245,7 +247,10 @@ func _warm_up() -> void:
 	cover.add_child(label)
 	var warm := Warmup.new()
 	add_child(warm)
-	warm.finished.connect(layer.queue_free)
+	_warming = true
+	warm.finished.connect(func() -> void:
+		_warming = false
+		layer.queue_free())
 	var started := Time.get_ticks_msec()
 	warm.finished.connect(func() -> void: print("Warmup: %d ms" % (Time.get_ticks_msec() - started)))
 	warm.start(view.camera, effects)
@@ -510,7 +515,12 @@ func _render_client(delta: float) -> void:
 ## One line per minute in the log (`adb logcat -s godot`) for sustained
 ## tests against PLAN §3.10: frame-time percentiles, minute average fps,
 ## host tick time, network health and thermal status.
+const HITCH_MS := 50.0
+
+
 func _log_perf(delta: float) -> void:
+	if _warming:
+		return
 	Platform.report_frame_work((Performance.get_monitor(Performance.TIME_PROCESS) \
 			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0 + RenderingServer.get_frame_setup_time_cpu())
 	if Settings.get_value("video", "adaptive_quality") and not _paused:
@@ -522,14 +532,17 @@ func _log_perf(delta: float) -> void:
 		_perf_minute_start_ms = now
 	_perf_ms.add(delta * 1000.0)
 	_perf_frames += 1
+	if delta * 1000.0 > HITCH_MS:
+		_perf_hitches += 1
 	_perf_peaks = _perf_peaks.max(Vector3i(int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), effects.live_particles))
 	if now - _perf_minute_start_ms < 60000:
 		return
 	var seconds := (now - _perf_minute_start_ms) / 1000.0
-	var line := "PERF mode=%s fps_avg=%.1f p50=%.1f p95=%.1f p99=%.1f" % [
+	var line := "PERF mode=%s fps_avg=%.1f p50=%.1f p95=%.1f p99=%.1f hitches=%d" % [
 		["offline", "host", "client"][config.mode], _perf_frames / seconds,
-		_perf_ms.percentile(50.0), _perf_ms.percentile(95.0), _perf_ms.percentile(99.0)]
+		_perf_ms.percentile(50.0), _perf_ms.percentile(95.0), _perf_ms.percentile(99.0), _perf_hitches]
+	_perf_hitches = 0
 	if server != null:
 		line += " tick_p50=%.2f tick_p99=%.2f sim_p99=%.2f players=%d clients=%d" % [_tick_ms.percentile(50.0),
 				_tick_ms.percentile(99.0), _sim_ms.percentile(99.0), server.world.players.size(), server.clients.size()]

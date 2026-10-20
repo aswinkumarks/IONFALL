@@ -13,6 +13,7 @@ config_version=5
 config/name="IONFALL"
 config/version="0.0.1"
 run/main_scene="res://core/boot.tscn"
+run/flush_stdout_on_print=true
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
