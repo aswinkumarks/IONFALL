@@ -112,10 +112,13 @@ func _make(weapon: int) -> Node3D:
 	ring.scale = Vector3(1, 0.3, 1)
 	ring.position.y = 0.04
 	root.add_child(ring)
-	var light := OmniLight3D.new()
-	light.light_color = color
-	light.light_energy = 0.8
-	light.omni_range = 2.2
-	light.position.y = 0.6
-	root.add_child(light)
+	# A small light on desktops; phones (Mobile renderer budget) rely on the
+	# emissive ring and glow.
+	if not Platform.is_mobile():
+		var light := OmniLight3D.new()
+		light.light_color = color
+		light.light_energy = 0.8
+		light.omni_range = 2.2
+		light.position.y = 0.6
+		root.add_child(light)
 	return root

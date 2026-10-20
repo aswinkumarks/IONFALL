@@ -75,6 +75,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 - **Friendly fire**: off by default in TDM (host setting). **Self-damage** is on for explosives at 50%
 - **Power weapons**: picking one up replaces your primary; your loadout primary drops and despawns after 1,200 ticks (20 s). If you die, the power weapon drops with its remaining ammo and despawns after 20 s. A spawn point's 60–120 s timer starts only when its previous instance no longer exists (never more than one instance per spot). The HUD shows the countdown
 - **Pickup contention**: the server resolves pickups in tick order; ties go to the player closest to the item
+- **Taking items**: walking over a power weapon takes it unless you already hold one; any other swap (a dropped primary, a second power weapon) needs Interact. Walking over a weapon you carry tops up its reserve. Spot timers: Rail Sniper 120 s, Arc Launcher 90 s, grenades 20 s
 - **Grenades**: 2 per life. Grenade pickups at fixed spots give +1 (cap 2)
 - **Extensibility**: new *variants* of existing firing types (hitscan auto/burst/semi, pellet, projectile) need only data plus a model. A genuinely new mechanic needs a checklist: sim state, prediction, replication, hit validation, presentation, audio, bot usage, balance-table entry
 
@@ -460,7 +461,7 @@ The Mi 11X at lower render scale only tests **scalable GPU settings**. It doesn'
 - **Stats**: kills, deaths, assists, K/D, wins, matches, accuracy, headshots, per-weapon kills, longest streak, time played, split "vs players" / "vs bots" per event (§2.7)
 - **XP formula** *(provisional)*: 10 per kill + 5 per assist + 1 per 10 s played + 100 per win + 30 per match completed; bot-related values halved as in §2.7
 - **Incomplete matches** (quit or host left): XP for time played and kills, no win/completion bonus; stats recorded
-- **Unlocks are cosmetic only** (armor colors/patterns, visors, weapon skins, emblems). LAN profiles and future online profiles stay in separate namespaces
+- **Unlocks are cosmetic only** (armor colors/patterns, visors, weapon skins, emblems). LAN profiles and future online profiles stay in separate namespaces. v1.0 unlocks by level: characters (Vanguard 2, Operative 3) and armour colours (levels 2, 4, 6, 8); locked picks fall back to the defaults
 - **Storage availability** (web, and any platform where writing fails): at startup the game test-writes `user://`. If storage is unavailable or not persistent (e.g. a private browser window), a banner warns "Your profile won't be saved". On the web, saves report success only after the browser storage sync completes
 
 ### 3.14 Versioning & compatibility
