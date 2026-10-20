@@ -210,6 +210,28 @@ func derez(feet: Vector3, color: Color) -> void:
 	_fading.append([ring, 0.0, 0.5, "ring"])
 
 
+## A frag grenade: the Kenney grenade model with a blinking orange light.
+func _grenade_node() -> MeshInstance3D:
+	var root := MeshInstance3D.new()
+	add_child(root)
+	var model: Node3D = (load("res://art/weapons/kenney/grenade-b.glb") as PackedScene).instantiate()
+	model.scale = Vector3.ONE * 0.35
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		mi.material_override = WeaponModels.material()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(model)
+	var blink := OmniLight3D.new()
+	blink.light_color = Color(1.0, 0.45, 0.15)
+	blink.omni_range = 1.6
+	blink.light_energy = 1.2
+	blink.shadow_enabled = false
+	root.add_child(blink)
+	var tw := blink.create_tween().set_loops()
+	tw.tween_property(blink, "light_energy", 0.1, 0.25)
+	tw.tween_property(blink, "light_energy", 1.4, 0.05)
+	return root
+
+
 ## Rockets follow the simulation's projectile list, interpolated between ticks.
 ## Accepts SimWorld.Projectile objects (host) or snapshot dictionaries
 ## {id, position, velocity} already placed at render time (client, alpha 1).
@@ -219,7 +241,11 @@ func sync_projectiles(projectiles: Array, alpha: float) -> void:
 		var id: String = proj.id if proj is Dictionary else proj.id()
 		alive[id] = true
 		var entry: Array = _rockets.get(id, [])
-		if entry.is_empty():
+		var weapon: StringName = proj.get("weapon", &"") if proj is Dictionary else proj.weapon.id
+		if entry.is_empty() and weapon == &"frag_grenade":
+			entry = [_grenade_node(), proj.position, proj.position]
+			_rockets[id] = entry
+		elif entry.is_empty():
 			var mesh := CapsuleMesh.new()
 			mesh.radius = 0.08
 			mesh.height = 0.45
@@ -254,7 +280,9 @@ func sync_projectiles(projectiles: Array, alpha: float) -> void:
 		var node: MeshInstance3D = entry[0]
 		node.global_position = (entry[1] as Vector3).lerp(entry[2], alpha)
 		var vel: Vector3 = proj.velocity
-		if vel.length_squared() > 0.01:
+		if weapon == &"frag_grenade":
+			node.rotation += Vector3(vel.length() * 0.02, 0.0, vel.length() * 0.013)
+		elif vel.length_squared() > 0.01:
 			node.look_at(node.global_position + vel, Vector3.UP if absf(vel.normalized().y) < 0.99 else Vector3.RIGHT)
 			node.rotate_object_local(Vector3.RIGHT, PI * 0.5)
 	for id in _rockets.keys():

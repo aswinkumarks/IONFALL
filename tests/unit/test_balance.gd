@@ -54,3 +54,13 @@ func test_arc_launcher_direct_hit_kills() -> void:
 	var w: WeaponData = load("res://data/weapons/arc_launcher.tres")
 	var s := PlayerSimState.new()
 	assert_true(Health.apply(s, w.direct_damage, false, 1.0, false).killed)
+
+
+func test_scatter_gun() -> void:
+	var w: WeaponData = load("res://data/weapons/scatter_gun.tres")
+	assert_eq(w.pellets * w.damage, 120.0, "10 pellets × 12 point blank")
+	assert_almost_eq(w.damage_at(15.0), 12.0 * 0.3, 0.001, "falls off to 30% at 15 m")
+	var s := PlayerSimState.new()
+	assert_false(Health.apply(s, w.pellets * w.damage, false, 1.0, false).killed)
+	assert_true(Health.apply(s, w.pellets * w.damage, false, 1.0, false).killed, "2 point-blank shots = 0.80 s")
+	assert_eq(w.ticks_between_shots, 48)

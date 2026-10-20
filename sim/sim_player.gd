@@ -14,6 +14,7 @@ var character: int = 0  ## cosmetic (CharacterRig.SELECTABLE index); presentatio
 var color: int = 0  ## cosmetic (PlayerVisual.PALETTE index, 0 = auto); presentation only
 var team: int = 0
 var config: MovementConfig
+## Issued at every spawn; pickups change the slots in `state` for this life.
 var loadout: Array[WeaponData] = []
 var state := PlayerSimState.new()
 var last_command: PlayerCommand
@@ -59,4 +60,4 @@ func eye_position() -> Vector3:
 
 
 func current_weapon() -> WeaponData:
-	return loadout[state.weapon_slot]
+	return state.weapon()

@@ -47,7 +47,7 @@ static func from_player(p: SimPlayer) -> NetEntity:
 	e.move_stance = s.move_state | (s.stance << 4)
 	e.shield = clampi(ceili(s.shield), 0, 255)
 	e.health = clampi(ceili(s.health), 0, 255)
-	e.weapon = s.weapon_slot
+	e.weapon = maxi(s.weapons[s.weapon_slot], 0) if s.weapon_slot < s.weapons.size() else 0
 	e.disc = s.discontinuity_gen & 0xFF
 	return e
 
@@ -159,5 +159,6 @@ func to_render_state() -> PlayerSimState:
 	s.shield = shield
 	s.health = health
 	s.discontinuity_gen = disc
-	s.weapon_slot = weapon
+	s.weapons = PackedInt32Array([weapon])  # the held weapon (Weapons.ALL index)
+	s.weapon_slot = 0
 	return s

@@ -203,7 +203,7 @@ func _simulate(cmd: PlayerCommand, emit: bool) -> void:
 func _predicted_fire_event(shot: WeaponSim.Shot) -> Dictionary:
 	var e := {"type": "fire", "id": "%d:%d:%d" % [local_id, pred.entity_gen, shot.action_seq], "shooter": local_id,
 			"weapon": shot.weapon.id, "origin": shot.origin, "direction": shot.direction, "predicted": true}
-	if not shot.weapon.is_projectile():
+	if not shot.weapon.is_projectile() and shot.weapon.id != &"melee":
 		var space := pred.get_world_3d().direct_space_state
 		var end := shot.origin + shot.direction * shot.weapon.max_range
 		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(shot.origin, end, Sim.LAYER_WORLD))

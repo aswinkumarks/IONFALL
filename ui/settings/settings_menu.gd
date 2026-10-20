@@ -44,7 +44,7 @@ const SCHEMA := {
 	],
 }
 const REMAPPABLE := ["move_forward", "move_back", "move_left", "move_right", "jump", "sprint", "crouch", "reload",
-		"switch_weapon", "weapon_1", "weapon_2", "weapon_3", "scoreboard"]
+		"switch_weapon", "weapon_1", "weapon_2", "grenade", "melee", "scoreboard"]
 
 var _listening_action: String = ""
 var _resolution_button: OptionButton

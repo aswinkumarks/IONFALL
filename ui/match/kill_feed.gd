@@ -7,7 +7,8 @@ extends VBoxContainer
 const MAX_ROWS := 5
 const ROW_SECONDS := 6.0
 const WEAPON_TAGS := {&"pulse_rifle": "PULSE", &"mag_pistol": "PISTOL", &"arc_launcher": "ARC",
-		&"burst_rifle": "BURST", &"rail_sniper": "RAIL", &"": "FALL"}
+		&"burst_rifle": "BURST", &"rail_sniper": "RAIL", &"scatter_gun": "SCATTER", &"frag_grenade": "FRAG",
+		&"melee": "MELEE", &"": "FALL"}
 
 
 func _ready() -> void:

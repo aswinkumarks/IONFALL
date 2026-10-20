@@ -26,10 +26,13 @@ const PERCEPTION_INTERVAL := 6
 const REPATH_INTERVAL := 30
 const CHASE_MEMORY_TICKS := 300
 const STUCK_CHECK_TICKS := 90
-const ARC_RANGE := Vector2(8.0, 22.0)
+## Splash weapons are kept for this range band (too close hurts the bot).
+const SPLASH_RANGE := Vector2(6.0, 30.0)
+const GRENADE_RANGE := Vector2(7.0, 18.0)
+const GRENADE_CHANCE := 0.2  ## per new sighting in range
+const MELEE_RANGE := 1.8
 const SLOT_PRIMARY := 0
 const SLOT_SIDEARM := 1
-const SLOT_ARC := 2
 
 var goal: int = Goal.ROAM
 var target_id: int = 0
@@ -55,7 +58,7 @@ var _last_repath: int = -100000
 var _strafe: float = 1.0
 var _strafe_until: int = 0
 var _slot: int = SLOT_PRIMARY
-var _arc_shots: int = 0
+var _throw_at: int = 0  ## tick to throw a grenade at the current target
 var _noise_phase := Vector4.ZERO
 var _progress_pos := Vector3.ZERO
 var _progress_tick: int = 0
@@ -197,10 +200,14 @@ func _perceive(tick: int, p: SimPlayer) -> void:
 		if not was_visible or best != target_id:
 			_seen_since = tick
 			_strafe_until = 0
-			_arc_shots = 0
-			var arc_ok: bool = p.state.mag[SLOT_ARC] > 0 or p.state.reserve[SLOT_ARC] > 0
-			if arc_ok and best_d >= ARC_RANGE.x and best_d <= ARC_RANGE.y and _rng.randf() < 0.25:
-				_slot = SLOT_ARC
+			# Splash primaries only at a safe range; the sidearm up close.
+			var primary := p.state.weapon(SLOT_PRIMARY)
+			_slot = SLOT_PRIMARY
+			if primary.is_projectile() and (best_d < SPLASH_RANGE.x or best_d > SPLASH_RANGE.y):
+				_slot = SLOT_SIDEARM
+			if p.state.grenades > 0 and best_d >= GRENADE_RANGE.x and best_d <= GRENADE_RANGE.y \
+					and _rng.randf() < GRENADE_CHANCE:
+				_throw_at = tick + REACTION_TICKS + 10
 		target_id = best
 		_last_seen_pos = _world.players[best].state.position
 		_last_seen_tick = tick
@@ -358,7 +365,8 @@ func _aim_point(target: SimPlayer, p: SimPlayer) -> Vector3:
 	if target == null:
 		return Vector3.INF
 	var ts := target.state
-	var base := ts.position + Vector3(0.0, 0.3 if _slot == SLOT_ARC else 1.2, 0.0)
+	var splash := p.state.weapon(_slot) != null and p.state.weapon(_slot).is_projectile()
+	var base := ts.position + Vector3(0.0, 0.3 if splash else 1.2, 0.0)
 	var to := base - p.eye_position()
 	var d := maxf(to.length(), 1.0)
 	var lateral := (ts.velocity - ts.velocity.project(to.normalized())).length()
@@ -375,30 +383,34 @@ func _trigger(tick: int, p: SimPlayer, target: SimPlayer, want_yaw: float, want_
 	if tick - _seen_since < REACTION_TICKS or not _visible:
 		return 0
 	var w := s.weapon_slot
+	var d := p.state.position.distance_to(target.state.position)
+	if d < MELEE_RANGE and s.melee_cooldown == 0:
+		_press(Action.MELEE)
+		return 0
+	if _throw_at > 0 and tick >= _throw_at:
+		_throw_at = 0
+		if s.grenades > 0 and d >= GRENADE_RANGE.x:
+			_press(Action.GRENADE)
+			return 0
 	if w != _slot or s.switch_ticks > 0:
 		return 0
 	# Out of ammo: sidearm is faster than reloading the primary.
 	if s.mag[w] <= 0:
 		if w == SLOT_PRIMARY and s.mag[SLOT_SIDEARM] > 0:
 			_slot = SLOT_SIDEARM
-		elif w == SLOT_ARC:
+		elif w == SLOT_SIDEARM and (s.mag[SLOT_PRIMARY] > 0 or s.reserve[SLOT_PRIMARY] > 0):
 			_slot = SLOT_PRIMARY
 		elif s.reload[w] == 0:
 			_press(Action.RELOAD)
 		return 0
-	var d := p.state.position.distance_to(target.state.position)
 	var aim_error := absf(wrapf(want_yaw - _yaw, -PI, PI)) + absf(want_pitch - _pitch)
 	if aim_error > atan2(0.45, d) + 0.03:
 		return 0
-	var data: WeaponData = p.loadout[w]
+	var data := s.weapon(w)
 	if data.fire_mode == WeaponData.FireMode.AUTO:
 		return Held.FIRE
 	if s.cooldown[w] == 0 and s.reload[w] == 0:
 		_press(Action.FIRE)
-		if w == SLOT_ARC:
-			_arc_shots += 1
-			if _arc_shots >= 2:
-				_slot = SLOT_PRIMARY
 	return 0
 
 
@@ -406,7 +418,7 @@ func _manage_weapons_out_of_combat(p: SimPlayer) -> void:
 	var s := p.state
 	_slot = SLOT_PRIMARY
 	var w := s.weapon_slot
-	if w == SLOT_PRIMARY and s.reload[w] == 0 and s.mag[w] * 2 < (p.loadout[w] as WeaponData).mag_size \
+	if w == SLOT_PRIMARY and s.reload[w] == 0 and s.mag[w] * 2 < s.weapon(w).mag_size \
 			and s.reserve[w] > 0:
 		_press(Action.RELOAD)
 

@@ -37,6 +37,7 @@ var _weapon_name: String = ""
 var _mag: int = 0
 var _mag_size: int = 1
 var _reserve: int = 0
+var _grenades: int = 0
 var _reload: float = 0.0  ## 0 = not reloading, else progress 0..1
 var _score: int = 0
 var _respawn_ticks: int = 0
@@ -167,6 +168,7 @@ func update_state(s: PlayerSimState, weapon: WeaponData, score: int, ticks_to_re
 	_mag = s.mag[w]
 	_mag_size = maxi(weapon.mag_size, 1)
 	_reserve = s.reserve[w]
+	_grenades = s.grenades
 	_reload = 1.0 - float(s.reload[w]) / weapon.reload_ticks if s.reload[w] > 0 else 0.0
 	_score = score
 	_respawn_ticks = ticks_to_respawn
@@ -344,6 +346,8 @@ func _draw_weapon() -> void:
 				UiStyle.BG if active else UiStyle.TEXT_DIM)
 		x += chip_w + 6 * s
 	_text(Vector2(right, base - 88 * s), _weapon_name, 20, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+	_text(Vector2(right - 230 * s, base - 88 * s), tr("HUD_GRENADES") % _grenades, 18,
+			UiStyle.TEXT if _grenades > 0 else Color(UiStyle.TEXT_DIM, 0.5))
 	if _reload > 0.0:
 		_text(Vector2(right, base - 30 * s), tr("HUD_RELOADING").to_upper(), 34, UiStyle.ACCENT,
 				HORIZONTAL_ALIGNMENT_RIGHT, UiStyle.font_display_bold)

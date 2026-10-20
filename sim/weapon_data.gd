@@ -27,10 +27,15 @@ enum FireMode { AUTO, SEMI, BURST, PROJECTILE }
 @export_range(0.0, 1.0) var min_damage_fraction: float = 0.7
 @export var max_range: float = 200.0
 @export var spread_degrees: float = 0.5
+## Pellet weapons (Scatter Gun): rays per shot, each with its own spread.
+@export var pellets: int = 1
 
 @export_group("Ammo")
 @export var mag_size: int = 36
 @export var reserve: int = 180
+## Reload one round per `reload_ticks` until full (shells), instead of the
+## whole magazine at once.
+@export var reload_per_round: bool = false
 
 @export_group("Projectile")
 @export var projectile_speed: float = 40.0
@@ -39,6 +44,12 @@ enum FireMode { AUTO, SEMI, BURST, PROJECTILE }
 @export var splash_damage: float = 120.0
 @export var splash_radius: float = 4.0
 @export_range(0.0, 1.0) var self_damage_multiplier: float = 0.5
+## Thrown projectiles (grenades): gravity in m/s², bounce off the world
+## keeping this fraction of speed, and explode after `fuse_ticks` instead of
+## on contact. 0 = straight flight, explode on contact.
+@export var gravity: float = 0.0
+@export_range(0.0, 1.0) var bounce: float = 0.0
+@export var fuse_ticks: int = 0
 
 
 func is_projectile() -> bool:

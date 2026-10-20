@@ -33,6 +33,12 @@ func _init() -> void:
 	_save("ui_click", _tick(1600.0, 0.03))
 	_save("spawn", _sweep(200.0, 700.0, 0.5, 0.3))
 	_save_loop("ambient_loop", _ambient(16.0))
+	# M3 weapons (appended so the earlier sounds keep their random sequence).
+	_save("burst_rifle", _gun(0.12, 600.0, 200.0, 0.5, 0.85))
+	_save("scatter_gun", _gun(0.38, 240.0, 60.0, 1.0, 1.1))
+	_save("rail_sniper", _gun(0.5, 1900.0, 180.0, 0.8, 1.0))
+	_save("frag_grenade", _whoosh(0.22, 700.0))
+	_save("melee", _whoosh(0.18, 1500.0))
 	print("gen_sounds: done")
 	quit()
 

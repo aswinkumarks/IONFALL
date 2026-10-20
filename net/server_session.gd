@@ -657,6 +657,7 @@ func _send_snapshot(c: Client, tick_entities: Dictionary) -> void:
 		snap.owner_gen = me.entity_gen & 0xFF
 	for proj in world.projectiles:
 		snap.projectiles.append({"owner": proj.owner_id, "gen": proj.owner_gen & 0xFF, "action": proj.action_seq,
+				"weapon": Protocol.weapon_index(proj.weapon.id),
 				"position": proj.position, "velocity": proj.velocity})
 	var events: Array[PackedByteArray] = []
 	for p in c.pending:

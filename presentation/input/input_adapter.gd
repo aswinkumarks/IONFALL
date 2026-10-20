@@ -108,6 +108,9 @@ func _unhandled_input(event: InputEvent) -> void:
 						_mouse_aim = not _mouse_aim
 				else:
 					_mouse_aim = event.pressed
+			MOUSE_BUTTON_MIDDLE:
+				if event.pressed:
+					press(Action.MELEE)
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
 				if event.pressed:
 					press(Action.SWITCH)
@@ -126,8 +129,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_slot_request = 0
 	elif event.is_action_pressed("weapon_2"):
 		_slot_request = 1
-	elif event.is_action_pressed("weapon_3"):
-		_slot_request = 2
+	elif event.is_action_pressed("grenade"):
+		press(Action.GRENADE)
+	elif event.is_action_pressed("melee"):
+		press(Action.MELEE)
 
 
 ## Default bindings, created at runtime so they can be remapped later
@@ -145,7 +150,8 @@ const DEFAULT_KEYS := {
 		"switch_weapon": [KEY_Q],
 		"weapon_1": [KEY_1],
 		"weapon_2": [KEY_2],
-		"weapon_3": [KEY_3],
+		"grenade": [KEY_G],
+		"melee": [KEY_V, KEY_F],
 		"scoreboard": [KEY_TAB],
 }
 

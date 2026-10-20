@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 4
+const VERSION := 5
 const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
@@ -23,14 +23,17 @@ const MAX_CLIENT_PACKET := 256
 const CMD_REDUNDANCY := 4
 const MAX_NAME_BYTES := 48
 
-## Weapon ids by wire index.
-const WEAPON_IDS: Array[StringName] = [&"pulse_rifle", &"arc_launcher", &"burst_rifle", &"mag_pistol", &"rail_sniper"]
 
 enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5 }
 
 
+## Weapon wire index (Weapons.ALL order).
 static func weapon_index(id: StringName) -> int:
-	return maxi(WEAPON_IDS.find(id), 0)
+	return maxi(Weapons.index_of(id), 0)
+
+
+static func weapon_id(index: int) -> StringName:
+	return Weapons.ALL[clampi(index, 0, Weapons.ALL.size() - 1)].id
 
 
 # --- Handshake (SceneMultiplayer auth payloads) ---
@@ -191,8 +194,8 @@ static func encode_results(match_id: int, result_id: String, winner: int, durati
 		for k in RESULT_COUNTERS:
 			w.u16(clampi(p[k], 0, 65535))
 		var wk: Dictionary = p.weapon_kills
-		w.u8(mini(wk.size(), WEAPON_IDS.size()))
-		for weapon in wk.keys().slice(0, WEAPON_IDS.size()):
+		w.u8(mini(wk.size(), Weapons.ALL.size()))
+		for weapon in wk.keys().slice(0, Weapons.ALL.size()):
 			w.u8(weapon_index(weapon)).u16(clampi(wk[weapon], 0, 65535))
 	return w.data()
 
@@ -215,11 +218,11 @@ static func decode_results(data: PackedByteArray) -> Dictionary:
 			p[k] = r.u16()
 		var wk := {}
 		var nw := r.u8()
-		if nw > WEAPON_IDS.size():
+		if nw > Weapons.ALL.size():
 			return {}
 		for j in nw:
 			var idx := r.u8()
-			wk[WEAPON_IDS[clampi(idx, 0, WEAPON_IDS.size() - 1)]] = r.u16()
+			wk[weapon_id(idx)] = r.u16()
 		p["weapon_kills"] = wk
 		out.players.append(p)
 	return out if r.ok and r.remaining() == 0 else {}
@@ -309,7 +312,7 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 			var shooter := r.u16()
 			var gen := r.u8()
 			var action := r.u32()
-			var weapon: StringName = WEAPON_IDS[clampi(r.u8(), 0, WEAPON_IDS.size() - 1)]
+			var weapon: StringName = weapon_id(r.u8())
 			var flags := r.u8()
 			var e := {"type": "fire", "id": "%d:%d:%d" % [shooter, gen, action], "shooter": shooter,
 					"weapon": weapon, "origin": r.pos()}
@@ -341,7 +344,7 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 			var killer := r.u16()
 			var flags := r.u8()
 			var wi := r.u8()
-			var weapon: StringName = &"" if wi == 255 else WEAPON_IDS[clampi(wi, 0, WEAPON_IDS.size() - 1)]
+			var weapon: StringName = &"" if wi == 255 else weapon_id(wi)
 			var position := r.pos()
 			var n := r.u8()
 			if n > 3:

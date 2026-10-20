@@ -22,6 +22,8 @@ var _buttons := [
 	{"id": "crouch", "label": "TOUCH_CROUCH", "pos": Vector2(0.80, 0.88), "radius": 0.05, "held": PlayerCommand.Held.CROUCH},
 	{"id": "reload", "label": "TOUCH_RELOAD", "pos": Vector2(0.73, 0.64), "radius": 0.042, "press": PlayerCommand.Action.RELOAD},
 	{"id": "swap", "label": "TOUCH_SWAP", "pos": Vector2(0.93, 0.42), "radius": 0.042, "press": PlayerCommand.Action.SWITCH},
+	{"id": "grenade", "label": "TOUCH_GRENADE", "pos": Vector2(0.70, 0.86), "radius": 0.042, "press": PlayerCommand.Action.GRENADE},
+	{"id": "melee", "label": "TOUCH_MELEE", "pos": Vector2(0.64, 0.72), "radius": 0.042, "press": PlayerCommand.Action.MELEE},
 ]
 var _fingers: Dictionary = {}  ## index -> {kind, origin, pos, button}
 var _font: Font
@@ -196,5 +198,13 @@ func _icon(id: String, c: Vector2, s: float, col: Color) -> void:
 				var head := Vector2(c.x + k * s * 0.7, y)
 				draw_line(head, head + Vector2(-k * s * 0.3, -s * 0.25), col, w)
 				draw_line(head, head + Vector2(-k * s * 0.3, s * 0.25), col, w)
+		"grenade":
+			draw_arc(c + Vector2(0, s * 0.15), s * 0.55, 0.0, TAU, 24, col, w)
+			draw_line(c + Vector2(-s * 0.25, -s * 0.45), c + Vector2(s * 0.25, -s * 0.45), col, w * 1.3)
+			draw_line(c + Vector2(s * 0.25, -s * 0.45), c + Vector2(s * 0.6, -s * 0.8), col, w)
+		"melee":
+			for k in 3:
+				var o := Vector2(-s * 0.35 + k * s * 0.35, 0.0)
+				draw_line(c + o + Vector2(-s * 0.15, s * 0.6), c + o + Vector2(s * 0.15, -s * 0.6), col, w * 1.2)
 		_:
 			draw_string(_font, c + Vector2(-s, s * 0.3), tr(id), HORIZONTAL_ALIGNMENT_CENTER, s * 2.0, 16, col)

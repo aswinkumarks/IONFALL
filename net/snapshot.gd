@@ -32,7 +32,7 @@ func encode(baseline: Dictionary, events_bytes: Array[PackedByteArray]) -> Packe
 		write_owner(w, owner_state)
 	w.u8(projectiles.size())
 	for p in projectiles:
-		w.u16(p.owner).u8(p.gen).u32(p.action).pos(p.position).vel(p.velocity)
+		w.u16(p.owner).u8(p.gen).u32(p.action).u8(p.weapon).pos(p.position).vel(p.velocity)
 	w.u8(events_bytes.size())
 	for b in events_bytes:
 		w.bytes(b)
@@ -71,8 +71,9 @@ static func decode(data: PackedByteArray, baselines: Dictionary) -> Snapshot:
 		var owner := r.u16()
 		var gen := r.u8()
 		var action := r.u32()
+		var weapon := r.u8()
 		s.projectiles.append({"id": "%d:%d:%d" % [owner, gen, action], "owner": owner,
-				"position": r.pos(), "velocity": r.vel()})
+				"weapon": Protocol.weapon_id(weapon), "position": r.pos(), "velocity": r.vel()})
 	var ne := r.u8()
 	if ne > MAX_EVENTS:
 		return null
@@ -95,7 +96,8 @@ static func write_owner(w: Wire.Writer, s: PlayerSimState) -> void:
 		w.vec_f32(s.mantle_start).vec_f32(s.mantle_target)
 	w.u32(s.action_seq).u8(s.weapon_slot).u8(s.switch_ticks).u8(s.mag.size())
 	for i in s.mag.size():
-		w.u16(s.mag[i]).u16(s.reserve[i]).u8(s.cooldown[i]).u8(s.reload[i]).u8(s.burst_left[i]).u8(s.burst_timer[i])
+		w.u8(s.weapons[i]).u16(s.mag[i]).u16(s.reserve[i]).u8(s.cooldown[i]).u8(s.reload[i]).u8(s.burst_left[i]).u8(s.burst_timer[i])
+	w.u8(s.grenades).u8(s.throw_cooldown).u8(s.melee_cooldown)
 	w.bytes(s.last_presses).bytes(s.pending_presses)
 	w.f32(s.shield).f32(s.health).u8(s.life_gen & 0xFF).u8(s.discontinuity_gen & 0xFF)
 	w.u8(mini(s.spawn_protection_ticks, 255)).u32(s.respawn_tick)
@@ -127,6 +129,7 @@ static func read_owner(r: Wire.Reader) -> PlayerSimState:
 		r.ok = false
 		return s
 	# Packed arrays are value types: resize each field directly.
+	s.weapons.resize(n)
 	s.mag.resize(n)
 	s.reserve.resize(n)
 	s.cooldown.resize(n)
@@ -134,12 +137,19 @@ static func read_owner(r: Wire.Reader) -> PlayerSimState:
 	s.burst_left.resize(n)
 	s.burst_timer.resize(n)
 	for i in n:
+		s.weapons[i] = r.u8()
+		if s.weapons[i] >= Weapons.ALL.size():
+			r.ok = false
+			return s
 		s.mag[i] = r.u16()
 		s.reserve[i] = r.u16()
 		s.cooldown[i] = r.u8()
 		s.reload[i] = r.u8()
 		s.burst_left[i] = r.u8()
 		s.burst_timer[i] = r.u8()
+	s.grenades = r.u8()
+	s.throw_cooldown = r.u8()
+	s.melee_cooldown = r.u8()
 	for a in PlayerCommand.ACTION_COUNT:
 		s.last_presses[a] = r.u8()
 	for a in PlayerCommand.ACTION_COUNT:

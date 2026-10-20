@@ -1,0 +1,121 @@
+extends GutTest
+## M3 combat (PLAN §2.3): Scatter Gun pellets and shell reload, frag
+## grenades, melee, per-player weapon slots and friendly fire.
+
+const Held := PlayerCommand.Held
+const Action := PlayerCommand.Action
+
+var world: SimWorld
+var shooter: SimPlayer
+var target: SimPlayer
+var input: SimHarness.CommandScript
+var target_input := SimHarness.CommandScript.new()
+
+
+func before_each() -> void:
+	add_child_autofree(SimHarness.make_arena())
+	world = SimHarness.make_world()
+	add_child_autofree(world)
+	await wait_physics_frames(2)
+	shooter = world.add_player(1, Loadouts.make(2), "shooter", false)
+	target = world.add_player(2, Loadouts.make(0), "target", true)
+	input = SimHarness.CommandScript.new()
+	input.yaw = PI * 0.5
+	_place(Vector3(4, 0.05, 17), Vector3(1.5, 0.05, 17))
+
+
+func _place(shooter_at: Vector3, target_at: Vector3, target_yaw: float = 0.0) -> void:
+	SimHarness.place(shooter, shooter_at, input.yaw)
+	SimHarness.place(target, target_at, target_yaw)
+	target_input.yaw = target_yaw
+	for i in 10:
+		world.step({1: input.cmd(world.tick), 2: target_input.cmd(world.tick)})
+	world.drain_events()
+	target.state.spawn_protection_ticks = 0
+	shooter.state.spawn_protection_ticks = 0
+
+
+func _aim_at(height: float) -> void:
+	var aim := target.state.position + Vector3(0, height, 0) - shooter.eye_position()
+	input.yaw = atan2(-aim.x, -aim.z)
+	input.pitch = atan2(aim.y, Vector2(aim.x, aim.z).length())
+
+
+func _run(ticks: int, held: int = 0, press: Array = []) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	for i in ticks:
+		world.step({1: input.cmd(world.tick, Vector2.ZERO, held, press if i == 0 else []), 2: target_input.cmd(world.tick)})
+		events.append_array(world.drain_events())
+	return events
+
+
+func _hits(events: Array[Dictionary]) -> Array[Dictionary]:
+	return events.filter(func(e: Dictionary) -> bool: return e.type == "hit" and e.target == 2)
+
+
+func test_scatter_gun_two_point_blank_shots_kill() -> void:
+	_aim_at(1.1)
+	var first := _hits(_run(1, 0, [Action.FIRE]))
+	assert_eq(first.size(), 1, "pellets on one target make one hit")
+	assert_gt(first[0].amount, 100.0, "most of 10 × 12 lands point blank")
+	assert_true(target.state.alive)
+	_run(Weapons.at(Weapons.SCATTER).ticks_between_shots)
+	_run(1, 0, [Action.FIRE])
+	assert_false(target.state.alive, "the second shot kills")
+
+
+func test_scatter_gun_reloads_one_shell_at_a_time() -> void:
+	var s := shooter.state
+	s.mag[0] = 2
+	var reserve := s.reserve[0]
+	_run(1, 0, [Action.RELOAD])
+	_run(Weapons.at(Weapons.SCATTER).reload_ticks)
+	assert_eq(s.mag[0], 3, "one shell per 30 ticks")
+	assert_eq(s.reserve[0], reserve - 1)
+	_run(Weapons.at(Weapons.SCATTER).reload_ticks * 3)
+	assert_eq(s.mag[0], 6, "keeps going until full")
+
+
+func test_slots_hold_weapon_indices() -> void:
+	assert_eq(shooter.state.weapons, PackedInt32Array([Weapons.SCATTER, Weapons.PISTOL]))
+	shooter.state.set_slot(0, Weapons.RAIL, 4, 8)
+	assert_eq(shooter.current_weapon().id, &"rail_sniper")
+	assert_eq(shooter.state.copy().weapons, shooter.state.weapons, "slots replay")
+
+
+func test_grenade_explodes_after_fuse_and_hurts() -> void:
+	_place(Vector3(4, 0.05, 17), Vector3(-3, 0.05, 17))
+	_aim_at(0.0)
+	var events := _run(1, 0, [Action.GRENADE])
+	assert_eq(shooter.state.grenades, 1, "2 per life, one thrown")
+	assert_eq(world.projectiles.size(), 1)
+	events = _run(Weapons.at(Weapons.FRAG).fuse_ticks + 2)
+	var boom := events.filter(func(e: Dictionary) -> bool: return e.type == "explosion")
+	assert_eq(boom.size(), 1, "explodes once, on the fuse")
+	assert_eq(world.projectiles.size(), 0)
+	assert_gt(_hits(events).size(), 0, "the splash reaches the target")
+
+
+func test_melee_front_and_back() -> void:
+	_place(Vector3(4, 0.05, 17), Vector3(2.8, 0.05, 17), -PI * 0.5)  # facing the attacker
+	_aim_at(1.1)
+	var front := _hits(_run(1, 0, [Action.MELEE]))
+	assert_eq(front.size(), 1)
+	assert_almost_eq(front[0].amount, 70.0, 0.01, "70 from the front")
+	assert_eq(shooter.state.melee_cooldown, Weapons.at(Weapons.MELEE).ticks_between_shots)
+	target_input.yaw = PI * 0.5  # now facing away
+	Health.reset(target.state)
+	_run(Weapons.at(Weapons.MELEE).ticks_between_shots)
+	_run(1, 0, [Action.MELEE])
+	assert_false(target.state.alive, "200 from behind kills")
+
+
+func test_no_friendly_fire_by_default() -> void:
+	world.teams_enabled = true
+	shooter.team = 1
+	target.team = 1
+	_aim_at(1.1)
+	assert_eq(_hits(_run(1, 0, [Action.FIRE])).size(), 0, "teammates take no damage")
+	world.friendly_fire = true
+	_run(Weapons.at(Weapons.SCATTER).ticks_between_shots)
+	assert_eq(_hits(_run(1, 0, [Action.FIRE])).size(), 1, "the host can turn it on")

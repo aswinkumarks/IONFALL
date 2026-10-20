@@ -1,10 +1,16 @@
 class_name WeaponSim
 extends RefCounted
-## Per-tick weapon state machine (PLAN §2.3): fire modes, reload, switching.
-## Produces shot requests; the world resolves hits and damage.
+## Per-tick weapon state machine (PLAN §2.3): fire modes, reload, switching,
+## grenade throws and melee. Produces shot requests; the world resolves hits
+## and damage.
 
 const Action := PlayerCommand.Action
 const FireMode := WeaponData.FireMode
+
+
+const THROW_COOLDOWN := 30
+## Grenades leave a little above the aim line.
+const THROW_LIFT := 0.12
 
 
 class Shot:
@@ -12,27 +18,48 @@ class Shot:
 	var action_seq: int = 0
 	var origin := Vector3.ZERO
 	var direction := Vector3.FORWARD
+	## Pellet weapons: every pellet's direction (`direction` is the first).
+	var pellets: Array[Vector3] = []
 
 
 static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: int) -> Array[Shot]:
 	var shots: Array[Shot] = []
 	var s := p.state
-	if not s.alive or p.loadout.is_empty():
+	if not s.alive or s.weapons.is_empty():
+		return shots
+	if s.throw_cooldown > 0:
+		s.throw_cooldown -= 1
+	if s.melee_cooldown > 0:
+		s.melee_cooldown -= 1
+	var busy := s.sprinting or s.move_state == PlayerSimState.Move.MANTLE
+
+	# Melee and grenades work with any weapon up (not while mantling).
+	if ActionInput.has(executed, Action.MELEE) and s.melee_cooldown == 0 and s.move_state != PlayerSimState.Move.MANTLE:
+		var melee := Weapons.at(Weapons.MELEE)
+		s.melee_cooldown = melee.ticks_between_shots
+		shots.append(_shot(p, melee, aim_direction(s.yaw, s.pitch)))
+		return shots
+	if ActionInput.has(executed, Action.GRENADE) and s.grenades > 0 and s.throw_cooldown == 0 \
+			and s.move_state != PlayerSimState.Move.MANTLE:
+		s.grenades -= 1
+		s.throw_cooldown = THROW_COOLDOWN
+		var aim := aim_direction(s.yaw, s.pitch)
+		shots.append(_shot(p, Weapons.at(Weapons.FRAG), (aim + Vector3.UP * THROW_LIFT).normalized()))
 		return shots
 
 	var requested := s.weapon_slot
-	if cmd.weapon_slot >= 0 and cmd.weapon_slot < p.loadout.size():
+	if cmd.weapon_slot >= 0 and cmd.weapon_slot < s.weapons.size():
 		requested = cmd.weapon_slot
 	elif ActionInput.has(executed, Action.SWITCH):
-		requested = (s.weapon_slot + 1) % p.loadout.size()
+		requested = (s.weapon_slot + 1) % s.weapons.size()
 	if requested != s.weapon_slot:
 		s.reload[s.weapon_slot] = 0
 		s.burst_left[s.weapon_slot] = 0
 		s.weapon_slot = requested
-		s.switch_ticks = p.loadout[requested].raise_ticks
+		s.switch_ticks = s.weapon(requested).raise_ticks
 
 	var w := s.weapon_slot
-	var data := p.loadout[w]
+	var data := s.weapon()
 	if s.switch_ticks > 0:
 		s.switch_ticks -= 1
 	if s.cooldown[w] > 0:
@@ -41,8 +68,12 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 		s.reload[w] -= 1
 		if s.reload[w] == 0:
 			var take := mini(data.mag_size - s.mag[w], s.reserve[w])
+			if data.reload_per_round:
+				take = mini(take, 1)
 			s.mag[w] += take
 			s.reserve[w] -= take
+			if data.reload_per_round:
+				_start_reload(s, w, data)  # next shell
 
 	if ActionInput.has(executed, Action.RELOAD):
 		_start_reload(s, w, data)
@@ -67,8 +98,10 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 	if not trigger:
 		return shots
 
-	var can_fire := s.switch_ticks == 0 and s.reload[w] == 0 and s.cooldown[w] == 0 \
-			and not s.sprinting and s.move_state != PlayerSimState.Move.MANTLE
+	# Shells: a loaded round can interrupt the reload.
+	if data.reload_per_round and s.reload[w] > 0 and s.mag[w] > 0:
+		s.reload[w] = 0
+	var can_fire := s.switch_ticks == 0 and s.reload[w] == 0 and s.cooldown[w] == 0 and not busy
 	if not can_fire:
 		return shots
 	if s.mag[w] <= 0:
@@ -91,14 +124,26 @@ static func _start_reload(s: PlayerSimState, w: int, data: WeaponData) -> void:
 
 static func _fire(p: SimPlayer, w: int, data: WeaponData, match_seed: int) -> Shot:
 	var s := p.state
-	s.action_seq += 1
 	s.mag[w] -= 1
+	var aim := aim_direction(s.yaw, s.pitch)
+	var shot := _shot(p, data, aim)
+	for i in maxi(data.pellets, 1):
+		var seed_value := Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq, i])
+		if data.pellets <= 1:
+			seed_value = Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq])
+		shot.pellets.append(spread_direction(aim, data.spread_degrees, seed_value))
+	shot.direction = shot.pellets[0]
+	return shot
+
+
+## A new action from the eye along `direction`.
+static func _shot(p: SimPlayer, data: WeaponData, direction: Vector3) -> Shot:
+	p.state.action_seq += 1
 	var shot := Shot.new()
 	shot.weapon = data
-	shot.action_seq = s.action_seq
+	shot.action_seq = p.state.action_seq
 	shot.origin = p.eye_position()
-	shot.direction = spread_direction(aim_direction(s.yaw, s.pitch), data.spread_degrees,
-			Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq]))
+	shot.direction = direction
 	return shot
 
 

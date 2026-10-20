@@ -118,7 +118,8 @@ ACTION_RELOAD,Reload
 ACTION_SWITCH_WEAPON,Next weapon
 ACTION_WEAPON_1,Weapon 1
 ACTION_WEAPON_2,Weapon 2
-ACTION_WEAPON_3,Weapon 3
+ACTION_GRENADE,Throw grenade
+ACTION_MELEE,Melee
 ACTION_SCOREBOARD,Scoreboard
 SETTING_NIGHT_MODE,Night mode (compressed dynamic range)
 CAPTION_SHIELD_BROKEN,Shield broken
@@ -159,3 +160,6 @@ CHAR_VANGUARD,Vanguard
 CHAR_VANGUARD_DESC,"Heavy plated trooper with a gold visor, armour in your colour."
 CHAR_OPERATIVE,Operative
 CHAR_OPERATIVE_DESC,"Light flight-suit pilot, quick and low-profile."
+HUD_GRENADES,Frag ×%d
+TOUCH_GRENADE,Grenade
+TOUCH_MELEE,Melee

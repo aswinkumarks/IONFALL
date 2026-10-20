@@ -29,6 +29,9 @@ const WEAPON_SCALE := 1.5
 ## Left-hand support: this far from the grip towards the muzzle, and below the barrel.
 const SUPPORT_ALONG := 0.55
 const SUPPORT_DROP := 0.035
+## Melee bash and grenade throw motions (seconds).
+const MELEE_TIME := 0.32
+const THROW_TIME := 0.45
 
 var camera := Camera3D.new()
 var _viewmodel := Node3D.new()  ## pose root, animated every frame
@@ -55,6 +58,8 @@ var _recoil_vel: float = 0.0
 var _recoil_roll: float = 0.0
 var _pose := Vector3.ZERO  ## smoothed [sprint, crouch/slide, reload/switch] blend
 var _cam_dip: float = 0.0
+var _melee_t: float = 0.0  ## time left in the melee bash
+var _throw_t: float = 0.0  ## time left in the throw dip
 
 
 func _ready() -> void:
@@ -117,6 +122,16 @@ func set_character(style: String, color: Color, fallback: String = "armored") ->
 			_arms.position = -EYE_FROM_HEAD - _arms.basis * rig.head_position()
 			return
 		rig.free()
+
+
+## Our melee: the weapon jabs forward and across.
+func melee() -> void:
+	_melee_t = MELEE_TIME
+
+
+## Our grenade throw: the weapon dips out of the way.
+func throw() -> void:
+	_throw_t = THROW_TIME
 
 
 func muzzle_position() -> Vector3:
@@ -216,10 +231,15 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	pos += Vector3(0.0, -0.16, 0.05) * _pose.z
 	pos += Vector3(0.0, -_land_dip * 0.4, 0.0)
 	pos.z += _recoil * 0.05
+	_melee_t = maxf(_melee_t - delta, 0.0)
+	_throw_t = maxf(_throw_t - delta, 0.0)
+	var bash := sin(PI * _melee_t / MELEE_TIME) if _melee_t > 0.0 else 0.0
+	var dip := sin(PI * _throw_t / THROW_TIME) if _throw_t > 0.0 else 0.0
+	pos += Vector3(-0.08, 0.03, -0.16) * bash + Vector3(0.04, -0.22, 0.06) * dip
 	_viewmodel.position = pos
 	_viewmodel.rotation = Vector3(
-		_recoil * 0.12 - _pose.x * 0.35 - _pose.z * 0.5 + _sway.y * 0.15,
-		_sway.x * 0.2 + _pose.x * 0.6,
+		_recoil * 0.12 - _pose.x * 0.35 - _pose.z * 0.5 + _sway.y * 0.15 - dip * 0.6,
+		_sway.x * 0.2 + _pose.x * 0.6 + bash * 0.7,
 		_recoil_roll + _pose.y * 0.25 + _pose.z * 0.4 - _sway.x * 0.1)
 
 	_flash_time -= delta

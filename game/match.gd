@@ -359,7 +359,8 @@ func _render_client(delta: float) -> void:
 	var ahead := (client.clock.server_time() - client.latest_snapshot.id) * Sim.TICK_DT
 	var rockets := []
 	for proj in client.projectiles:
-		rockets.append({"id": proj.id, "position": proj.position + proj.velocity * ahead, "velocity": proj.velocity})
+		rockets.append({"id": proj.id, "weapon": proj.weapon, "position": proj.position + proj.velocity * ahead,
+				"velocity": proj.velocity})
 	effects.sync_projectiles(rockets, 1.0)
 	var server_state := client.server_state if client.server_state != null else s
 	# Health, shield and death come from the server; movement and ammo are predicted.
@@ -475,7 +476,8 @@ func _update_match_ui(delta: float) -> void:
 	var me := _local_player()
 	if me != null:
 		var names := PackedStringArray()
-		for w: WeaponData in me.loadout:
+		for i in me.state.weapons.size():
+			var w := me.state.weapon(i)
 			names.append(KillFeed.WEAPON_TAGS.get(w.id, w.display_name))
 		hud.set_slots(names, me.state.weapon_slot)
 		_local_sounds(me.state)
@@ -602,9 +604,14 @@ func _handle_event(e: Dictionary) -> void:
 				hud.on_gunfire_from(e.origin)
 			if not local and _visuals.has(e.shooter):
 				(_visuals[e.shooter] as PlayerVisual).on_fire()
-			if local:
-				view.kick(2.0 if e.weapon == &"arc_launcher" else 1.0)
-				hud.on_fired(2.0 if e.weapon == &"arc_launcher" else 1.0)
+			if local and e.weapon == &"melee":
+				view.melee()
+			elif local and e.weapon == &"frag_grenade":
+				view.throw()
+			elif local:
+				var heavy: bool = e.weapon in [&"arc_launcher", &"rail_sniper", &"scatter_gun"]
+				view.kick(2.0 if heavy else 1.0)
+				hud.on_fired(2.0 if heavy else 1.0)
 				if e.get("predicted_hit", false):
 					hud.on_hit_marker(false, false)
 			if e.has("end"):

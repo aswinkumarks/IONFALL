@@ -29,7 +29,8 @@ func _add_bots(n: int) -> void:
 
 
 func _run(ticks: int) -> Dictionary:
-	var out := {"deaths": 0, "kills": 0, "shots": 0, "hits": 0, "max_height": 0.0, "step_ms": FrameStats.new(ticks)}
+	var out := {"deaths": 0, "kills": 0, "shots": 0, "hits": 0, "max_height": 0.0, "step_ms": FrameStats.new(ticks),
+			"grenades": 0, "melee": 0}
 	for t in ticks:
 		var commands := {}
 		var t0 := Time.get_ticks_usec()
@@ -44,6 +45,8 @@ func _run(ticks: int) -> Dictionary:
 					out.kills += 0 if e.suicide else 1
 				"fire":
 					out.shots += 1
+					out.grenades += 1 if e.weapon == &"frag_grenade" else 0
+					out.melee += 1 if e.weapon == &"melee" else 0
 				"hit":
 					out.hits += 1
 					if brains.has(e.target):
@@ -59,9 +62,10 @@ func test_four_bots_fight_for_two_minutes() -> void:
 	var teleports := 0
 	for b: BotBrain in brains.values():
 		teleports += b.stuck_teleports
-	gut.p("2 min, 4 bots: kills %d deaths %d shots %d hits %d (acc %.0f%%) max height %.1f m, stuck teleports %d, tick p50 %.2f p99 %.2f ms" % [
-			r.kills, r.deaths, r.shots, r.hits, 100.0 * r.hits / maxf(r.shots, 1), r.max_height, teleports,
-			r.step_ms.percentile(50.0), r.step_ms.percentile(99.0)])
+	gut.p("2 min, 4 bots: kills %d deaths %d shots %d hits %d (acc %.0f%%) grenades %d melee %d max height %.1f m, stuck teleports %d, tick p50 %.2f p99 %.2f ms" % [
+			r.kills, r.deaths, r.shots, r.hits, 100.0 * r.hits / maxf(r.shots, 1), r.grenades, r.melee, r.max_height,
+			teleports, r.step_ms.percentile(50.0), r.step_ms.percentile(99.0)])
+	assert_gt(r.grenades, 0, "bots throw grenades")
 	assert_gt(r.kills, 4, "bots find and kill each other")
 	assert_gt(r.hits, 20)
 	assert_lt(float(r.hits) / maxf(r.shots, 1), 0.8, "no perfect aim")

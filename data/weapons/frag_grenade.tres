@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://sim/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"frag_grenade"
+display_name = "Frag Grenade"
+fire_mode = 3
+ticks_between_shots = 30
+damage = 0.0
+headshot_multiplier = 1.0
+spread_degrees = 0.0
+mag_size = 2
+reserve = 0
+projectile_speed = 18.0
+projectile_lifetime_ticks = 150
+direct_damage = 0.0
+splash_damage = 130.0
+splash_radius = 5.0
+self_damage_multiplier = 0.5
+gravity = 15.0
+bounce = 0.45
+fuse_ticks = 150

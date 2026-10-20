@@ -37,16 +37,20 @@ var spawn_protection_ticks: int = 0
 var life_gen: int = 0
 var discontinuity_gen: int = 0
 
-# Weapons
+# Weapons: each slot holds a Weapons.ALL index, so pickups can change it.
 var action_seq: int = 0
 var weapon_slot: int = 0
 var switch_ticks: int = 0
+var weapons := PackedInt32Array()
 var mag := PackedInt32Array()
 var reserve := PackedInt32Array()
 var cooldown := PackedInt32Array()
 var reload := PackedInt32Array()
 var burst_left := PackedInt32Array()
 var burst_timer := PackedInt32Array()
+var grenades: int = 0
+var throw_cooldown: int = 0
+var melee_cooldown: int = 0
 
 # Input bookkeeping
 var last_presses := PackedByteArray([0, 0, 0, 0, 0, 0, 0])
@@ -58,8 +62,12 @@ func is_on_floor() -> bool:
 	return move_state == Move.GROUND or move_state == Move.SLIDE
 
 
+const GRENADES_PER_LIFE := 2
+
+
 func init_weapons(loadout: Array[WeaponData]) -> void:
 	var n := loadout.size()
+	weapons.resize(n)
 	mag.resize(n)
 	reserve.resize(n)
 	cooldown.resize(n)
@@ -67,14 +75,29 @@ func init_weapons(loadout: Array[WeaponData]) -> void:
 	burst_left.resize(n)
 	burst_timer.resize(n)
 	for i in n:
-		mag[i] = loadout[i].mag_size
-		reserve[i] = loadout[i].reserve
-		cooldown[i] = 0
-		reload[i] = 0
-		burst_left[i] = 0
-		burst_timer[i] = 0
+		set_slot(i, Weapons.index_of(loadout[i].id), loadout[i].mag_size, loadout[i].reserve)
 	weapon_slot = 0
 	switch_ticks = 0
+	grenades = GRENADES_PER_LIFE
+	throw_cooldown = 0
+	melee_cooldown = 0
+
+
+## Puts weapon `index` (Weapons.ALL) in `slot` with the given ammo.
+func set_slot(slot: int, index: int, p_mag: int, p_reserve: int) -> void:
+	weapons[slot] = index
+	mag[slot] = p_mag
+	reserve[slot] = p_reserve
+	cooldown[slot] = 0
+	reload[slot] = 0
+	burst_left[slot] = 0
+	burst_timer[slot] = 0
+
+
+## The weapon in `slot` (default: the held one), or null.
+func weapon(slot: int = -1) -> WeaponData:
+	var i := weapon_slot if slot < 0 else slot
+	return Weapons.at(weapons[i]) if i >= 0 and i < weapons.size() else null
 
 
 func copy() -> PlayerSimState:

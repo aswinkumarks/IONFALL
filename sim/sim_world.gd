@@ -18,6 +18,10 @@ const ASSIST_TICKS := 300
 const MAX_ASSISTS := 3
 ## Falling below this height is an environmental death.
 const KILL_Y := -30.0
+## Melee reach: the target's centre within ~37° of the aim; "from behind"
+## when the attacker is within ~60° of the target's back.
+const MELEE_CONE_COS := 0.8
+const MELEE_BACK_DOT := 0.5
 
 var tick: int = 0
 var match_seed: int = 1
@@ -30,6 +34,9 @@ var scores: Dictionary = {}  ## net_id -> int
 var damage_enabled: bool = true
 ## Lag compensation (PLAN §3.3.4). Off in offline play.
 var lag_compensation: bool = false
+## TDM (PLAN §2.4): SimPlayer.team matters; friendly fire is a host setting.
+var teams_enabled: bool = false
+var friendly_fire: bool = false
 var history: Dictionary = {}  ## net_id -> HitboxHistory
 
 var _events: Array[Dictionary] = []
@@ -170,6 +177,7 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 
 func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
 	var w := shot.weapon
+	var action_id := "%d:%d:%d" % [p.net_id, p.entity_gen, shot.action_seq]
 	if w.is_projectile():
 		var proj := Projectile.new()
 		proj.owner_id = p.net_id
@@ -179,44 +187,112 @@ func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
 		proj.position = shot.origin
 		proj.velocity = shot.direction * w.projectile_speed
 		projectiles.append(proj)
-		_emit("%d:%d:%d" % [p.net_id, p.entity_gen, shot.action_seq], "fire", {
+		_emit(action_id, "fire", {
 			"shooter": p.net_id, "weapon": w.id, "origin": shot.origin, "direction": shot.direction,
 		})
 		return
+	if w.id == &"melee":
+		_resolve_melee(p, shot, action_id)
+		return
+	# Hitscan: every pellet traced; damage summed per target (one hit each).
+	var dealt := {}  ## target -> [amount, headshot]
+	var first: Array = []
+	for dir: Vector3 in (shot.pellets if not shot.pellets.is_empty() else [shot.direction]):
+		var t := _trace(p, shot.origin, dir, w.max_range)
+		if first.is_empty():
+			first = t
+		if t[0] != null:
+			var hit: Hitbox.Hit = t[1]
+			var entry: Array = dealt.get(t[0], [0.0, false])
+			entry[0] += w.damage_at(hit.distance)
+			entry[1] = entry[1] or hit.part == Hitbox.Part.HEAD
+			dealt[t[0]] = entry
+	_emit(action_id, "fire", {
+		"shooter": p.net_id, "weapon": w.id, "origin": shot.origin, "direction": shot.direction,
+		"end": first[2], "hit_player": first[0] != null,
+		"hit_world": first[0] == null and first[3], "normal": first[4],
+	})
+	var targets := dealt.keys()
+	targets.sort_custom(func(a: SimPlayer, b: SimPlayer) -> bool: return a.net_id < b.net_id)
+	for target: SimPlayer in targets:
+		_damage(target, p.net_id, dealt[target][0], dealt[target][1], w, shot.action_seq)
 
-	var end := shot.origin + shot.direction * w.max_range
-	var world_hit := _ray(shot.origin, end)
-	var max_dist := w.max_range
+
+## One ray against the world and the (rewound) players:
+## [target or null, Hitbox.Hit, end point, hit the world, world normal].
+func _trace(p: SimPlayer, origin: Vector3, dir: Vector3, max_range: float) -> Array:
+	var world_hit := _ray(origin, origin + dir * max_range)
+	var max_dist := max_range
 	var normal := Vector3.ZERO
 	if not world_hit.is_empty():
-		max_dist = shot.origin.distance_to(world_hit.position)
+		max_dist = origin.distance_to(world_hit.position)
 		normal = world_hit.normal
 	var target: SimPlayer = null
 	var best: Hitbox.Hit = null
-	var rewind := _rewind_tick(p)
 	for other: SimPlayer in players.values():
-		if other == p or not other.state.alive:
+		if other == p or not other.state.alive or not _can_hurt(p.net_id, other):
 			continue
-		var feet := other.state.position
-		var stance := other.state.stance
-		if rewind >= 0.0:
-			var pose := (history[other.net_id] as HitboxHistory).sample(rewind) if history.has(other.net_id) else null
-			if pose == null or pose.life_gen != other.state.life_gen:
-				continue  # wasn't there (or was a previous life) at that moment
-			feet = pose.position
-			stance = pose.stance
-		var hit := Hitbox.intersect(feet, stance, shot.origin, shot.direction, max_dist)
+		var pose := _pose(p, other)
+		if pose.is_empty():
+			continue
+		var hit := Hitbox.intersect(pose[0], pose[1], origin, dir, max_dist)
 		if hit != null and (best == null or hit.distance < best.distance):
 			best = hit
 			target = other
-	var hit_dist := best.distance if best != null else max_dist
-	_emit("%d:%d:%d" % [p.net_id, p.entity_gen, shot.action_seq], "fire", {
-		"shooter": p.net_id, "weapon": w.id, "origin": shot.origin, "direction": shot.direction,
-		"end": shot.origin + shot.direction * hit_dist, "hit_player": target != null,
-		"hit_world": target == null and not world_hit.is_empty(), "normal": normal,
-	})
-	if target != null:
-		_damage(target, p.net_id, w.damage_at(best.distance), best.part == Hitbox.Part.HEAD, w, shot.action_seq)
+	var dist := best.distance if best != null else max_dist
+	return [target, best, origin + dir * dist, not world_hit.is_empty(), normal]
+
+
+## Where `other` was as `shooter` saw it: [feet, stance], rewound for lag
+## compensation; [] if it wasn't there (or was a previous life) then.
+func _pose(shooter: SimPlayer, other: SimPlayer) -> Array:
+	var rewind := _rewind_tick(shooter)
+	if rewind < 0.0:
+		return [other.state.position, other.state.stance]
+	var pose := (history[other.net_id] as HitboxHistory).sample(rewind) if history.has(other.net_id) else null
+	if pose == null or pose.life_gen != other.state.life_gen:
+		return []
+	return [pose.position, pose.stance]
+
+
+## Melee (PLAN §2.3): the nearest visible enemy within reach in front of the
+## eye; 70 damage, or the weapon's direct damage (200) from behind.
+func _resolve_melee(p: SimPlayer, shot: WeaponSim.Shot, action_id: String) -> void:
+	var w := shot.weapon
+	var target: SimPlayer = null
+	var best_d := INF
+	for other: SimPlayer in players.values():
+		if other == p or not other.state.alive or not _can_hurt(p.net_id, other):
+			continue
+		var pose := _pose(p, other)
+		if pose.is_empty():
+			continue
+		var c := Hitbox.center(pose[0], pose[1])
+		var to := c - shot.origin
+		var d := to.length()
+		if d > w.max_range + 0.4 or to.normalized().dot(shot.direction) < MELEE_CONE_COS:
+			continue
+		if not _ray(shot.origin, c).is_empty():
+			continue
+		if d < best_d:
+			best_d = d
+			target = other
+	# A "fire" event without an end point; presentation plays a swing.
+	_emit(action_id, "fire", {"shooter": p.net_id, "weapon": w.id, "origin": shot.origin, "direction": shot.direction})
+	if target == null:
+		return
+	var facing := WeaponSim.aim_direction(target.state.yaw, 0.0)
+	var from_behind := facing.dot((target.state.position - p.state.position).normalized()) > MELEE_BACK_DOT
+	_damage(target, p.net_id, w.direct_damage if from_behind else w.damage, false, w, shot.action_seq)
+
+
+## Friendly fire (PLAN §2.3): teammates can't hurt each other unless the host
+## turned it on. Players always hurt themselves (explosives).
+func _can_hurt(attacker_id: int, target: SimPlayer) -> bool:
+	if friendly_fire or attacker_id == target.net_id or not teams_enabled:
+		return true
+	var a: SimPlayer = players.get(attacker_id)
+	return a == null or a.team != target.team
 
 
 ## The (already validated) view tick to rewind targets to, or -1 for "now".
@@ -231,6 +307,11 @@ func _step_projectiles() -> void:
 	var remaining: Array[Projectile] = []
 	for proj in projectiles:
 		proj.age += 1
+		var w := proj.weapon
+		if w.fuse_ticks > 0:
+			if _step_thrown(proj):
+				remaining.append(proj)
+			continue
 		var from := proj.position
 		var to := from + proj.velocity * Sim.TICK_DT
 		var seg := to - from
@@ -243,7 +324,7 @@ func _step_projectiles() -> void:
 		var direct: SimPlayer = null
 		var best: Hitbox.Hit = null
 		for other: SimPlayer in players.values():
-			if other.net_id == proj.owner_id or not other.state.alive:
+			if other.net_id == proj.owner_id or not other.state.alive or not _can_hurt(proj.owner_id, other):
 				continue
 			var hit := Hitbox.intersect(other.state.position, other.state.stance, from, dir, max_dist)
 			if hit != null and (best == null or hit.distance < best.distance):
@@ -261,6 +342,27 @@ func _step_projectiles() -> void:
 	projectiles = remaining
 
 
+## Grenades: gravity, bounces off the world, explode when the fuse runs out.
+## Returns false once exploded.
+func _step_thrown(proj: Projectile) -> bool:
+	var w := proj.weapon
+	if proj.age >= w.fuse_ticks:
+		_explode(proj, proj.position, null)
+		return false
+	proj.velocity.y -= w.gravity * Sim.TICK_DT
+	var to := proj.position + proj.velocity * Sim.TICK_DT
+	var hit := _ray(proj.position, to)
+	if hit.is_empty():
+		proj.position = to
+		return true
+	var n: Vector3 = hit.normal
+	proj.position = hit.position + n * 0.05
+	proj.velocity = proj.velocity.bounce(n) * w.bounce
+	if n.y > 0.7 and proj.velocity.length() < 1.0:
+		proj.velocity = Vector3.ZERO  # at rest on the floor
+	return true
+
+
 func _explode(proj: Projectile, at: Vector3, direct: SimPlayer) -> void:
 	var w := proj.weapon
 	_emit("x:" + proj.id(), "explosion", {"position": at, "owner": proj.owner_id, "weapon": w.id})
@@ -270,7 +372,7 @@ func _explode(proj: Projectile, at: Vector3, direct: SimPlayer) -> void:
 	ids.sort()
 	for id in ids:
 		var p: SimPlayer = players[id]
-		if p == direct or not p.state.alive:
+		if p == direct or not p.state.alive or not _can_hurt(proj.owner_id, p):
 			continue
 		var c := Hitbox.center(p.state.position, p.state.stance)
 		var d := at.distance_to(c)
