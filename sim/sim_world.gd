@@ -39,11 +39,33 @@ var teams_enabled: bool = false
 var friendly_fire: bool = false
 var history: Dictionary = {}  ## net_id -> HitboxHistory
 
+## Pickups (PLAN §2.3), run by the server only (clients learn the result
+## from snapshots). Spots: {weapon (StringName, &"grenade"), position,
+## respawn_ticks}; `spot_respawn[i]` is the tick its next instance appears,
+## 0 while one exists (on the floor, held or dropped).
+var pickups_enabled: bool = false
+var pickup_spots: Array = []
+var spot_respawn := PackedInt32Array()
+var items: Array[Item] = []
+var _held_spot: Dictionary = {}  ## net_id -> spot of the power weapon it holds
+var _next_item_id: int = 1
+
 var _events: Array[Dictionary] = []
 var _recent_deaths: Array = []  ## [Vector3, tick]
 var _damage_log: Dictionary = {}  ## victim id -> Array of [attacker id, amount, tick]
 var _rng := RandomNumberGenerator.new()
 var _next_entity_gen: int = 1
+
+
+## A weapon or grenade on the floor.
+class Item:
+	var id: int = 0
+	var spot: int = -1  ## the spot it came from, or -1
+	var weapon: int = -1  ## Weapons.ALL index; -1 = grenade
+	var position := Vector3.ZERO
+	var mag: int = 0
+	var reserve: int = 0
+	var despawn_tick: int = 0  ## 0 = stays until taken (spot items)
 
 
 class Projectile:
@@ -59,11 +81,13 @@ class Projectile:
 		return "%d:%d:%d" % [owner_id, owner_gen, action_seq]
 
 
-func configure(seed_value: int, movement: MovementConfig, spawns: Array[Transform3D]) -> void:
+func configure(seed_value: int, movement: MovementConfig, spawns: Array[Transform3D], spots: Array = []) -> void:
 	match_seed = seed_value
 	movement_config = movement
 	spawn_points = spawns
+	pickup_spots = spots
 	_rng.seed = seed_value
+	_reset_pickups()
 
 
 func add_player(net_id: int, weapons: Array[WeaponData], player_name: String, bot: bool) -> SimPlayer:
@@ -98,6 +122,7 @@ func reset_match(seed_value: int) -> void:
 	_rng.seed = seed_value
 	projectiles.clear()
 	_recent_deaths.clear()
+	_reset_pickups()
 	var ids := players.keys()
 	ids.sort()
 	for id in ids:
@@ -109,6 +134,8 @@ func remove_player(net_id: int) -> void:
 	var p: SimPlayer = players.get(net_id)
 	if p == null:
 		return
+	if p.state.alive:
+		_drop_power_weapon(p)
 	players.erase(net_id)
 	scores.erase(net_id)
 	history.erase(net_id)
@@ -142,6 +169,7 @@ func drain_events() -> Array[Dictionary]:
 func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 	var ids := players.keys()
 	ids.sort()
+	var interacting := {}
 	for id in ids:
 		var p: SimPlayer = players[id]
 		if stalled.has(id) and p.state.alive:
@@ -151,6 +179,8 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 			cmd = PlayerCommand.neutral_from(p.last_command, tick)
 		p.last_command = cmd
 		var executed := ActionInput.consume(p.state, cmd)
+		if ActionInput.has(executed, PlayerCommand.Action.INTERACT):
+			interacting[id] = true
 		if not p.state.alive:
 			if tick >= p.state.respawn_tick:
 				_spawn(p)
@@ -159,6 +189,8 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 			p.state.spawn_protection_ticks = 0
 			_resolve_shot(p, shot)
 	_step_projectiles()
+	if pickups_enabled:
+		_step_pickups(ids, interacting)
 	for id in ids:
 		var fallen: SimPlayer = players[id]
 		if fallen.state.alive and fallen.state.position.y < KILL_Y:
@@ -406,6 +438,7 @@ func _damage(target: SimPlayer, attacker_id: int, amount: float, headshot: bool,
 ## `attacker_id` 0 = the environment (falls, hazards); `w` is null then.
 func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -> void:
 	var s := victim.state
+	_drop_power_weapon(victim)
 	s.alive = false
 	s.move_state = PlayerSimState.Move.DEAD
 	s.velocity = Vector3.ZERO
@@ -442,6 +475,149 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 		"weapon": w.id if w != null else &"", "suicide": suicide, "headshot": headshot,
 		"environment": attacker_id == 0, "assists": assists, "position": s.position,
 	})
+
+
+# --- Pickups ---
+
+const PICKUP_RADIUS := 1.2
+const PICKUP_HEIGHT := 1.8
+const DROP_DESPAWN_TICKS := 1200
+
+
+func _reset_pickups() -> void:
+	items.clear()
+	_held_spot.clear()
+	spot_respawn.resize(pickup_spots.size())
+	spot_respawn.fill(0)
+	for i in pickup_spots.size():
+		_spawn_item(i)
+
+
+func _spawn_item(spot: int) -> void:
+	var def: Dictionary = pickup_spots[spot]
+	var w := Weapons.by_id(def.weapon) if def.weapon != &"grenade" else null
+	_add_item(spot, Weapons.index_of(def.weapon) if w != null else -1, def.position,
+			w.mag_size if w != null else 0, w.reserve if w != null else 0, 0)
+	spot_respawn[spot] = 0
+
+
+func _add_item(spot: int, weapon: int, position: Vector3, mag: int, reserve: int, despawn: int) -> Item:
+	var it := Item.new()
+	it.id = _next_item_id
+	_next_item_id = (_next_item_id % 65535) + 1
+	it.spot = spot
+	it.weapon = weapon
+	it.position = position
+	it.mag = mag
+	it.reserve = reserve
+	it.despawn_tick = despawn
+	items.append(it)
+	return it
+
+
+## The item's instance is gone: its spot's timer starts.
+func _instance_gone(spot: int) -> void:
+	if spot >= 0:
+		spot_respawn[spot] = tick + int(pickup_spots[spot].respawn_ticks)
+
+
+func _step_pickups(ids: Array, interacting: Dictionary) -> void:
+	for i in pickup_spots.size():
+		if spot_respawn[i] > 0 and tick >= spot_respawn[i]:
+			_spawn_item(i)
+	var kept: Array[Item] = []
+	for it in items:
+		if it.despawn_tick > 0 and tick >= it.despawn_tick:
+			_instance_gone(it.spot)
+		else:
+			kept.append(it)
+	items = kept
+	# Contention: each item goes to the closest player who can take it (ties:
+	# lowest id), in item order.
+	for it: Item in items.duplicate():
+		var best: SimPlayer = null
+		var best_d := INF
+		for id in ids:
+			var p: SimPlayer = players[id]
+			if not p.state.alive:
+				continue
+			var d := p.state.position - it.position
+			var flat := Vector2(d.x, d.z).length()
+			if flat > PICKUP_RADIUS or absf(d.y) > PICKUP_HEIGHT:
+				continue
+			if _wants(p, it, interacting.has(id)) and flat < best_d:
+				best_d = flat
+				best = p
+		if best != null:
+			_take(best, it)
+
+
+## Whether `p` takes `it` now: grenades below the cap; ammo for a weapon it
+## carries; a power weapon if it holds none; anything else on interact.
+func _wants(p: SimPlayer, it: Item, interact: bool) -> bool:
+	var s := p.state
+	if it.weapon < 0:
+		return s.grenades < PlayerSimState.GRENADES_PER_LIFE
+	var slot := s.weapons.find(it.weapon)
+	if slot >= 0:
+		return s.reserve[slot] < Weapons.at(it.weapon).reserve
+	return interact or not needs_interact(s, it.weapon)
+
+
+## Picking up `weapon` would swap out the primary by choice (interact):
+## anything but a power weapon while holding none, or ammo for a carried one.
+static func needs_interact(s: PlayerSimState, weapon: int) -> bool:
+	if weapon < 0 or s.weapons.find(weapon) >= 0:
+		return false
+	return not (Weapons.at(weapon).is_power_weapon and not s.weapon(0).is_power_weapon)
+
+
+func _take(p: SimPlayer, it: Item) -> void:
+	var s := p.state
+	items.erase(it)
+	_emit("p:%d:%d" % [it.id, tick], "pickup", {"player": p.net_id, "weapon": Weapons.at(it.weapon).id if it.weapon >= 0 else &"grenade",
+			"position": it.position})
+	if it.weapon < 0:
+		s.grenades += 1
+		_instance_gone(it.spot)
+		return
+	var w := Weapons.at(it.weapon)
+	var slot := s.weapons.find(it.weapon)
+	if slot >= 0:
+		s.reserve[slot] = mini(s.reserve[slot] + it.mag + it.reserve, w.reserve)
+		_instance_gone(it.spot)
+		return
+	# Swap the primary: the old one drops (and despawns in 20 s).
+	_drop_slot(p, 0)
+	s.set_slot(0, it.weapon, it.mag, it.reserve)
+	s.weapon_slot = 0
+	s.switch_ticks = w.raise_ticks
+	if w.is_power_weapon:
+		s.spawn_protection_ticks = 0
+		_held_spot[p.net_id] = it.spot
+
+
+## Puts `p`'s slot `slot` weapon on the floor at its feet with its ammo.
+func _drop_slot(p: SimPlayer, slot: int) -> void:
+	var s := p.state
+	var spot: int = _held_spot.get(p.net_id, -1) if slot == 0 else -1
+	if slot == 0:
+		_held_spot.erase(p.net_id)
+	var floor_hit := _ray(s.position + Vector3.UP * 0.5, s.position + Vector3.DOWN * 20.0)
+	var at: Vector3 = floor_hit.position if not floor_hit.is_empty() else s.position
+	_add_item(spot, s.weapons[slot], at, s.mag[slot], s.reserve[slot], tick + DROP_DESPAWN_TICKS)
+
+
+## Death or leaving: a held power weapon drops with its remaining ammo.
+func _drop_power_weapon(p: SimPlayer) -> void:
+	var held := p.state.weapon(0)
+	if held != null and held.is_power_weapon:
+		_drop_slot(p, 0)
+
+
+## Ticks until spot `i`'s next instance (0 while one exists).
+func spot_ticks_left(i: int) -> int:
+	return maxi(spot_respawn[i] - tick, 0) if spot_respawn[i] > 0 else 0
 
 
 func _spawn(p: SimPlayer) -> void:

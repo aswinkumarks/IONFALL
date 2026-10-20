@@ -3,12 +3,12 @@ extends RefCounted
 ## Server-side bot (PLAN §2.7): produces the same PlayerCommand stream a
 ## human does, so bots use the same movement, weapons, validation and
 ## replication. Utility goals (attack / chase / retreat to regenerate /
-## roam), path following with traversal links, human-like aim (reaction
+## grab a power weapon or grenades / roam), path following with traversal links, human-like aim (reaction
 ## delay, turn-rate limit, tracking error; no wallhacks, no perfect aim) and
 ## stuck recovery. Perception runs at 10 Hz, re-pathing at most 2 Hz,
 ## staggered across bots.
 
-enum Goal { ROAM, ATTACK, CHASE, RETREAT }
+enum Goal { ROAM, ATTACK, CHASE, RETREAT, PICKUP }
 
 const Held := PlayerCommand.Held
 const Action := PlayerCommand.Action
@@ -31,6 +31,9 @@ const SPLASH_RANGE := Vector2(6.0, 30.0)
 const GRENADE_RANGE := Vector2(7.0, 18.0)
 const GRENADE_CHANCE := 0.2  ## per new sighting in range
 const MELEE_RANGE := 1.8
+## Out of combat, bots fetch power weapons and grenades this close.
+const POWER_FETCH_RANGE := 35.0
+const GRENADE_FETCH_RANGE := 15.0
 const SLOT_PRIMARY := 0
 const SLOT_SIDEARM := 1
 
@@ -127,9 +130,9 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 		Goal.CHASE:
 			move = _follow(tick, p, _last_seen_pos)
 			held |= Held.SPRINT if move.length() > 0.5 else 0
-		Goal.RETREAT:
+		Goal.RETREAT, Goal.PICKUP:
 			move = _follow(tick, p, _path_goal)
-			held |= Held.SPRINT
+			held |= Held.SPRINT if move.length() > 0.5 else 0
 		_:
 			if _destination != Vector3.INF:
 				move = _follow(tick, p, _destination)
@@ -230,10 +233,36 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 	elif tick - _last_seen_tick < CHASE_MEMORY_TICKS and target_id != 0:
 		goal = Goal.CHASE
 	else:
+		target_id = 0
+		var item := _wanted_item(p)
+		if item != Vector3.INF:
+			if goal != Goal.PICKUP or _path_goal.distance_to(item) > 0.5:
+				_path_goal = item
+				_last_repath = -100000
+			goal = Goal.PICKUP
+			return
 		if goal != Goal.ROAM:
 			_path_goal = Vector3.INF
 		goal = Goal.ROAM
-		target_id = 0
+
+
+## The nearest power weapon (holding none) or grenade pickup (short of
+## grenades) in fetching range, or INF.
+func _wanted_item(p: SimPlayer) -> Vector3:
+	var s := p.state
+	var best := Vector3.INF
+	var best_d := INF
+	for it: SimWorld.Item in _world.items:
+		var d := it.position.distance_to(s.position)
+		var want := false
+		if it.weapon < 0:
+			want = s.grenades < PlayerSimState.GRENADES_PER_LIFE and d < GRENADE_FETCH_RANGE
+		else:
+			want = Weapons.at(it.weapon).is_power_weapon and not s.weapon(0).is_power_weapon and d < POWER_FETCH_RANGE
+		if want and d < best_d:
+			best_d = d
+			best = it.position
+	return best
 
 
 func _retreat_point(p: SimPlayer, threat: SimPlayer) -> Vector3:

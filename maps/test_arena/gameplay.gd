@@ -22,3 +22,7 @@ func _ready() -> void:
 
 func spawn_points() -> Array[Transform3D]:
 	return TestArenaLayout.spawn_points()
+
+
+func pickup_spots() -> Array:
+	return []

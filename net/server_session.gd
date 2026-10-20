@@ -42,6 +42,8 @@ var transport := Transport.new()
 var world: SimWorld
 var movement: MovementConfig
 var loadout: Array[WeaponData] = []
+## Players choose their primary (Loadouts.make); off: everyone gets `loadout`.
+var use_primaries: bool = false
 var match_id: int = 0
 var phase: int = MatchPhase.WAITING
 var phase_seq: int = 0
@@ -109,10 +111,13 @@ class Client:
 	var stall_run: int = 0
 	var token: int = 0
 	var restored_score: int = 0
+	var primary: int = 0  ## Loadouts.PRIMARIES index
 
 
-## `port` < 0 runs without networking (offline play).
-func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D]) -> Error:
+## `port` < 0 runs without networking (offline play). `spots`: the map's
+## pickup spots (SimWorld.pickup_spots).
+func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D],
+		spots: Array = []) -> Error:
 	movement = movement_config
 	loadout = weapons
 	_rng.randomize()
@@ -121,7 +126,8 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	world = SimWorld.new()
 	world.name = "ServerWorld"
 	world.lag_compensation = true
-	world.configure(_rng.randi(), movement, spawns)
+	world.pickups_enabled = true
+	world.configure(_rng.randi(), movement, spawns, spots)
 	add_child(world)
 	add_child(transport)
 	if port >= 0:
@@ -137,9 +143,9 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	return OK
 
 
-func add_local_player(player_name: String, character: int = 0, color: int = 0) -> SimPlayer:
+func add_local_player(player_name: String, character: int = 0, color: int = 0, primary: int = 0) -> SimPlayer:
 	local_player_id = LOCAL_PLAYER_ID
-	var p := world.add_player(local_player_id, loadout, player_name, false)
+	var p := world.add_player(local_player_id, _loadout_for(primary), player_name, false)
 	p.character = character
 	p.color = color
 	stats.add_player(local_player_id, player_name, false, world.tick)
@@ -157,11 +163,24 @@ func add_bot(bot_name: String, driver: RefCounted) -> SimPlayer:
 	var id := 1000 + _bot_seq
 	_bot_seq += 1
 	bots[id] = driver
-	var p := world.add_player(id, loadout, bot_name, true)
+	var p := world.add_player(id, _loadout_for(_rng.randi_range(0, Loadouts.PRIMARIES.size() - 1)), bot_name, true)
 	p.character = _bot_seq - 1  # bots cycle through the characters
 	stats.add_player(id, bot_name, true, world.tick)
 	_broadcast_roster()
 	return p
+
+
+## The spawn loadout for primary choice `primary`. Matches started with a
+## fixed loadout (tests, test clients) keep it.
+func _loadout_for(primary: int) -> Array[WeaponData]:
+	return Loadouts.make(primary) if use_primaries else loadout
+
+
+## The primary `player_id` gets from its next spawn (PLAN §2.5).
+func set_primary(player_id: int, primary: int) -> void:
+	var p := world.get_player(player_id)
+	if p != null:
+		p.loadout = _loadout_for(primary)
 
 
 func combatants() -> int:
@@ -500,6 +519,7 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 	c.uuid = hello.uuid
 	c.character = hello.character
 	c.color = hello.color
+	c.primary = clampi(hello.primary, 0, Loadouts.PRIMARIES.size() - 1)
 	_expire_departed()
 	var back: Dictionary = _departed.get(hello.token, {})
 	if not back.is_empty() and _player_id_free(back.player_id):
@@ -599,13 +619,20 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 				var rtt := float((Time.get_ticks_msec() - pong.echo) & 0xFFFFFFFF)
 				if rtt < 5000.0:
 					c.rtt_ms = lerpf(c.rtt_ms, rtt, 0.3)
+		Protocol.Msg.LOADOUT:
+			var primary := Protocol.decode_loadout(data)
+			if primary < 0:
+				anomalies += 1
+			else:
+				c.primary = primary
+				set_primary(c.player_id, primary)
 		Protocol.Msg.LOADED:
 			var loaded := Protocol.decode_loaded(data)
 			if loaded.is_empty():
 				anomalies += 1
 			elif not c.loaded:
 				c.loaded = true
-				var joined := world.add_player(c.player_id, loadout, c.name, false)
+				var joined := world.add_player(c.player_id, _loadout_for(c.primary), c.name, false)
 				joined.character = c.character
 				joined.color = c.color
 				stats.add_player(c.player_id, c.name, false, world.tick)
@@ -655,6 +682,11 @@ func _send_snapshot(c: Client, tick_entities: Dictionary) -> void:
 	if me != null:
 		snap.owner_state = me.state
 		snap.owner_gen = me.entity_gen & 0xFF
+	for it in world.items:
+		snap.items.append({"id": it.id, "weapon": it.weapon, "position": it.position})
+	snap.spot_ticks.resize(world.pickup_spots.size())
+	for i in world.pickup_spots.size():
+		snap.spot_ticks[i] = world.spot_ticks_left(i)
 	for proj in world.projectiles:
 		snap.projectiles.append({"owner": proj.owner_id, "gen": proj.owner_gen & 0xFF, "action": proj.action_seq,
 				"weapon": Protocol.weapon_index(proj.weapon.id),

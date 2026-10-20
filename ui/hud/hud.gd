@@ -38,6 +38,8 @@ var _mag: int = 0
 var _mag_size: int = 1
 var _reserve: int = 0
 var _grenades: int = 0
+var _prompt: String = ""
+var _pickup_timers: String = ""
 var _reload: float = 0.0  ## 0 = not reloading, else progress 0..1
 var _score: int = 0
 var _respawn_ticks: int = 0
@@ -149,6 +151,16 @@ func set_timer(seconds_left: int, show: bool) -> void:
 	_timer_shown = show
 
 
+## "Press E: swap for RAIL SNIPER", or "" for none.
+func set_prompt(text: String) -> void:
+	_prompt = text
+
+
+## Power weapon spawn timers, one line.
+func set_pickup_timers(text: String) -> void:
+	_pickup_timers = text
+
+
 func set_slots(names: PackedStringArray, current: int) -> void:
 	_slots = names
 	_slot = current
@@ -251,6 +263,8 @@ func _draw() -> void:
 	_draw_weapon()
 	if _protected:
 		_text(c + Vector2(0, 70 * s), tr("HUD_SPAWN_PROTECTED").to_upper(), 18, Color(UiStyle.ACCENT, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
+	if not _prompt.is_empty():
+		_text(c + Vector2(0, 110 * s), _prompt, 22, UiStyle.WARN, HORIZONTAL_ALIGNMENT_CENTER)
 	_draw_caption()
 
 
@@ -267,6 +281,8 @@ func _draw_top() -> void:
 				UiStyle.WARN if urgent else UiStyle.TEXT, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 		y += 48 * s
 	_text(Vector2(x, y + 20 * s), tr("HUD_SCORE") % _score, 20, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	if not _pickup_timers.is_empty():
+		_text(Vector2(x, y + 44 * s), _pickup_timers, 15, Color(1.0, 0.65, 0.3, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _draw_crosshair(c: Vector2) -> void:

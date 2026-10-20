@@ -22,6 +22,7 @@ var input_source: Callable
 var player_name: String = "Player"
 var character: int = 0  ## sent in the handshake (CharacterRig.SELECTABLE index)
 var color: int = 0  ## sent in the handshake (PlayerVisual.PALETTE index)
+var primary: int = 0  ## sent in the handshake (Loadouts.PRIMARIES index)
 ## Reconnect token from the server's WELCOME; pass it to join() to get the
 ## same player and score back within 60 s (PLAN §3.4).
 var reconnect_token: int = 0
@@ -47,6 +48,8 @@ var prev_state: PlayerSimState
 var latest_snapshot: Snapshot
 var server_state: PlayerSimState  ## latest authoritative owner state
 var projectiles: Array = []
+var items: Array = []  ## latest snapshot's floor items {id, weapon, position}
+var spot_ticks := PackedInt32Array()
 
 # Metrics
 var corrections: int = 0
@@ -84,7 +87,13 @@ func join(address: String, port: int, movement_config: MovementConfig, weapons: 
 	transport.message.connect(_on_message)
 	_last_packet_ms = Time.get_ticks_msec()
 	return transport.join(address, port, Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
-			uuid, player_name, reconnect_token, character, color))
+			uuid, player_name, reconnect_token, character, color, primary))
+
+
+## The primary for our next spawn (PLAN §2.5).
+func send_loadout(p_primary: int) -> void:
+	primary = p_primary
+	transport.send(1, Protocol.encode_loadout(p_primary), Protocol.CH_CONTROL, true)
 
 
 ## Seconds since the last packet from the server (host-loss detection,
@@ -301,6 +310,8 @@ func _on_snapshot(data: PackedByteArray) -> void:
 	var jitter := _arrival_jitter.percentile(95.0) - _arrival_jitter.percentile(5.0)
 	interp_ticks = clampi(roundi(2 * ServerSession.SNAPSHOT_INTERVAL + jitter), 3, 9)
 	projectiles = snap.projectiles
+	items = snap.items
+	spot_ticks = snap.spot_ticks
 	_events.append_array(snap.events)
 	# Time dilation (PLAN §3.3.2): run up to 5% faster or slower to keep the
 	# server's command buffer at its target, instead of hard resyncs.

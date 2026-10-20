@@ -120,6 +120,7 @@ ACTION_WEAPON_1,Weapon 1
 ACTION_WEAPON_2,Weapon 2
 ACTION_GRENADE,Throw grenade
 ACTION_MELEE,Melee
+ACTION_INTERACT,Pick up / swap
 ACTION_SCOREBOARD,Scoreboard
 SETTING_NIGHT_MODE,Night mode (compressed dynamic range)
 CAPTION_SHIELD_BROKEN,Shield broken
@@ -163,3 +164,8 @@ CHAR_OPERATIVE_DESC,"Light flight-suit pilot, quick and low-profile."
 HUD_GRENADES,Frag ×%d
 TOUCH_GRENADE,Grenade
 TOUCH_MELEE,Melee
+TOUCH_INTERACT,Pick up
+HUD_PICKUP_SWAP,[%s] Swap for %s
+HUD_PICKUP_READY,ready
+LOADOUT_PRIMARY,Next spawn:
+CUSTOMIZE_PRIMARY,Primary weapon

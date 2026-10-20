@@ -133,6 +133,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		press(Action.GRENADE)
 	elif event.is_action_pressed("melee"):
 		press(Action.MELEE)
+	elif event.is_action_pressed("interact"):
+		press(Action.INTERACT)
 
 
 ## Default bindings, created at runtime so they can be remapped later
@@ -152,6 +154,7 @@ const DEFAULT_KEYS := {
 		"weapon_2": [KEY_2],
 		"grenade": [KEY_G],
 		"melee": [KEY_V, KEY_F],
+		"interact": [KEY_E],
 		"scoreboard": [KEY_TAB],
 }
 

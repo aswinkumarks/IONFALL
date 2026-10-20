@@ -17,6 +17,7 @@ var map: String = Maps.DEFAULT
 var bots: int = 3  ## dummies alongside the local player; they leave as humans join
 var character: int = 0  ## index into CharacterRig.SELECTABLE
 var color: int = 0  ## index into PlayerVisual.PALETTE (0 = auto)
+var primary: int = 0  ## index into Loadouts.PRIMARIES
 var map_retried: bool = false  ## joined once already and reloaded with the host's map
 
 
@@ -35,6 +36,7 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	c.map = Maps.from_args(saved if saved is String else Maps.DEFAULT)
 	c.character = profile_character()
 	c.color = profile_color()
+	c.primary = profile_primary()
 	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches
 		c.bots = Platform.get_user_arg("--bots").to_int()
 	if not p_address.is_empty():
@@ -63,6 +65,12 @@ static func profile_character() -> int:
 static func profile_color() -> int:
 	var v: Variant = Settings.get_value("profile", "color")
 	return clampi(v if v is int else 0, 0, PlayerVisual.PALETTE.size() - 1)
+
+
+## The chosen primary weapon (Loadouts.PRIMARIES index).
+static func profile_primary() -> int:
+	var v: Variant = Settings.get_value("profile", "primary")
+	return clampi(v if v is int else 0, 0, Loadouts.PRIMARIES.size() - 1)
 
 
 ## Stable per-install id sent in the handshake (identifies the player across

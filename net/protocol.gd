@@ -9,10 +9,10 @@ const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
 
-enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26 }
+enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27 }
 ## NOTICE codes: host lifecycle hints (PLAN §3.5.1, best effort).
 enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2 }
-const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED]
+const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED, Msg.LOADOUT]
 
 ## Logical channels (PLAN §3.3.3).
 const CH_GAME := 0  ## unreliable: commands, snapshots, pings
@@ -24,7 +24,7 @@ const CMD_REDUNDANCY := 4
 const MAX_NAME_BYTES := 48
 
 
-enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5 }
+enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5, PICKUP = 6 }
 
 
 ## Weapon wire index (Weapons.ALL order).
@@ -42,10 +42,10 @@ static func weapon_id(index: int) -> StringName:
 ## `character`, `color`: the player's cosmetic picks (CharacterRig.SELECTABLE,
 ## PlayerVisual.PALETTE indices).
 static func encode_hello(compat: String, build: String, uuid: String, player_name: String, token: int = 0,
-		character: int = 0, color: int = 0) -> PackedByteArray:
+		character: int = 0, color: int = 0, primary: int = 0) -> PackedByteArray:
 	return Wire.Writer.new().u32(MAGIC).u16(VERSION).str8(compat).str8(build).str8(uuid) \
 			.str8(player_name.left(MAX_NAME_BYTES)).u32(token >> 32).u32(token & 0xFFFFFFFF).u8(character & 0xFF) \
-			.u8(color & 0xFF).data()
+			.u8(color & 0xFF).u8(primary & 0xFF).data()
 
 
 ## Returns {} if malformed.
@@ -58,6 +58,7 @@ static func decode_hello(data: PackedByteArray) -> Dictionary:
 	out["token"] = (r.u32() << 32) | r.u32()
 	out["character"] = r.u8()
 	out["color"] = r.u8()
+	out["primary"] = r.u8()
 	return out if r.ok and r.remaining() == 0 else {}
 
 
@@ -239,6 +240,18 @@ static func decode_notice(data: PackedByteArray) -> int:
 	return code if r.ok else 0
 
 
+## Client -> server: the primary for the next spawn (Loadouts.PRIMARIES).
+static func encode_loadout(primary: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.LOADOUT).u8(primary & 0xFF).data()
+
+
+static func decode_loadout(data: PackedByteArray) -> int:
+	var r := Wire.Reader.new(data)
+	var type := r.u8()
+	var primary := r.u8()
+	return primary if r.ok and r.remaining() == 0 and type == Msg.LOADOUT and primary < Loadouts.PRIMARIES.size() else -1
+
+
 static func encode_loaded(match_id: int) -> PackedByteArray:
 	return Wire.Writer.new().u8(Msg.LOADED).u32(match_id).data()
 
@@ -295,6 +308,10 @@ static func write_event(w: Wire.Writer, e: Dictionary) -> bool:
 					.u8(weapon_index(e.weapon) if e.weapon != &"" else 255).pos(e.position).u8(mini(assists.size(), 3))
 			for i in mini(assists.size(), 3):
 				w.u16(assists[i])
+		"pickup":
+			var parts: PackedStringArray = e.id.substr(2).split(":")
+			w.u8(Event.PICKUP).u16(e.player).u16(int(parts[0])).u32(int(parts[1])) \
+					.u8(255 if e.weapon == &"grenade" else weapon_index(e.weapon)).pos(e.position)
 		"spawn":
 			w.u8(Event.SPAWN).u16(e.player).u8(int(e.id.split(":")[2])).pos(e.position).u16(PlayerCommand.quantize_yaw(e.yaw))
 		_:
@@ -356,6 +373,13 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 			return {"type": "death", "id": "d:%d:%d" % [victim, life], "victim": victim, "killer": killer,
 					"suicide": (flags & 1) != 0, "headshot": (flags & 2) != 0, "environment": (flags & 4) != 0,
 					"weapon": weapon, "position": position, "assists": assists}
+		Event.PICKUP:
+			var player := r.u16()
+			var item := r.u16()
+			var tick := r.u32()
+			var wi := r.u8()
+			return {"type": "pickup", "id": "p:%d:%d" % [item, tick], "player": player,
+					"weapon": &"grenade" if wi == 255 else weapon_id(wi), "position": r.pos()}
 		Event.SPAWN:
 			var player := r.u16()
 			var life := r.u8()

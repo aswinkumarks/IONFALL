@@ -10,6 +10,7 @@ const DEFAULTS := {
 		"uuid": "",
 		"character": "sentinel",  ## CharacterRig.SELECTABLE
 		"color": 0,  ## PlayerVisual.PALETTE index, 0 = auto
+		"primary": 0,  ## Loadouts.PRIMARIES index
 		"map": "station",  ## Maps.PLAYABLE, for Play and Host
 	},
 	"video": {

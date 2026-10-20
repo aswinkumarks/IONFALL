@@ -21,3 +21,7 @@ func _ready() -> void:
 
 func spawn_points() -> Array[Transform3D]:
 	return SpireLayout.spawn_points()
+
+
+func pickup_spots() -> Array:
+	return SpireLayout.pickup_spots()

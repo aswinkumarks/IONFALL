@@ -13,6 +13,12 @@ const JOYSTICK_RADIUS := 110.0
 const SPRINT_THRESHOLD := 0.9
 
 var input: InputAdapter
+## The interact button shows only while something can be picked up.
+var show_interact: bool = false:
+	set(v):
+		if v != show_interact:
+			show_interact = v
+			queue_redraw()
 
 ## Buttons in fractions of the screen size. `press` actions fire on touch,
 ## `held` flags stay set while the finger is down.
@@ -24,6 +30,8 @@ var _buttons := [
 	{"id": "swap", "label": "TOUCH_SWAP", "pos": Vector2(0.93, 0.42), "radius": 0.042, "press": PlayerCommand.Action.SWITCH},
 	{"id": "grenade", "label": "TOUCH_GRENADE", "pos": Vector2(0.70, 0.86), "radius": 0.042, "press": PlayerCommand.Action.GRENADE},
 	{"id": "melee", "label": "TOUCH_MELEE", "pos": Vector2(0.64, 0.72), "radius": 0.042, "press": PlayerCommand.Action.MELEE},
+	{"id": "interact", "label": "TOUCH_INTERACT", "pos": Vector2(0.62, 0.45), "radius": 0.05, "press": PlayerCommand.Action.INTERACT,
+			"contextual": true},
 ]
 var _fingers: Dictionary = {}  ## index -> {kind, origin, pos, button}
 var _font: Font
@@ -124,6 +132,8 @@ func _on_up(index: int) -> void:
 func _button_at(pos: Vector2) -> Dictionary:
 	var screen := _screen()
 	for b in _buttons:
+		if b.get("contextual", false) and not show_interact:
+			continue
 		if pos.distance_to(b.pos * screen) <= b.radius * screen.y * 1.15:
 			return b
 	return {}
@@ -146,6 +156,8 @@ func _is_pressed(button: Dictionary) -> bool:
 func _draw() -> void:
 	var screen := _screen()
 	for b in _buttons:
+		if b.get("contextual", false) and not show_interact:
+			continue
 		var center: Vector2 = b.pos * screen
 		var r: float = b.radius * screen.y
 		var pressed := _is_pressed(b)
@@ -202,6 +214,10 @@ func _icon(id: String, c: Vector2, s: float, col: Color) -> void:
 			draw_arc(c + Vector2(0, s * 0.15), s * 0.55, 0.0, TAU, 24, col, w)
 			draw_line(c + Vector2(-s * 0.25, -s * 0.45), c + Vector2(s * 0.25, -s * 0.45), col, w * 1.3)
 			draw_line(c + Vector2(s * 0.25, -s * 0.45), c + Vector2(s * 0.6, -s * 0.8), col, w)
+		"interact":
+			draw_rect(Rect2(c - Vector2(s, s) * 0.6, Vector2(s, s) * 1.2), col, false, w)
+			draw_line(c + Vector2(0, -s * 0.3), c + Vector2(0, s * 0.3), col, w)
+			draw_line(c + Vector2(-s * 0.3, 0), c + Vector2(s * 0.3, 0), col, w)
 		"melee":
 			for k in 3:
 				var o := Vector2(-s * 0.35 + k * s * 0.35, 0.0)

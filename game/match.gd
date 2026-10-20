@@ -19,6 +19,7 @@ var client: ClientSession  ## client
 var input := InputAdapter.new()
 var view := FirstPersonView.new()
 var effects := Effects.new()
+var pickups := PickupVisuals.new()
 var audio := GameAudio.new()
 var hud: Hud
 var touch := TouchControls.new()
@@ -43,6 +44,7 @@ var _kill_feed: KillFeed
 var _scoreboard: MatchPanel
 var _results: MatchPanel
 var _death_label: Label
+var _loadout_bar: HBoxContainer  ## primary choice while respawning (PLAN §2.6)
 var _scores_button: Button
 var _results_until: float = 0.0
 ## Death cam (PLAN §2.6): {pos, killer, until} while active.
@@ -76,6 +78,7 @@ func _ready() -> void:
 		config.map = Maps.DEFAULT
 	var gameplay := Maps.gameplay(config.map)
 	add_child(gameplay)
+	pickups.spots = gameplay.pickup_spots()
 	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
@@ -87,6 +90,7 @@ func _ready() -> void:
 	add_child(input)
 	add_child(view)
 	add_child(effects)
+	add_child(pickups)
 	add_child(audio)
 	audio.listener = view.camera
 	_build_ui()
@@ -109,9 +113,10 @@ func _ready() -> void:
 		server.map_id = config.map
 		if Platform.get_user_arg("--time-limit").is_valid_int():  # dev: short matches
 			server.time_limit_ticks = Platform.get_user_arg("--time-limit").to_int() * Sim.TICK_RATE
+		server.use_primaries = true
 		add_child(server)
 		var port := config.port if config.mode == MatchConfig.Mode.HOST else -1
-		var err := server.start(port, MOVEMENT, loadout, spawns)
+		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots())
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
 			return
@@ -122,7 +127,7 @@ func _ready() -> void:
 		server.bot_nav = nav
 		server.max_combatants = config.max_combatants()
 		server.bot_fill = 1 + config.bots
-		var me := server.add_local_player(config.player_name, config.character, config.color)
+		var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
 		input.look_yaw = me.state.yaw
 		if config.mode == MatchConfig.Mode.HOST:
 			_info.text = tr("NET_HOSTING") % [", ".join(lan_addresses()), config.port]
@@ -155,6 +160,7 @@ func _start_client(token: int) -> bool:
 	client.player_name = config.player_name
 	client.character = config.character
 	client.color = config.color
+	client.primary = config.primary
 	client.uuid = MatchConfig.profile_uuid()
 	client.reconnect_token = token
 	client.input_source = _local_command
@@ -331,7 +337,39 @@ func _render_host(delta: float) -> void:
 	audio.update_player(me.net_id, s, true)
 	_prune_visuals(seen)
 	effects.sync_projectiles(world.projectiles, alpha)
+	var spot_ticks := PackedInt32Array()
+	for i in world.pickup_spots.size():
+		spot_ticks.append(world.spot_ticks_left(i))
+	pickups.sync(world.items, spot_ticks)
+	_update_pickup_hud(s, world.items, spot_ticks)
 	hud.update_state(s, me.current_weapon(), world.scores.get(me.net_id, 0), s.respawn_tick - world.tick)
+
+
+## The interact prompt for the nearest item that needs one, and the power
+## weapon timers (PLAN §2.3: the HUD shows the countdown).
+func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32Array) -> void:
+	var prompt := ""
+	var best := SimWorld.PICKUP_RADIUS + 0.3
+	for it in items:
+		var weapon: int = it.weapon
+		var pos: Vector3 = it.position
+		var d := Vector2(pos.x - s.position.x, pos.z - s.position.z).length()
+		if s.alive and d < best and absf(pos.y - s.position.y) < SimWorld.PICKUP_HEIGHT \
+				and SimWorld.needs_interact(s, weapon):
+			best = d
+			prompt = tr("HUD_PICKUP_SWAP") % [InputAdapter.key_name("interact"), tr(Weapons.at(weapon).display_name).to_upper()]
+	hud.set_prompt(prompt)
+	touch.show_interact = not prompt.is_empty()
+	var timers := PackedStringArray()
+	for i in pickups.spots.size():
+		var def: Dictionary = pickups.spots[i]
+		if def.weapon == &"grenade":
+			continue
+		var tag: String = KillFeed.WEAPON_TAGS.get(def.weapon, String(def.weapon))
+		var ticks: int = spot_ticks[i] if i < spot_ticks.size() else 0
+		var secs := ceili(ticks / float(Sim.TICK_RATE))
+		timers.append("%s %s" % [tag, tr("HUD_PICKUP_READY") if ticks == 0 else "%d:%02d" % [floori(secs / 60.0), secs % 60]])
+	hud.set_pickup_timers(" · ".join(timers))
 
 
 func _render_client(delta: float) -> void:
@@ -362,6 +400,8 @@ func _render_client(delta: float) -> void:
 		rockets.append({"id": proj.id, "weapon": proj.weapon, "position": proj.position + proj.velocity * ahead,
 				"velocity": proj.velocity})
 	effects.sync_projectiles(rockets, 1.0)
+	pickups.sync(client.items, client.spot_ticks)
+	_update_pickup_hud(s, client.items, client.spot_ticks)
 	var server_state := client.server_state if client.server_state != null else s
 	# Health, shield and death come from the server; movement and ammo are predicted.
 	var shown := s.copy()
@@ -496,6 +536,11 @@ func _update_match_ui(delta: float) -> void:
 		_death_label.visible = true
 	else:
 		_death_label.visible = false
+	var choosing := dead and not _results.visible
+	if choosing != _loadout_bar.visible:
+		_loadout_bar.visible = choosing
+		if not Platform.is_mobile() and not _paused:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if choosing else Input.MOUSE_MODE_CAPTURED
 	_banner.visible = not _results.visible
 	# Results until the next match starts; the scoreboard while held.
 	if _results.visible:
@@ -717,6 +762,27 @@ func _build_ui() -> void:
 	_death_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_death_label.visible = false
 	layer.add_child(_death_label)
+	_loadout_bar = HBoxContainer.new()
+	_loadout_bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_loadout_bar.offset_top = -190.0
+	_loadout_bar.offset_bottom = -120.0
+	_loadout_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_loadout_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	_loadout_bar.add_theme_constant_override("separation", 12)
+	_loadout_bar.visible = false
+	var caption := _make_label(18, UiStyle.TEXT_DIM)
+	caption.text = "LOADOUT_PRIMARY"
+	_loadout_bar.add_child(caption)
+	for i in Loadouts.PRIMARIES.size():
+		var b := Button.new()
+		b.text = Loadouts.PRIMARIES[i].display_name
+		b.toggle_mode = true
+		b.button_pressed = i == config.primary
+		b.custom_minimum_size = Vector2(170, 56)
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_choose_primary.bind(i))
+		_loadout_bar.add_child(b)
+	layer.add_child(_loadout_bar)
 	_scoreboard = MatchPanel.new()
 	layer.add_child(_scoreboard)
 	_results = MatchPanel.new()
@@ -831,6 +897,19 @@ func _set_paused(paused: bool) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif not Platform.is_mobile():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Primary for the next spawn, saved to the profile (PLAN §2.5).
+func _choose_primary(i: int) -> void:
+	config.primary = i
+	Settings.set_value("profile", "primary", i)
+	Settings.save_settings()
+	if server != null:
+		server.set_primary(server.local_player_id, i)
+	elif client != null:
+		client.send_loadout(i)
+	for k in Loadouts.PRIMARIES.size():
+		(_loadout_bar.get_child(k + 1) as Button).button_pressed = k == i
 
 
 func _leave() -> void:

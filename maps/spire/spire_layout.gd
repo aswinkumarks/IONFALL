@@ -291,6 +291,19 @@ static func spawn_points() -> Array[Transform3D]:
 	return out
 
 
+## Pickup spots (PLAN §2.3): the Rail Sniper on the plaza, the Arc
+## Launcher under it, grenades in the side lanes and on the corridor roofs.
+static func pickup_spots() -> Array:
+	var out := [
+		{"weapon": &"rail_sniper", "position": Vector3(0, DECK, -5.5), "respawn_ticks": 7200},
+		{"weapon": &"arc_launcher", "position": Vector3(0, 0, 4.5), "respawn_ticks": 5400},
+	]
+	for s in [-1.0, 1.0]:
+		out.append({"weapon": &"grenade", "position": Vector3(12 * s, 0, 0), "respawn_ticks": 1200})
+		out.append({"weapon": &"grenade", "position": Vector3(0, DECK, 24 * s), "respawn_ticks": 1200})
+	return out
+
+
 ## Hash of everything the presentation is built from.
 static func layout_hash() -> String:
 	return var_to_str([boxes(), decor(), pieces(), lights()]).sha256_text()

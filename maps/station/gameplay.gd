@@ -20,3 +20,7 @@ func _ready() -> void:
 
 func spawn_points() -> Array[Transform3D]:
 	return StationLayout.spawn_points()
+
+
+func pickup_spots() -> Array:
+	return StationLayout.pickup_spots()

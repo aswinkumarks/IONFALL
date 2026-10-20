@@ -18,6 +18,8 @@ var _idle := PlayerSimState.new()
 var _name_edit := LineEdit.new()
 var _swatches: Array[Button] = []
 var _character_buttons: Array[Button] = []
+var _primary: int = 0
+var _primary_buttons: Array[Button] = []
 var _title: Label
 var _blurb: Label
 
@@ -97,6 +99,22 @@ func _init() -> void:
 		b.pressed.connect(_pick_character.bind(i))
 		characters.add_child(b)
 		_character_buttons.append(b)
+	side.add_child(_gap())
+	side.add_child(UiStyle.label("CUSTOMIZE_PRIMARY", &"DimLabel"))
+	var primaries := HBoxContainer.new()
+	primaries.add_theme_constant_override("separation", 8)
+	side.add_child(primaries)
+	for i in Loadouts.PRIMARIES.size():
+		var b := UiStyle.menu_button(Loadouts.PRIMARIES[i].display_name)
+		b.toggle_mode = true
+		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.custom_minimum_size.y = 50
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 20)
+		b.clip_text = true
+		b.pressed.connect(_pick_primary.bind(i))
+		primaries.add_child(b)
+		_primary_buttons.append(b)
 	_idle.alive = true
 	_idle.move_state = PlayerSimState.Move.GROUND
 	visibility_changed.connect(_on_visibility_changed)
@@ -139,6 +157,7 @@ func load_profile(player_name: String) -> void:
 	_name_edit.text = player_name
 	_character = MatchConfig.profile_character()
 	_color = MatchConfig.profile_color()
+	_primary = MatchConfig.profile_primary()
 	_refresh()
 
 
@@ -170,6 +189,13 @@ func _pick_character(index: int) -> void:
 	_refresh()
 
 
+func _pick_primary(index: int) -> void:
+	_primary = index
+	Settings.set_value("profile", "primary", _primary)
+	Settings.save_settings()
+	_refresh()
+
+
 func _pick_color(index: int) -> void:
 	_color = index
 	Settings.set_value("profile", "color", _color)
@@ -189,7 +215,7 @@ func _refresh() -> void:
 	_rig = CharacterRig.create(CharacterRig.SELECTABLE[_character])
 	_stage.add_child(_rig)
 	_rig.setup(preview_color())
-	_rig.set_weapon(Loadouts.PULSE.id)
+	_rig.set_weapon(Loadouts.PRIMARIES[_primary].id)
 	_rig.rotation.y = yaw
 	var key: String = CharacterRig.SELECTABLE_KEYS[_character]
 	_title.text = tr(key).to_upper()
@@ -198,6 +224,8 @@ func _refresh() -> void:
 		_character_buttons[i].set_pressed_no_signal(i == _character)
 	for i in _swatches.size():
 		_style_swatch(_swatches[i], i)
+	for i in _primary_buttons.size():
+		_primary_buttons[i].set_pressed_no_signal(i == _primary)
 
 
 func _style_swatch(b: Button, index: int) -> void:

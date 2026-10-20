@@ -32,9 +32,10 @@ func _ready() -> void:
 	server = ServerSession.new()
 	server.name = "Server"
 	server.map_id = map
+	server.use_primaries = true
 	add_child(server)
 	var loadout := Loadouts.ffa()
-	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points())
+	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points(), gameplay.pickup_spots())
 	if err != OK:
 		printerr("IONFALL server: could not listen on UDP port %d: %s" % [port, error_string(err)])
 		get_tree().quit(1)

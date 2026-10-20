@@ -5,6 +5,7 @@ extends RefCounted
 ## reconciliation, projectiles and cosmetic events.
 
 const MAX_EVENTS := 8
+const MAX_ITEMS := 32
 ## `last_cmd_tick` before the server has processed any command from this client.
 const NO_COMMAND := 0xFFFFFFFF
 
@@ -18,6 +19,8 @@ var entities: Dictionary = {}  ## id -> NetEntity
 var owner_gen: int = -1
 var owner_state: PlayerSimState  ## null if the client has no player entity
 var projectiles: Array = []  ## of {id, owner, position, velocity}
+var items: Array = []  ## of {id, weapon (Weapons index, -1 grenade), position}
+var spot_ticks := PackedInt32Array()  ## per pickup spot: ticks until it respawns (0 = present)
 var events: Array[Dictionary] = []
 
 
@@ -33,6 +36,13 @@ func encode(baseline: Dictionary, events_bytes: Array[PackedByteArray]) -> Packe
 	w.u8(projectiles.size())
 	for p in projectiles:
 		w.u16(p.owner).u8(p.gen).u32(p.action).u8(p.weapon).pos(p.position).vel(p.velocity)
+	w.u8(mini(items.size(), MAX_ITEMS))
+	for i in mini(items.size(), MAX_ITEMS):
+		var it: Dictionary = items[i]
+		w.u16(it.id).u8(255 if it.weapon < 0 else it.weapon).pos(it.position)
+	w.u8(spot_ticks.size())
+	for t in spot_ticks:
+		w.u16(mini(t, 65535))
 	w.u8(events_bytes.size())
 	for b in events_bytes:
 		w.bytes(b)
@@ -74,6 +84,19 @@ static func decode(data: PackedByteArray, baselines: Dictionary) -> Snapshot:
 		var weapon := r.u8()
 		s.projectiles.append({"id": "%d:%d:%d" % [owner, gen, action], "owner": owner,
 				"weapon": Protocol.weapon_id(weapon), "position": r.pos(), "velocity": r.vel()})
+	var ni := r.u8()
+	if ni > MAX_ITEMS:
+		return null
+	for i in ni:
+		var item_id := r.u16()
+		var wi := r.u8()
+		s.items.append({"id": item_id, "weapon": -1 if wi == 255 else wi, "position": r.pos()})
+	var ns := r.u8()
+	if ns > MAX_ITEMS:
+		return null
+	s.spot_ticks.resize(ns)
+	for i in ns:
+		s.spot_ticks[i] = r.u16()
 	var ne := r.u8()
 	if ne > MAX_EVENTS:
 		return null

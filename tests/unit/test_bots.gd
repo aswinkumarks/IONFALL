@@ -114,3 +114,23 @@ func test_sixteen_bot_server_load() -> void:
 	# PLAN §3.10 dedicated reference: p50 ≤ 2 ms, p99 ≤ 6 ms (release build;
 	# tests run the debug build, so only a loose ceiling here).
 	assert_lt(r.step_ms.percentile(50.0), 6.0)
+
+
+func test_bots_fetch_power_weapons() -> void:
+	world.pickups_enabled = true
+	world.configure(5, SimHarness.MOVEMENT, TestArenaLayout.spawn_points(), [
+		{"weapon": &"rail_sniper", "position": Vector3(4, 0, 17), "respawn_ticks": 600},
+		{"weapon": &"arc_launcher", "position": Vector3(-4, 0, 17), "respawn_ticks": 600},
+	])
+	_add_bots(2)
+	var picked := 0
+	for t in 3600:
+		var commands := {}
+		for id in brains:
+			commands[id] = brains[id].command_for(world.tick, world.get_player(id))
+		world.step(commands)
+		for e in world.drain_events():
+			if e.type == "pickup" and e.weapon in [&"rail_sniper", &"arc_launcher"]:
+				picked += 1
+	gut.p("power weapon pickups in 60 s: %d" % picked)
+	assert_gt(picked, 0, "bots go and get power weapons")
