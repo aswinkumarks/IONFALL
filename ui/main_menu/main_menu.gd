@@ -206,7 +206,8 @@ func _refresh_games() -> void:
 ## `map`: the host's map when known (LAN list), so a client loads it first.
 func _start(mode: int, port: int = Protocol.DEFAULT_PORT, map: String = "") -> void:
 	var player_name := ServerSession.sanitize_name(_name_edit.text)
-	if player_name != MatchConfig.profile_name():
+	# A dev `--name` is for this session only; typed names are saved.
+	if player_name != MatchConfig.profile_name() and not Platform.user_args.has("--name"):
 		Settings.set_value("profile", "name", player_name)
 	var bots := OFFLINE_DUMMIES if mode == MatchConfig.Mode.OFFLINE else HOST_DUMMIES if mode == MatchConfig.Mode.HOST else 0
 	var config := MatchConfig.make(mode, player_name, bots)

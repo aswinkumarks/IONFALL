@@ -153,8 +153,14 @@ func show_xp(gained: int, total_xp: int) -> void:
 	tween.tween_interval(0.5)
 	if after.level > before.level:
 		tween.tween_property(_xp_bar, "value", float(before.needed), 0.8)
+		var unlocked := Unlocks.unlocked_between(before.level, after.level)
 		tween.tween_callback(func() -> void:
 			_xp_label.text = "+%d XP · %s %d" % [gained, tr("PROFILE_LEVEL").to_upper(), after.level]
+			if not unlocked.is_empty():
+				var names := PackedStringArray()
+				for key in unlocked:
+					names.append(tr(key))
+				_xp_label.text += "\n" + tr("RESULTS_UNLOCKED") % ", ".join(names)
 			_xp_label.add_theme_color_override("font_color", UiStyle.WARN)
 			_xp_bar.max_value = after.needed
 			_xp_bar.value = 0.0)

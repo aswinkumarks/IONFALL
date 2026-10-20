@@ -8,15 +8,22 @@ const KEYS := ["name", "character", "color"]
 var _saved := {}
 
 
+var _saved_xp: int = 0
+
+
+## Everything unlocked (test_unlocks covers the locks).
 func before_each() -> void:
 	for k: String in KEYS:
 		_saved[k] = Settings.get_value("profile", k)
+	_saved_xp = Profile.data.data.xp
+	Profile.data.data.xp = 1000000
 
 
 func after_each() -> void:
 	for k: String in KEYS:
 		Settings.set_value("profile", k, _saved[k])
 	Settings.save_settings()
+	Profile.data.data.xp = _saved_xp
 
 
 func test_catalog() -> void:

@@ -183,7 +183,10 @@ func _on_visibility_changed() -> void:
 
 
 func _pick_character(index: int) -> void:
-	_character = posmod(index, CharacterRig.SELECTABLE.size())
+	var i := posmod(index, CharacterRig.SELECTABLE.size())
+	if Unlocks.character_level(CharacterRig.SELECTABLE[i]) > Unlocks.level():
+		return
+	_character = i
 	Settings.set_value("profile", "character", CharacterRig.SELECTABLE[_character])
 	Settings.save_settings()
 	_refresh()
@@ -194,6 +197,15 @@ func _pick_primary(index: int) -> void:
 	Settings.set_value("profile", "primary", _primary)
 	Settings.save_settings()
 	_refresh()
+
+
+## The next unlocked character in direction `dir`.
+func _cycle_character(dir: int) -> void:
+	for step in range(1, CharacterRig.SELECTABLE.size()):
+		var i := posmod(_character + dir * step, CharacterRig.SELECTABLE.size())
+		if Unlocks.character_level(CharacterRig.SELECTABLE[i]) <= Unlocks.level():
+			_pick_character(i)
+			return
 
 
 func _pick_color(index: int) -> void:
@@ -222,8 +234,21 @@ func _refresh() -> void:
 	_blurb.text = tr(key + "_DESC")
 	for i in _character_buttons.size():
 		_character_buttons[i].set_pressed_no_signal(i == _character)
+	# Locks (PLAN §3.13): earned by level; locked picks show the level needed.
+	var level := Unlocks.level()
 	for i in _swatches.size():
 		_style_swatch(_swatches[i], i)
+		var locked := Unlocks.color_level(i) > level
+		_swatches[i].disabled = locked
+		if i > 0:
+			_swatches[i].text = (tr("CUSTOMIZE_LOCKED") % Unlocks.color_level(i)) if locked else ""
+	for i in _character_buttons.size():
+		var need := Unlocks.character_level(CharacterRig.SELECTABLE[i])
+		var locked := need > level
+		_character_buttons[i].disabled = locked
+		_character_buttons[i].text = tr(CharacterRig.SELECTABLE_KEYS[i]) + \
+				("\n" + tr("CUSTOMIZE_LOCKED") % need if locked else "")
+		_character_buttons[i].add_theme_font_size_override("font_size", 15 if locked else 20)
 	for i in _primary_buttons.size():
 		_primary_buttons[i].set_pressed_no_signal(i == _primary)
 
@@ -231,9 +256,9 @@ func _refresh() -> void:
 func _style_swatch(b: Button, index: int) -> void:
 	var fill: Color = UiStyle.PANEL if index == 0 else PlayerVisual.PALETTE[index]
 	var selected := index == _color
-	for state: String in ["normal", "hover", "pressed", "focus"]:
+	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = fill.lightened(0.15) if state == "hover" else fill
+		sb.bg_color = fill.lightened(0.15) if state == "hover" else fill.darkened(0.55) if state == "disabled" else fill
 		sb.set_corner_radius_all(6)
 		var ring: bool = selected or state == "focus"
 		sb.set_border_width_all(3 if ring else 1)
@@ -256,9 +281,9 @@ func _input(event: InputEvent) -> void:
 	if not is_visible_in_tree() or focus == _name_edit or focus is TabBar:
 		return
 	if event.is_action_pressed("ui_left"):
-		_pick_character(_character - 1)
+		_cycle_character(-1)
 	elif event.is_action_pressed("ui_right"):
-		_pick_character(_character + 1)
+		_cycle_character(1)
 	else:
 		return
 	get_viewport().set_input_as_handled()

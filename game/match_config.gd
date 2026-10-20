@@ -64,16 +64,20 @@ static func profile_name() -> String:
 	return n
 
 
-## The chosen character's index (CharacterRig.SELECTABLE).
+## The chosen character's index (CharacterRig.SELECTABLE); the default if
+## it is still locked.
 static func profile_character() -> int:
 	var v: Variant = Settings.get_value("profile", "character")
-	return CharacterRig.selectable_index(v if v is String else "")
+	var i := CharacterRig.selectable_index(v if v is String else "")
+	return i if Unlocks.character_level(CharacterRig.SELECTABLE[i]) <= Unlocks.level() else 0
 
 
-## The chosen colour's index (PlayerVisual.PALETTE, 0 = auto).
+## The chosen colour's index (PlayerVisual.PALETTE, 0 = auto); auto if it
+## is still locked.
 static func profile_color() -> int:
 	var v: Variant = Settings.get_value("profile", "color")
-	return clampi(v if v is int else 0, 0, PlayerVisual.PALETTE.size() - 1)
+	var i := clampi(v if v is int else 0, 0, PlayerVisual.PALETTE.size() - 1)
+	return i if Unlocks.color_level(i) <= Unlocks.level() else 0
 
 
 ## The chosen primary weapon (Loadouts.PRIMARIES index).
