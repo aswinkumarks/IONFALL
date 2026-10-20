@@ -23,6 +23,11 @@ const MAX_LEG_TWIST := deg_to_rad(50.0)
 const GRIP_EULER := Vector3(0.0, PI * 0.5, PI * 0.5)
 const GRIP_OFFSET := Vector3(0.0, 0.08, 0.03)
 const GRIP_SCALE := 2.6
+## First-person handshake grip (_fp_hand): how far the fingers point down
+## from the barrel (tan of the angle), and where the palm centre goes in the
+## weapon's space (metres; right of and just below the weapon's origin).
+const FP_FINGER_DROP := 0.45
+const FP_PALM_AT := Vector3(0.025, -0.01, 0.0)
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
 static var _library: AnimationLibrary
@@ -378,6 +383,15 @@ func _arm_roots() -> Array:
 	return _arm_chains().map(func(c: Array) -> String: return c[0])
 
 
+## First-person right hand, for rigs whose hands can't close around a grip
+## (no finger bones): [fingers, palm normal, palm centre] in the hand bone's
+## space (skeleton units). The hand is then posed palm against the grip's
+## right side, fingers forward, thumb up. Empty: hold the weapon by the grip
+## transform (_grip_local), as in third person.
+func _fp_hand() -> Array:
+	return []
+
+
 func head_position() -> Vector3:
 	var head := _skeleton.find_bone("Head") if _skeleton.find_bone("Head") >= 0 else _skeleton.find_bone("neck")
 	return global_transform.affine_inverse() * _skeleton.global_transform * _skeleton.get_bone_global_rest(head).origin
@@ -387,9 +401,25 @@ func pose_first_person(weapon: Transform3D, support: Vector3) -> void:
 	var to_skel := (global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
 	var grip := _grip_local()
 	var unit := grip.basis.get_scale().x / _grip_scale()  ## skeleton units per metre (e.g. 100 for cm)
-	# The hand that holds `weapon`: undo the grip, keeping metres for the offset.
-	var hand_basis := weapon.basis.orthonormalized() * grip.basis.orthonormalized().inverse()
-	var hand_pos := weapon.origin - hand_basis * (grip.origin / unit)
+	var hand_basis: Basis
+	var hand_pos: Vector3
+	var fp := _fp_hand()
+	if fp.is_empty():
+		# The hand that holds `weapon`: undo the grip, keeping metres for the offset.
+		hand_basis = weapon.basis.orthonormalized() * grip.basis.orthonormalized().inverse()
+		hand_pos = weapon.origin - hand_basis * (grip.origin / unit)
+	else:
+		# Handshake grip: fingers forward and a little down along the grip's
+		# right side, palm facing the weapon.
+		var w := weapon.basis.orthonormalized()
+		var fingers := (w * Vector3(0.0, -FP_FINGER_DROP, -1.0)).normalized()
+		var palm := -w.x
+		var hand_fingers: Vector3 = (fp[0] as Vector3).normalized()
+		var hand_palm: Vector3 = (fp[1] as Vector3).normalized()
+		var local := Basis(hand_fingers.cross(hand_palm), hand_fingers, hand_palm)
+		hand_basis = Basis(fingers.cross(palm), fingers, palm) * local.inverse()
+		var centre: Vector3 = fp[2]
+		hand_pos = weapon.origin + w * FP_PALM_AT - hand_basis * (centre / unit)
 	var chains := _arm_chains()
 	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
 	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
@@ -428,6 +458,14 @@ func _reach(chain: Array, target: Vector3, hand_basis: Basis, pole: Vector3) -> 
 	var fore := Basis(swing_f) * Basis(swing_u) * rest_f.basis.orthonormalized()
 	sk.set_bone_pose_rotation(f, (upper.inverse() * fore).get_rotation_quaternion())
 	if hand_basis != Basis():
+		# The forearm takes the hand's roll about its own axis (as the radius
+		# does), so the wrist only bends instead of wringing the skin.
+		var rel := (fore.inverse() * hand_basis).get_rotation_quaternion()
+		var axis := (fore.inverse() * (Basis(swing_f) * fore_dir)).normalized()
+		var proj := axis * Vector3(rel.x, rel.y, rel.z).dot(axis)
+		var twist := Quaternion(proj.x, proj.y, proj.z, rel.w).normalized()
+		fore = fore * Basis(twist)
+		sk.set_bone_pose_rotation(f, (upper.inverse() * fore).get_rotation_quaternion())
 		sk.set_bone_pose_rotation(h, (fore.inverse() * hand_basis).get_rotation_quaternion())
 
 

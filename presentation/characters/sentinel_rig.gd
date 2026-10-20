@@ -67,6 +67,12 @@ func _grip_local() -> Transform3D:
 	return _grip
 
 
+## Meshy's rig has no finger bones, so in first person the open hand lies
+## against the grip. Hand bone space (cm): fingers +Y, palm -Z, thumb -X.
+func _fp_hand() -> Array:
+	return [Vector3.UP, Vector3.FORWARD, Vector3(-1.0, 8.0, -4.0)]
+
+
 func _arm_chains() -> Array:
 	return [["RightArm", "RightForeArm", "RightHand"], ["LeftArm", "LeftForeArm", "LeftHand"]]
 
