@@ -50,6 +50,7 @@ var _results_until: float = 0.0
 ## Death cam (PLAN §2.6): {pos, killer, until} while active.
 var _death_cam: Dictionary = {}
 var _arms_ready: bool = false  ## first-person arms built (see _ensure_arms)
+var _arms_color := Color.WHITE
 var _life_dealt: float = 0.0
 var _life_taken: float = 0.0
 var _remote_cache: Dictionary = {}  ## client: latest remote render states
@@ -114,6 +115,8 @@ func _ready() -> void:
 		if Platform.get_user_arg("--time-limit").is_valid_int():  # dev: short matches
 			server.time_limit_ticks = Platform.get_user_arg("--time-limit").to_int() * Sim.TICK_RATE
 		server.use_primaries = true
+		server.game_mode = config.game_mode
+		server.friendly_fire = config.friendly_fire
 		add_child(server)
 		var port := config.port if config.mode == MatchConfig.Mode.HOST else -1
 		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots())
@@ -221,11 +224,33 @@ func _apply_shadows(root: Node) -> void:
 
 ## First-person arms in the player's character and colour, once the local
 ## id (for the "auto" colour) is known.
+## First-person arms in our colour (our team's in TDM); rebuilt if it changes.
 func _ensure_arms() -> void:
-	if _arms_ready:
+	var team := _team_of(local_id())
+	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(local_id(), config.color)
+	if _arms_ready and color == _arms_color:
 		return
 	_arms_ready = true
-	view.set_character(CharacterRig.selectable_style(config.character), PlayerVisual.color_for(local_id(), config.color))
+	_arms_color = color
+	view.set_character(CharacterRig.selectable_style(config.character), color)
+
+
+func _game_mode() -> int:
+	return server.game_mode if server != null else client.game_mode
+
+
+## TDM team of player `id`; GameMode.NO_TEAM in FFA.
+func _team_of(id: int) -> int:
+	if _game_mode() != GameMode.TDM:
+		return GameMode.NO_TEAM
+	if server != null:
+		var p: SimPlayer = server.world.players.get(id)
+		return p.team if p != null else GameMode.NO_TEAM
+	return client.team_of(id)
+
+
+func _team_scores() -> PackedInt32Array:
+	return server.world.team_scores if server != null else client.team_scores
 
 
 func local_id() -> int:
@@ -513,6 +538,8 @@ func _update_match_ui(delta: float) -> void:
 	var now := float(server.world.tick) if server != null else client.clock.server_time()
 	var playing := phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH
 	hud.set_timer(maxi(ceili((ends - now) / Sim.TICK_RATE), 0), playing)
+	var my_team := _team_of(local_id())
+	hud.set_teams(my_team, _team_scores() if my_team < 2 else PackedInt32Array())
 	var me := _local_player()
 	if me != null:
 		var names := PackedStringArray()
@@ -552,7 +579,8 @@ func _update_match_ui(delta: float) -> void:
 	var want_scores := (Input.is_action_pressed("scoreboard") or _scores_button.button_pressed) and not _results.visible
 	if want_scores:
 		_scoreboard.show_scoreboard(_roster(), local_id(),
-				tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else "")
+				tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else "",
+				_team_scores() if _game_mode() == GameMode.TDM else PackedInt32Array())
 	else:
 		_scoreboard.visible = false
 
@@ -585,7 +613,8 @@ func _local_player() -> SimPlayer:
 func _visual_for(id: int, display_name: String, is_bot: bool, character: int, color_pick: int) -> PlayerVisual:
 	var v: PlayerVisual = _visuals.get(id)
 	var style := CharacterRig.selectable_style(character)
-	var color := PlayerVisual.color_for(id, color_pick, is_bot)
+	var team := _team_of(id)
+	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(id, color_pick, is_bot)
 	if v != null and (v.rig_style != style or v.color != color):
 		v.queue_free()
 		v = null
@@ -593,6 +622,8 @@ func _visual_for(id: int, display_name: String, is_bot: bool, character: int, co
 		v = PlayerVisual.new()
 		add_child(v)
 		v.setup(display_name, is_bot, color, id, style)
+		if team < 2:
+			v.set_label_color(color.lightened(0.35))
 		_visuals[id] = v
 	return v
 

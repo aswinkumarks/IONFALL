@@ -30,6 +30,9 @@ const SCHEMA := {
 		["video", "fps_cap", "SETTING_FPS_CAP", "choice", [30, 60, 90, 120]],
 		["video", "shadows", "SETTING_SHADOWS", "check"],
 	],
+	"SETTINGS_TAB_GAME": [
+		["profile", "friendly_fire", "SETTINGS_FRIENDLY_FIRE", "check"],
+	],
 	"SETTINGS_TAB_AUDIO": [
 		["audio", "master", "SETTING_VOL_MASTER", "percent", 0.0, 1.0, 0.05],
 		["audio", "music", "SETTING_VOL_MUSIC", "percent", 0.0, 1.0, 0.05],

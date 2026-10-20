@@ -162,12 +162,15 @@ static func decode_phase(data: PackedByteArray) -> Dictionary:
 	return out if r.ok else {}
 
 
-## roster: Array of {id, name, bot, character, color, score, kills, deaths, assists}
-static func encode_roster(match_id: int, roster: Array) -> PackedByteArray:
-	var w := Wire.Writer.new().u8(Msg.ROSTER).u32(match_id).u8(roster.size())
+## roster: Array of {id, name, bot, character, color, score, team, kills,
+## deaths, assists}; `mode` GameMode; `team_scores` [cyan, orange] (TDM).
+static func encode_roster(match_id: int, roster: Array, mode: int = GameMode.FFA,
+		team_scores := PackedInt32Array([0, 0])) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.ROSTER).u32(match_id).u8(mode).i16(team_scores[0]).i16(team_scores[1]) \
+			.u8(roster.size())
 	for p in roster:
 		w.u16(p.id).u8(1 if p.bot else 0).u8(p.get("character", 0) & 0xFF).u8(p.get("color", 0) & 0xFF) \
-				.i16(p.score).u16(p.get("kills", 0)).u16(p.get("deaths", 0)) \
+				.i16(p.score).u8(p.get("team", GameMode.NO_TEAM)).u16(p.get("kills", 0)).u16(p.get("deaths", 0)) \
 				.u16(p.get("assists", 0)).str8(p.name)
 	return w.data()
 
@@ -175,23 +178,26 @@ static func encode_roster(match_id: int, roster: Array) -> PackedByteArray:
 static func decode_roster(data: PackedByteArray) -> Dictionary:
 	var r := Wire.Reader.new(data)
 	r.u8()
-	var out := {"match_id": r.u32(), "players": []}
+	var out := {"match_id": r.u32(), "mode": r.u8(), "team_scores": PackedInt32Array([r.i16(), r.i16()]), "players": []}
 	var n := r.u8()
 	for i in n:
-		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "character": r.u8(), "color": r.u8(), "score": r.i16(), "kills": r.u16(),
-				"deaths": r.u16(), "assists": r.u16(), "name": r.str8()})
-	return out if r.ok else {}
+		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "character": r.u8(), "color": r.u8(), "score": r.i16(),
+				"team": r.u8(), "kills": r.u16(), "deaths": r.u16(), "assists": r.u16(), "name": r.str8()})
+	return out if r.ok and out.mode <= GameMode.TDM else {}
 
 
 ## End-of-match results (PLAN §2.6, §3.13). `result_id` makes applying them
 ## to a profile idempotent. `winner` 0 = draw. `players`: Array of Dictionary
 ## from MatchStats lines plus "score".
+## TDM: `winner_team` (GameMode.NO_TEAM = none) and `team_scores`; rows
+## carry "team".
 static func encode_results(match_id: int, result_id: String, winner: int, duration_ticks: int, humans: int,
-		players: Array) -> PackedByteArray:
+		players: Array, mode: int = GameMode.FFA, winner_team: int = GameMode.NO_TEAM,
+		team_scores := PackedInt32Array([0, 0])) -> PackedByteArray:
 	var w := Wire.Writer.new().u8(Msg.RESULTS).u32(match_id).str8(result_id).u16(winner).u32(duration_ticks) \
-			.u8(humans).u8(players.size())
+			.u8(humans).u8(mode).u8(winner_team).i16(team_scores[0]).i16(team_scores[1]).u8(players.size())
 	for p in players:
-		w.u16(p.id).u8(1 if p.bot else 0).str8(p.name).i16(p.score).u32(p.ticks_played)
+		w.u16(p.id).u8(1 if p.bot else 0).str8(p.name).i16(p.score).u8(p.get("team", GameMode.NO_TEAM)).u32(p.ticks_played)
 		for k in RESULT_COUNTERS:
 			w.u16(clampi(p[k], 0, 65535))
 		var wk: Dictionary = p.weapon_kills
@@ -209,12 +215,14 @@ static func decode_results(data: PackedByteArray) -> Dictionary:
 	var r := Wire.Reader.new(data)
 	r.u8()
 	var out := {"match_id": r.u32(), "result_id": r.str8(64), "winner": r.u16(), "duration_ticks": r.u32(),
-			"humans": r.u8(), "players": []}
+			"humans": r.u8(), "mode": r.u8(), "winner_team": r.u8(), "team_scores": PackedInt32Array([r.i16(), r.i16()]),
+			"players": []}
 	var n := r.u8()
 	if n > MAX_PEERS:
 		return {}
 	for i in n:
-		var p := {"id": r.u16(), "bot": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES), "score": r.i16(), "ticks_played": r.u32()}
+		var p := {"id": r.u16(), "bot": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES), "score": r.i16(), "team": r.u8(),
+				"ticks_played": r.u32()}
 		for k in RESULT_COUNTERS:
 			p[k] = r.u16()
 		var wk := {}

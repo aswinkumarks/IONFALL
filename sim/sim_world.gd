@@ -30,6 +30,9 @@ var players: Dictionary = {}  ## net_id -> SimPlayer
 var projectiles: Array[Projectile] = []
 var spawn_points: Array[Transform3D] = []
 var scores: Dictionary = {}  ## net_id -> int
+## TDM (PLAN §2.4): team scores; kills score for the killer's team.
+var team_scores := PackedInt32Array([0, 0])
+var respawn_ticks: int = RESPAWN_TICKS
 ## Off outside the PLAYING phase (PLAN §3.4: no damage in countdown/lobby).
 var damage_enabled: bool = true
 ## Lag compensation (PLAN §3.3.4). Off in offline play.
@@ -122,12 +125,18 @@ func reset_match(seed_value: int) -> void:
 	_rng.seed = seed_value
 	projectiles.clear()
 	_recent_deaths.clear()
+	team_scores = PackedInt32Array([0, 0])
 	_reset_pickups()
 	var ids := players.keys()
 	ids.sort()
 	for id in ids:
 		scores[id] = 0
 		_spawn(players[id])
+
+
+## Spawns `p` again now (its team changed, PLAN §2.5).
+func respawn(p: SimPlayer) -> void:
+	_spawn(p)
 
 
 func remove_player(net_id: int) -> void:
@@ -442,7 +451,7 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 	s.alive = false
 	s.move_state = PlayerSimState.Move.DEAD
 	s.velocity = Vector3.ZERO
-	s.respawn_tick = tick + RESPAWN_TICKS
+	s.respawn_tick = tick + respawn_ticks
 	_recent_deaths.append([s.position, tick])
 	# Death attribution (PLAN §2.4): 1. an enemy's weapon → that enemy;
 	# 2. your own explosive → suicide; 3. environment → the last enemy who
@@ -457,10 +466,17 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 				killer = dmg_log[i][0]
 				break
 	var suicide := killer == 0 or killer == victim.net_id
+	var killer_p: SimPlayer = players.get(killer)
+	var team_kill := teams_enabled and not suicide and killer_p != null and killer_p.team == victim.team
 	if suicide:
-		scores[victim.net_id] -= 1
+		scores[victim.net_id] -= 1  # personal only; the team score is unchanged
+	elif team_kill:
+		scores[killer] -= 1
+		team_scores[killer_p.team] -= 1
 	elif scores.has(killer):
 		scores[killer] += 1
+		if teams_enabled and killer_p != null:
+			team_scores[killer_p.team] += 1
 	var assists: Array[int] = []
 	var dealt := {}
 	for e in dmg_log:
@@ -473,7 +489,7 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 	_emit("d:%d:%d" % [victim.net_id, s.life_gen], "death", {
 		"victim": victim.net_id, "killer": killer if not suicide else victim.net_id,
 		"weapon": w.id if w != null else &"", "suicide": suicide, "headshot": headshot,
-		"environment": attacker_id == 0, "assists": assists, "position": s.position,
+		"environment": attacker_id == 0, "assists": assists, "position": s.position, "team_kill": team_kill,
 	})
 
 
@@ -655,6 +671,7 @@ func _choose_spawn(for_id: int) -> Transform3D:
 		return Transform3D(Basis.IDENTITY, Vector3(0.0, 1.0, 0.0))
 	_recent_deaths = _recent_deaths.filter(func(d: Array) -> bool: return tick - d[1] <= RECENT_DEATH_TICKS)
 	var scored: Array = []
+	var me: SimPlayer = players.get(for_id)
 	for i in spawn_points.size():
 		var pos := spawn_points[i].origin
 		var nearest := 50.0
@@ -664,8 +681,10 @@ func _choose_spawn(for_id: int) -> Transform3D:
 			if other.net_id == for_id or not other.state.alive:
 				continue
 			var d := pos.distance_to(other.state.position)
-			nearest = minf(nearest, d)
 			occupied = occupied or d < 2.0
+			if teams_enabled and me != null and other.team == me.team:
+				continue  # teammates: see _team_spawn_bonus
+			nearest = minf(nearest, d)
 			if _ray(pos + Vector3(0.0, 1.6, 0.0), other.eye_position()).is_empty():
 				visible += 1
 		var recent := 0
@@ -673,11 +692,24 @@ func _choose_spawn(for_id: int) -> Transform3D:
 			if pos.distance_to(d[0]) < 8.0:
 				recent += 1
 		var score := nearest - visible * 15.0 - recent * 10.0 - (100.0 if occupied else 0.0)
+		if teams_enabled and me != null:
+			score += _team_spawn_bonus(me, pos)
 		scored.append([score, i])
 	scored.sort_custom(func(a: Array, b: Array) -> bool:
 		return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
 	var pick: int = scored[_rng.randi_range(0, mini(3, scored.size()) - 1)][1]
 	return spawn_points[pick]
+
+
+## TDM spawn scoring (PLAN §2.5): near teammates, away from the enemy half.
+func _team_spawn_bonus(p: SimPlayer, pos: Vector3) -> float:
+	var bonus := 0.0
+	for other: SimPlayer in players.values():
+		if other != p and other.team == p.team and other.state.alive and pos.distance_to(other.state.position) < 15.0:
+			bonus += 4.0
+	if signf(pos.x) == -GameMode.team_side(p.team) and absf(pos.x) > 4.0:
+		bonus -= 30.0
+	return bonus
 
 
 func _emit(id: String, type: String, data: Dictionary) -> void:

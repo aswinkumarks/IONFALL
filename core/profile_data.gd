@@ -165,7 +165,8 @@ func apply_results(results: Dictionary, player_id: int, completed: bool = true, 
 			row = p
 	if row.is_empty():
 		return -1
-	var won: bool = completed and results.winner == player_id
+	var won: bool = completed and (results.winner == player_id
+			or (results.get("winner_team", GameMode.NO_TEAM) != GameMode.NO_TEAM and row.get("team", -1) == results.winner_team))
 	var gained := xp_for(row, won, completed, results.humans)
 	var s: Dictionary = data.stats
 	s.vs_players.kills += row.kills - row.kills_vs_bots

@@ -47,6 +47,8 @@ func _ready() -> void:
 	_play_button.pressed.connect(_start.bind(MatchConfig.Mode.OFFLINE))
 	%MapButton.pressed.connect(_next_map)
 	_update_map_button()
+	%ModeButton.pressed.connect(_next_mode)
+	_update_mode_button()
 	_host_button.pressed.connect(_start.bind(MatchConfig.Mode.HOST))
 	_join_button.pressed.connect(_show_join.bind(true))
 	_back_button.pressed.connect(_show_join.bind(false))
@@ -95,6 +97,19 @@ func _next_map() -> void:
 	Settings.set_value("profile", "map", Maps.PLAYABLE[(i + 1) % Maps.PLAYABLE.size()])
 	Settings.save_settings()
 	_update_map_button()
+
+
+## Play and Host use the saved mode; the button cycles GameMode.IDS.
+func _next_mode() -> void:
+	var i := GameMode.from_id(str(Settings.get_value("profile", "mode")))
+	Settings.set_value("profile", "mode", GameMode.IDS[(i + 1) % GameMode.IDS.size()])
+	Settings.save_settings()
+	_update_mode_button()
+
+
+func _update_mode_button() -> void:
+	var i := GameMode.from_id(str(Settings.get_value("profile", "mode")))
+	%ModeButton.text = tr("MENU_MODE") % tr(GameMode.NAME_KEYS[i])
 
 
 func _update_map_button() -> void:
@@ -155,7 +170,7 @@ func _show_join(show: bool) -> void:
 	elif not show and _browser != null:
 		_browser.queue_free()
 		_browser = null
-	for b: Control in [_play_button, %MapButton, _host_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
+	for b: Control in [_play_button, %MapButton, %ModeButton, _host_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
 		b.visible = not show and (b != _quit_button or not (Platform.is_web() or Platform.is_mobile()))
 	if show:
 		_address_edit.grab_focus()
@@ -174,7 +189,8 @@ func _refresh_games() -> void:
 	for b: Discovery.Beacon in games:
 		var row := Button.new()
 		var map_name := tr(Maps.LIST[b.map].name) if Maps.has(b.map) else b.map
-		row.text = "%s · %s · %d/%d" % [b.name, map_name, b.combatants, b.max_combatants]
+		var mode_name := tr(GameMode.NAME_KEYS[GameMode.from_id(b.mode)])
+		row.text = "%s · %s · %s · %d/%d" % [b.name, mode_name, map_name, b.combatants, b.max_combatants]
 		if not b.compatible():
 			row.text += " · " + tr("MENU_LAN_OTHER_VERSION") % b.build
 			row.disabled = true

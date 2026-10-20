@@ -43,38 +43,59 @@ func _init() -> void:
 	visible = false
 
 
-## Scoreboard rows from roster entries {id, name, bot, score, kills, deaths, assists}.
-func show_scoreboard(roster: Array, local_id: int, subtitle: String) -> void:
-	var sorted := roster.duplicate()
-	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
+## Scoreboard rows from roster entries {id, name, bot, score, team, kills,
+## deaths, assists}. TDM (`team_scores` given): grouped and tinted by team.
+func show_scoreboard(roster: Array, local_id: int, subtitle: String, team_scores := PackedInt32Array()) -> void:
+	var sorted := _sorted(roster)
 	var rows := []
+	var colors := []
 	var mine := -1
 	for i in sorted.size():
 		var p: Dictionary = sorted[i]
 		if p.id == local_id:
 			mine = i
 		rows.append([("[BOT] " if p.bot else "") + p.name, p.score, p.get("kills", 0), p.get("deaths", 0), p.get("assists", 0)])
-	title.text = tr("SCOREBOARD_TITLE")
-	table.set_rows(["COL_PLAYER", "COL_SCORE", "COL_KILLS", "COL_DEATHS", "COL_ASSISTS"], rows, mine)
+		if not team_scores.is_empty():
+			colors.append(_team_color(p.get("team", GameMode.NO_TEAM)))
+	title.text = tr("SCOREBOARD_TITLE") if team_scores.is_empty() else _team_line(team_scores)
+	table.set_rows(["COL_PLAYER", "COL_SCORE", "COL_KILLS", "COL_DEATHS", "COL_ASSISTS"], rows, mine, colors)
 	footer.text = subtitle
 	visible = true
 
 
 ## Results rows from a decoded RESULTS message (Protocol.decode_results).
 func show_results(results: Dictionary, local_id: int) -> void:
+	var tdm: bool = results.get("mode", GameMode.FFA) == GameMode.TDM
+	var players: Array = _sorted(results.players) if tdm else results.players
 	var rows := []
+	var colors := []
 	var mine := -1
+	var my_team := GameMode.NO_TEAM
 	var winner_name := ""
-	for i in results.players.size():
-		var p: Dictionary = results.players[i]
+	for i in players.size():
+		var p: Dictionary = players[i]
 		if p.id == local_id:
 			mine = i
+			my_team = p.get("team", GameMode.NO_TEAM)
 		if p.id == results.winner:
 			winner_name = p.name
 		var accuracy := "%d%%" % roundi(100.0 * p.hits / p.shots) if p.shots > 0 else "-"
 		rows.append([("[BOT] " if p.bot else "") + p.name, p.score, p.kills, p.deaths, p.assists, accuracy, p.damage_dealt])
+		if tdm:
+			colors.append(_team_color(p.get("team", GameMode.NO_TEAM)))
 	title.add_theme_font_size_override("font_size", 56)
-	if results.winner == 0:
+	if tdm:
+		var wt: int = results.get("winner_team", GameMode.NO_TEAM)
+		if wt == GameMode.NO_TEAM:
+			title.text = tr("RESULTS_DRAW").to_upper()
+			title.add_theme_color_override("font_color", UiStyle.TEXT)
+		elif wt == my_team:
+			title.text = tr("RESULTS_VICTORY").to_upper()
+			title.add_theme_color_override("font_color", GameMode.TEAM_COLORS[wt])
+		else:
+			title.text = (tr("RESULTS_TEAM_WINS") % tr(GameMode.TEAM_KEYS[wt])).to_upper()
+			title.add_theme_color_override("font_color", GameMode.TEAM_COLORS[wt])
+	elif results.winner == 0:
 		title.text = tr("RESULTS_DRAW").to_upper()
 		title.add_theme_color_override("font_color", UiStyle.TEXT)
 	elif results.winner == local_id:
@@ -91,9 +112,29 @@ func show_results(results: Dictionary, local_id: int) -> void:
 	tween.tween_property(self, "modulate:a", 1.0, 0.35)
 	tween.tween_property(self, "scale", Vector2.ONE, 0.45)
 	table.set_rows(["COL_PLAYER", "COL_SCORE", "COL_KILLS", "COL_DEATHS", "COL_ASSISTS", "COL_ACCURACY", "COL_DAMAGE"],
-			rows, mine)
-	footer.text = ""
+			rows, mine, colors)
+	footer.text = _team_line(results.team_scores) if tdm else ""
 	visible = true
+
+
+## By team (TDM), then score.
+static func _sorted(players: Array) -> Array:
+	var out := players.duplicate()
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ta: int = a.get("team", GameMode.NO_TEAM)
+		var tb: int = b.get("team", GameMode.NO_TEAM)
+		return ta < tb or (ta == tb and a.score > b.score))
+	return out
+
+
+static func _team_color(team: int) -> Color:
+	return GameMode.TEAM_COLORS[team] if team < GameMode.TEAM_COLORS.size() else UiStyle.TEXT
+
+
+## "CYAN 12 · 9 ORANGE"
+func _team_line(team_scores: PackedInt32Array) -> String:
+	return "%s %d  ·  %d %s" % [tr(GameMode.TEAM_KEYS[0]).to_upper(), team_scores[0], team_scores[1],
+			tr(GameMode.TEAM_KEYS[1]).to_upper()]
 
 
 ## XP gained this match: the bar fills from the old total to the new one,

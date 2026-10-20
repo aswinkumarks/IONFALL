@@ -171,6 +171,13 @@ size_flags_stretch_ratio = 1.2
 text = "MAP"
 alignment = 0
 
+[node name="ModeButton" type="Button" parent="Margin/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+text = "MODE"
+alignment = 0
+
 [node name="HostButton" type="Button" parent="Margin/Center"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)

@@ -39,6 +39,8 @@ var _mag_size: int = 1
 var _reserve: int = 0
 var _grenades: int = 0
 var _prompt: String = ""
+var _team: int = GameMode.NO_TEAM
+var _team_scores := PackedInt32Array()
 var _pickup_timers: String = ""
 var _reload: float = 0.0  ## 0 = not reloading, else progress 0..1
 var _score: int = 0
@@ -149,6 +151,12 @@ func set_view(pos: Vector3, yaw: float) -> void:
 func set_timer(seconds_left: int, show: bool) -> void:
 	_timer_seconds = seconds_left
 	_timer_shown = show
+
+
+## TDM: our team and both team scores (empty in FFA).
+func set_teams(team: int, scores: PackedInt32Array) -> void:
+	_team = team
+	_team_scores = scores
 
 
 ## "Press E: swap for RAIL SNIPER", or "" for none.
@@ -280,9 +288,21 @@ func _draw_top() -> void:
 		_text(Vector2(x, y + 31 * s), "%d:%02d" % [floori(_timer_seconds / 60.0), _timer_seconds % 60], 32,
 				UiStyle.WARN if urgent else UiStyle.TEXT, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 		y += 48 * s
-	_text(Vector2(x, y + 20 * s), tr("HUD_SCORE") % _score, 20, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	if _team_scores.size() == 2:
+		# Team scores either side of the centre, ours underlined; our own
+		# score under them.
+		for t in 2:
+			var tx := x + (-44.0 if t == 0 else 44.0) * s
+			var col: Color = GameMode.TEAM_COLORS[t]
+			_text(Vector2(tx, y + 28 * s), str(_team_scores[t]), 30, col, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
+			if t == _team:
+				draw_rect(Rect2(Vector2(tx - 20 * s, y + 34 * s), Vector2(40 * s, 3 * s)), col)
+		_text(Vector2(x, y + 26 * s), "·", 24, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		y += 30 * s
+	_text(Vector2(x, y + 20 * s), tr("HUD_SCORE") % _score, 20 if _team_scores.is_empty() else 15, UiStyle.TEXT_DIM,
+			HORIZONTAL_ALIGNMENT_CENTER)
 	if not _pickup_timers.is_empty():
-		_text(Vector2(x, y + 44 * s), _pickup_timers, 15, Color(1.0, 0.65, 0.3, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
+		_text(Vector2(x, y + 42 * s), _pickup_timers, 15, Color(1.0, 0.65, 0.3, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _draw_crosshair(c: Vector2) -> void:

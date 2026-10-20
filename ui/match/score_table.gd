@@ -5,7 +5,9 @@ extends GridContainer
 ## highlighted; bots are tagged by the caller.
 
 
-func set_rows(headers: Array, rows: Array, highlight_row: int) -> void:
+## `row_colors`: optional per-row colour (TDM teams); the highlighted row is
+## then marked with a leading "›".
+func set_rows(headers: Array, rows: Array, highlight_row: int, row_colors: Array = []) -> void:
 	columns = headers.size()
 	for child in get_children():
 		child.queue_free()
@@ -15,8 +17,13 @@ func set_rows(headers: Array, rows: Array, highlight_row: int) -> void:
 		add_child(_cell(tr(h).to_upper(), UiStyle.TEXT_DIM, 17, h == headers[0]))
 	for i in rows.size():
 		var color := UiStyle.ACCENT if i == highlight_row else UiStyle.TEXT
+		if i < row_colors.size():
+			color = row_colors[i]
 		for j in rows[i].size():
-			add_child(_cell(str(rows[i][j]), color, 24 if j > 0 else 21, j == 0))
+			var text := str(rows[i][j])
+			if j == 0 and i == highlight_row and i < row_colors.size():
+				text = "› " + text
+			add_child(_cell(text, color, 24 if j > 0 else 21, j == 0))
 
 
 func _cell(text: String, color: Color, size: int, left: bool) -> Label:

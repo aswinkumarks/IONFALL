@@ -181,7 +181,7 @@ func _perceive(tick: int, p: SimPlayer) -> void:
 		if id == _id:
 			continue
 		var o: SimPlayer = _world.players[id]
-		if not o.state.alive:
+		if not o.state.alive or (_world.teams_enabled and o.team == p.team):
 			continue
 		var chest := o.state.position + Vector3(0.0, 1.2, 0.0)
 		var to := chest - eye
@@ -227,6 +227,7 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 			goal = Goal.RETREAT
 			_retreat_until = tick + 360
 			_path_goal = _retreat_point(p, target)
+			_path = []
 			_last_repath = -100000
 			return
 		goal = Goal.ATTACK
@@ -238,6 +239,7 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 		if item != Vector3.INF:
 			if goal != Goal.PICKUP or _path_goal.distance_to(item) > 0.5:
 				_path_goal = item
+				_path = []  # repath now: _follow keeps a path whose goal hasn't moved
 				_last_repath = -100000
 			goal = Goal.PICKUP
 			return

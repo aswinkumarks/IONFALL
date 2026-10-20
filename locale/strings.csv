@@ -169,3 +169,11 @@ HUD_PICKUP_SWAP,[%s] Swap for %s
 HUD_PICKUP_READY,ready
 LOADOUT_PRIMARY,Next spawn:
 CUSTOMIZE_PRIMARY,Primary weapon
+MODE_FFA,Free-for-all
+MODE_TDM,Team Deathmatch
+TEAM_CYAN,Cyan
+TEAM_ORANGE,Orange
+RESULTS_TEAM_WINS,%s team wins
+MENU_MODE,Mode: %s  ›
+SETTINGS_FRIENDLY_FIRE,Friendly fire when hosting Team Deathmatch
+SETTINGS_TAB_GAME,Game

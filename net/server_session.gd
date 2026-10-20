@@ -44,6 +44,9 @@ var movement: MovementConfig
 var loadout: Array[WeaponData] = []
 ## Players choose their primary (Loadouts.make); off: everyone gets `loadout`.
 var use_primaries: bool = false
+## GameMode.FFA or TDM (set before start()); friendly fire is a host setting.
+var game_mode: int = GameMode.FFA
+var friendly_fire: bool = false
 var match_id: int = 0
 var phase: int = MatchPhase.WAITING
 var phase_seq: int = 0
@@ -111,6 +114,7 @@ class Client:
 	var stall_run: int = 0
 	var token: int = 0
 	var restored_score: int = 0
+	var restored_team: int = -1  ## TDM: the team to rejoin after a reconnect
 	var primary: int = 0  ## Loadouts.PRIMARIES index
 
 
@@ -127,6 +131,9 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	world.name = "ServerWorld"
 	world.lag_compensation = true
 	world.pickups_enabled = true
+	world.teams_enabled = game_mode == GameMode.TDM
+	world.friendly_fire = friendly_fire
+	world.respawn_ticks = GameMode.respawn_ticks(game_mode)
 	world.configure(_rng.randi(), movement, spawns, spots)
 	add_child(world)
 	add_child(transport)
@@ -146,6 +153,7 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 func add_local_player(player_name: String, character: int = 0, color: int = 0, primary: int = 0) -> SimPlayer:
 	local_player_id = LOCAL_PLAYER_ID
 	var p := world.add_player(local_player_id, _loadout_for(primary), player_name, false)
+	_join_team(p)
 	p.character = character
 	p.color = color
 	stats.add_player(local_player_id, player_name, false, world.tick)
@@ -164,6 +172,7 @@ func add_bot(bot_name: String, driver: RefCounted) -> SimPlayer:
 	_bot_seq += 1
 	bots[id] = driver
 	var p := world.add_player(id, _loadout_for(_rng.randi_range(0, Loadouts.PRIMARIES.size() - 1)), bot_name, true)
+	_join_team(p)
 	p.character = _bot_seq - 1  # bots cycle through the characters
 	stats.add_player(id, bot_name, true, world.tick)
 	_broadcast_roster()
@@ -188,9 +197,37 @@ func combatants() -> int:
 
 
 ## Adds or removes training dummies so the match has `bot_fill` combatants.
+## TDM: a new player joins the smaller team (ties: the one behind), and
+## respawns there so it starts on its own side.
+func _join_team(p: SimPlayer, team: int = -1) -> void:
+	if game_mode != GameMode.TDM:
+		return
+	if team < 0:
+		var counts := team_counts(p.net_id)
+		team = 0 if counts[0] < counts[1] or (counts[0] == counts[1] and world.team_scores[0] <= world.team_scores[1]) else 1
+	p.team = team
+	world.respawn(p)
+
+
+## Players per team, leaving out `except`.
+func team_counts(except: int = 0) -> PackedInt32Array:
+	var counts := PackedInt32Array([0, 0])
+	for other: SimPlayer in world.players.values():
+		if other.net_id != except:
+			counts[clampi(other.team, 0, 1)] += 1
+	return counts
+
+
 func update_bot_fill() -> void:
 	while bots.size() > 0 and combatants() > maxi(bot_fill, _humans()):
 		var id: int = bots.keys().max()
+		if game_mode == GameMode.TDM:
+			# Make room on the larger team.
+			var counts := team_counts()
+			var big := 0 if counts[0] > counts[1] else 1
+			var on_big := bots.keys().filter(func(b: int) -> bool: return world.players[b].team == big)
+			if not on_big.is_empty():
+				id = on_big.max()
 		bots.erase(id)
 		world.remove_player(id)
 		stats.remove_player(id, world.tick)
@@ -211,6 +248,7 @@ func beacon(display_name: String, dedicated: bool, port: int) -> Discovery.Beaco
 	b.compat_prefix = BuildInfo.compat_hash.left(8)
 	b.name = display_name
 	b.map = map_id
+	b.mode = GameMode.IDS[game_mode]
 	b.combatants = _humans()
 	b.max_combatants = max_combatants
 	b.flags = Discovery.FLAG_DEDICATED if dedicated else 0
@@ -253,7 +291,7 @@ func roster() -> Array:
 		var p: SimPlayer = world.players[id]
 		var l: MatchStats.Line = stats.lines.get(id)
 		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "character": p.character, "color": p.color,
-				"score": world.scores.get(id, 0),
+				"score": world.scores.get(id, 0), "team": p.team if game_mode == GameMode.TDM else GameMode.NO_TEAM,
 				"kills": l.kills if l else 0, "deaths": l.deaths if l else 0, "assists": l.assists if l else 0})
 	return out
 
@@ -437,11 +475,12 @@ func _update_phase() -> void:
 				_play_started_tick = world.tick
 				_set_phase(MatchPhase.PLAYING, world.tick + time_limit_ticks)
 		MatchPhase.PLAYING:
+			var scores := _victory_scores()
 			var top := -999
-			for id in world.scores:
-				top = maxi(top, world.scores[id])
-			var lead := MatchPhase.leader(world.scores)
-			if top >= MatchPhase.FFA_SCORE_LIMIT:
+			for id in scores:
+				top = maxi(top, scores[id])
+			var lead := MatchPhase.leader(scores)
+			if top >= GameMode.score_limit(game_mode):
 				_end_match(lead)
 			elif world.tick >= phase_ends_tick:
 				if lead != 0:
@@ -449,7 +488,7 @@ func _update_phase() -> void:
 				else:
 					_set_phase(MatchPhase.SUDDEN_DEATH, world.tick + MatchPhase.SUDDEN_DEATH_TICKS)
 		MatchPhase.SUDDEN_DEATH:
-			var lead := MatchPhase.leader(world.scores)
+			var lead := MatchPhase.leader(_victory_scores())
 			if lead != 0:
 				_end_match(lead)
 			elif world.tick >= phase_ends_tick:
@@ -466,9 +505,20 @@ func _update_phase() -> void:
 				_broadcast_roster()
 
 
+## What decides the match: player scores (FFA) or team scores keyed by
+## team + 1 (TDM), so MatchPhase.leader's 0 still means "nobody".
+func _victory_scores() -> Dictionary:
+	if game_mode != GameMode.TDM:
+		return world.scores
+	return {1: world.team_scores[0], 2: world.team_scores[1]}
+
+
 ## PLAN §2.6: results go to every client (reliable) and to the host's own
 ## presentation; each carries a unique result id for idempotent profiles.
-func _end_match(winner: int) -> void:
+## `lead`: the winning player id (FFA) or team + 1 (TDM); 0 = draw.
+func _end_match(lead: int) -> void:
+	var winner := lead if game_mode != GameMode.TDM else 0
+	var winner_team := lead - 1 if game_mode == GameMode.TDM and lead > 0 else GameMode.NO_TEAM
 	last_winner = winner
 	_set_phase(MatchPhase.POST_MATCH, world.tick + MatchPhase.POST_MATCH_TICKS)
 	var rows := []
@@ -479,10 +529,12 @@ func _end_match(winner: int) -> void:
 				"deaths": l.deaths, "deaths_vs_bots": l.deaths_vs_bots, "assists": l.assists,
 				"assists_vs_bots": l.assists_vs_bots, "suicides": l.suicides, "headshot_kills": l.headshot_kills,
 				"shots": l.shots, "hits": l.hits, "damage_dealt": l.damage_dealt, "damage_taken": l.damage_taken,
-				"best_streak": l.best_streak, "weapon_kills": l.weapon_kills})
+				"best_streak": l.best_streak, "weapon_kills": l.weapon_kills,
+				"team": world.players[id].team if game_mode == GameMode.TDM and world.players.has(id) else GameMode.NO_TEAM})
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
 	var result_id := "%08x-%08x" % [_instance_id, match_id]
-	var msg := Protocol.encode_results(match_id, result_id, winner, world.tick - _play_started_tick, _humans(), rows)
+	var msg := Protocol.encode_results(match_id, result_id, winner, world.tick - _play_started_tick, _humans(), rows,
+			game_mode, winner_team, world.team_scores)
 	# The host reads the same decoded form clients get.
 	var results := Protocol.decode_results(msg)
 	results["type"] = "results"
@@ -526,6 +578,7 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 		_departed.erase(hello.token)
 		c.player_id = back.player_id
 		c.restored_score = back.score
+		c.restored_team = back.get("team", -1)
 		c.token = hello.token
 	else:
 		c.player_id = _allocate_player_id()
@@ -583,7 +636,7 @@ func _on_peer_joined(id: int) -> void:
 			Protocol.CH_CONTROL, true)
 	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick),
 			Protocol.CH_CONTROL, true)
-	transport.send(id, Protocol.encode_roster(match_id, roster()), Protocol.CH_CONTROL, true)
+	transport.send(id, Protocol.encode_roster(match_id, roster(), game_mode, world.team_scores), Protocol.CH_CONTROL, true)
 
 
 func _on_peer_left(id: int) -> void:
@@ -591,8 +644,9 @@ func _on_peer_left(id: int) -> void:
 	clients.erase(id)
 	if c != null:
 		if c.loaded:
+			var gone: SimPlayer = world.players.get(c.player_id)
 			_departed[c.token] = {"player_id": c.player_id, "score": world.scores.get(c.player_id, 0),
-					"expires_ms": Time.get_ticks_msec() + RECONNECT_WINDOW_MS}
+					"team": gone.team if gone != null else -1, "expires_ms": Time.get_ticks_msec() + RECONNECT_WINDOW_MS}
 		world.remove_player(c.player_id)
 		stats.remove_player(c.player_id, world.tick)
 	update_bot_fill()
@@ -633,6 +687,7 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			elif not c.loaded:
 				c.loaded = true
 				var joined := world.add_player(c.player_id, _loadout_for(c.primary), c.name, false)
+				_join_team(joined, c.restored_team)
 				joined.character = c.character
 				joined.color = c.color
 				stats.add_player(c.player_id, c.name, false, world.tick)
@@ -736,6 +791,6 @@ func _send_reliable_event(e: Dictionary) -> void:
 func _broadcast_roster() -> void:
 	if not networked:
 		return
-	var msg := Protocol.encode_roster(match_id, roster())
+	var msg := Protocol.encode_roster(match_id, roster(), game_mode, world.team_scores)
 	for c: Client in clients.values():
 		transport.send(c.id, msg, Protocol.CH_CONTROL, true)

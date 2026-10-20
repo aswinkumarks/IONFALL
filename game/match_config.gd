@@ -18,6 +18,8 @@ var bots: int = 3  ## dummies alongside the local player; they leave as humans j
 var character: int = 0  ## index into CharacterRig.SELECTABLE
 var color: int = 0  ## index into PlayerVisual.PALETTE (0 = auto)
 var primary: int = 0  ## index into Loadouts.PRIMARIES
+var game_mode: int = GameMode.FFA  ## hosting: the mode to run
+var friendly_fire: bool = false  ## hosting TDM
 var map_retried: bool = false  ## joined once already and reloaded with the host's map
 
 
@@ -37,6 +39,9 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	c.character = profile_character()
 	c.color = profile_color()
 	c.primary = profile_primary()
+	var mode: Variant = Settings.get_value("profile", "mode")
+	c.game_mode = GameMode.from_id(Platform.get_user_arg("--mode", mode if mode is String else "ffa"))
+	c.friendly_fire = Settings.get_value("profile", "friendly_fire") == true
 	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches
 		c.bots = Platform.get_user_arg("--bots").to_int()
 	if not p_address.is_empty():

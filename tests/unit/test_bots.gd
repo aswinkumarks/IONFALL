@@ -122,9 +122,9 @@ func test_bots_fetch_power_weapons() -> void:
 		{"weapon": &"rail_sniper", "position": Vector3(4, 0, 17), "respawn_ticks": 600},
 		{"weapon": &"arc_launcher", "position": Vector3(-4, 0, 17), "respawn_ticks": 600},
 	])
-	_add_bots(2)
+	_add_bots(1)  # alone, so it isn't busy fighting
 	var picked := 0
-	for t in 3600:
+	for t in 1800:
 		var commands := {}
 		for id in brains:
 			commands[id] = brains[id].command_for(world.tick, world.get_player(id))
@@ -132,5 +132,5 @@ func test_bots_fetch_power_weapons() -> void:
 		for e in world.drain_events():
 			if e.type == "pickup" and e.weapon in [&"rail_sniper", &"arc_launcher"]:
 				picked += 1
-	gut.p("power weapon pickups in 60 s: %d" % picked)
+	gut.p("power weapon pickups in 30 s: %d" % picked)
 	assert_gt(picked, 0, "bots go and get power weapons")

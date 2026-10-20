@@ -73,6 +73,11 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 	rig.set_glow(shimmer)
 
 
+## Nameplate tint (TDM team colour).
+func set_label_color(c: Color) -> void:
+	_label.modulate = c
+
+
 ## Hit feedback: a white flash on the body (brighter when the shield breaks).
 func flash_hit(shield_broken: bool) -> void:
 	rig.flash(1.0 if shield_broken else 0.6)

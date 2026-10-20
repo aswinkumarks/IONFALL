@@ -37,6 +37,8 @@ var phase_ends_tick: int = 0
 var match_seed: int = 1
 var map_id: String = ""  ## the server's map, from WELCOME
 var roster: Array = []
+var game_mode: int = GameMode.FFA  ## from the roster
+var team_scores := PackedInt32Array([0, 0])
 var clock := ClockSync.new()
 var interpolator := RemoteInterpolator.new()
 var interp_ticks: int = 4
@@ -128,6 +130,14 @@ func alpha() -> float:
 ## Current time-dilation rate (PLAN §3.3.2), for diagnostics.
 func rate() -> float:
 	return _rate
+
+
+## TDM team of player `id` (GameMode.NO_TEAM in FFA or if unknown).
+func team_of(id: int) -> int:
+	for p in roster:
+		if p.id == id:
+			return p.team
+	return GameMode.NO_TEAM
 
 
 func score_of(id: int) -> int:
@@ -280,6 +290,8 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 			var r := Protocol.decode_roster(data)
 			if not r.is_empty():
 				roster = r.players
+				game_mode = r.mode
+				team_scores = r.team_scores
 		Protocol.Msg.RESULTS:
 			var res := Protocol.decode_results(data)
 			if not res.is_empty():
