@@ -274,7 +274,11 @@ static func lan_addresses() -> PackedStringArray:
 			out.append(a)
 	if out.is_empty():
 		out.append("127.0.0.1")
-	return out
+	# Home routers and hotspots first; 172.16-31 is often a VM/container bridge.
+	var rank := func(a: String) -> int: return 0 if a.begins_with("192.168.") else 1 if a.begins_with("10.") else 2
+	var sorted := Array(out)
+	sorted.sort_custom(func(a: String, b: String) -> bool: return rank.call(a) < rank.call(b))
+	return PackedStringArray(sorted)
 
 
 # --- Simulation (host / offline) ---
@@ -910,7 +914,39 @@ func _make_pause_panel() -> Control:
 	hint.visible = not DisplayServer.is_touchscreen_available()
 	box.add_child(Control.new())
 	box.add_child(hint)
+	if config.mode == MatchConfig.Mode.HOST:
+		root.add_child(_make_join_code())
 	return root
+
+
+## Hosts show a QR join code (PLAN §3.6): a phone camera opens the
+## ionfall://join link, which starts the game and joins.
+func _make_join_code() -> Control:
+	var addresses := lan_addresses()
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	box.offset_left = -400
+	box.offset_right = -60
+	box.offset_top = -230
+	box.offset_bottom = 230
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 10)
+	if addresses.is_empty():
+		return box
+	var link := "ionfall://join?host=%s&port=%d" % [addresses[0], config.port]
+	var qr := QrCode.encode(link)
+	if qr == null:
+		return box
+	box.add_child(UiStyle.label("PAUSE_SCAN_TO_JOIN", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER))
+	var tex := TextureRect.new()
+	tex.texture = ImageTexture.create_from_image(qr.to_image(8))
+	tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tex.custom_minimum_size = Vector2(300, 300)
+	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	box.add_child(tex)
+	box.add_child(UiStyle.label("%s:%d" % [addresses[0], config.port], &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER))
+	return box
 
 
 ## Leaving an online match asks first (PLAN §3.5.1); offline just leaves.

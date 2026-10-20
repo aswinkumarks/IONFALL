@@ -14,7 +14,7 @@ HUD_SPAWN_PROTECTED,Spawn protection
 PAUSE_TITLE,Paused
 PAUSE_RESUME,Resume
 PAUSE_LEAVE,Leave match
-PAUSE_CONTROLS_HINT,"WASD move · Shift sprint · Ctrl/C crouch, slide · Space jump, double jump, hold to mantle · R reload · Q / 1 / 2 / 3 switch · F3 diagnostics"
+PAUSE_CONTROLS_HINT,"WASD move · Shift sprint · Ctrl/C crouch, slide · Space jump, double jump, hold to mantle · R reload · Q / 1 / 2 switch · G grenade · V / F melee · E pick up · F3 diagnostics"
 TOUCH_FIRE,Fire
 TOUCH_JUMP,Jump
 TOUCH_CROUCH,Crouch
@@ -197,3 +197,4 @@ TOUCH_EDIT_HINT,Drag a button to move it. Select one to resize it.
 TOUCH_EDIT_SIZE,Button size
 TOUCH_EDIT_RESET,Reset
 MENU_REJOIN,Rejoin match
+PAUSE_SCAN_TO_JOIN,Scan to join
