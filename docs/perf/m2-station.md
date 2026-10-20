@@ -52,5 +52,8 @@ first-use shader compiles). The Sentinel itself is not the cost: the
 | Low | 59.2 | 16.7 / 18.1 / 23.8 |
 
 Sun shadows (every character drawn twice) are the main remaining cost.
-Medium (the phone default) is now: 0.75 render scale, FSR, FXAA, glow, no
+Medium (the phone default) is now: 0.75 render scale, FXAA, glow, no
 soft shadows and no sun shadows; baked lighting still shadows the map.
+FSR1 needs the Forward+ renderer; the project uses Mobile, so the FSR rows
+above were bilinear in practice (hence the identical numbers). `apply_video`
+now only asks for FSR under Forward+.

@@ -134,8 +134,9 @@ func apply_video() -> void:
 		res_scale = clampf(float(res.y) / maxf(DisplayServer.window_get_size().y, 1.0), 0.25, 1.0)
 	var preset := quality_preset()
 	var scale := clampf(float(get_value("video", "render_scale")) * res_scale, 0.25, 1.0)
-	# FSR only helps when actually upscaling; it also sharpens.
-	if preset.upscale == "fsr" and scale < 0.99 and not Platform.is_web():
+	# FSR only helps when actually upscaling; it also sharpens. The Mobile
+	# renderer (phones) doesn't support it and would warn, so they get bilinear.
+	if preset.upscale == "fsr" and scale < 0.99 and RenderingServer.get_current_rendering_method() == "forward_plus":
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 		root.fsr_sharpness = 0.35
 	else:
