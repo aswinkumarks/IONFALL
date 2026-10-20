@@ -9,7 +9,7 @@ signal closed
 ## [section, key, label key, kind, min, max, step]; kind: slider, percent, check,
 ## choice ([..., choices] where choices is an Array or the name of a Settings
 ## method returning one; string choices are shown via "SETTING_VALUE_<X>" keys
-## or as-is for resolutions).
+## or as-is for resolutions), action ([..., method]: a button calling it).
 const DESKTOP_ONLY := ["display_mode"]
 const SCHEMA := {
 	"SETTINGS_TAB_CONTROLS": [
@@ -20,6 +20,9 @@ const SCHEMA := {
 		["input", "crouch_toggle", "SETTING_CROUCH_TOGGLE", "check"],
 		["input", "sprint_toggle", "SETTING_SPRINT_TOGGLE", "check"],
 		["input", "aim_toggle", "SETTING_AIM_TOGGLE", "check"],
+		["input", "aim_assist", "SETTING_AIM_ASSIST", "check"],
+		["input", "auto_fire", "SETTING_AUTO_FIRE", "check"],
+		["input", "touch_layout", "SETTING_TOUCH_LAYOUT", "action", "open_touch_editor"],
 	],
 	"SETTINGS_TAB_VIDEO": [
 		["video", "quality", "SETTING_QUALITY", "choice", ["low", "medium", "high", "ultra", "custom"]],
@@ -55,6 +58,7 @@ var _resolution_button: OptionButton
 var _tabs: TabContainer
 var _controls: Dictionary = {}  ## "section/key" -> control, refreshed when a preset changes values
 var _key_buttons: Dictionary = {}  ## action -> Button
+var _touch_editor: TouchLayoutEditor
 
 
 func _init() -> void:
@@ -85,6 +89,14 @@ func _init() -> void:
 	done.pressed.connect(close)
 	root.add_child(done)
 	visible = false
+
+
+## The touch layout editor, over the settings screen.
+func open_touch_editor() -> void:
+	if _touch_editor == null:
+		_touch_editor = TouchLayoutEditor.new()
+		add_child(_touch_editor)
+	_touch_editor.open()
 
 
 func open() -> void:
@@ -129,6 +141,11 @@ func _control_for(row: Array) -> Control:
 	var key: String = row[1]
 	var value: Variant = Settings.get_value(section, key)
 	match row[3]:
+		"action":
+			var button := UiStyle.menu_button("SETTINGS_EDIT")
+			button.custom_minimum_size = Vector2(200, 44)
+			button.pressed.connect(Callable(self, row[4]))
+			return button
 		"check":
 			var check := CheckButton.new()
 			check.button_pressed = bool(value)

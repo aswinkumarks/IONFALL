@@ -14,6 +14,13 @@ var look_pitch: float = 0.0
 var touch_move := Vector2.ZERO
 var touch_held: int = 0
 var enabled: bool = true
+## Touch auto-fire (AimAssist) holds the trigger; a burst weapon needs a
+## press, so the rising edge presses too.
+var assist_fire: bool = false:
+	set(v):
+		if v and not assist_fire:
+			press(Action.FIRE)
+		assist_fire = v
 
 var _presses := PackedByteArray([0, 0, 0, 0, 0, 0, 0])
 var _mouse_fire: bool = false
@@ -49,6 +56,7 @@ func reset_held() -> void:
 	_sprint_on = false
 	touch_move = Vector2.ZERO
 	touch_held = 0
+	assist_fire = false
 
 
 func build_command(tick: int) -> PlayerCommand:
@@ -61,6 +69,8 @@ func build_command(tick: int) -> PlayerCommand:
 	var kb := Input.get_vector("move_left", "move_right", "move_back", "move_forward")
 	c.set_move((kb + touch_move).limit_length(1.0))
 	var held := touch_held
+	if assist_fire:
+		held |= Held.FIRE
 	if _mouse_fire:
 		held |= Held.FIRE
 	if _mouse_aim:

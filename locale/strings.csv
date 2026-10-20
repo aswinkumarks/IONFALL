@@ -188,3 +188,11 @@ UNLOCK_COLOR_5,Crimson
 UNLOCK_COLOR_6,Gold
 UNLOCK_COLOR_7,Magenta
 UNLOCK_COLOR_8,Frost
+SETTING_AIM_ASSIST,Aim assist (touch)
+SETTING_AUTO_FIRE,Auto-fire (touch)
+SETTING_TOUCH_OPACITY,Touch button opacity
+SETTING_TOUCH_LAYOUT,Touch button layout
+SETTINGS_EDIT,Edit
+TOUCH_EDIT_HINT,Drag a button to move it. Select one to resize it.
+TOUCH_EDIT_SIZE,Button size
+TOUCH_EDIT_RESET,Reset

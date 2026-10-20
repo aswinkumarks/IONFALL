@@ -33,6 +33,10 @@ const DEFAULTS := {
 		"crouch_toggle": false,
 		"sprint_toggle": false,
 		"aim_toggle": false,
+		"aim_assist": true,  ## touch only (PLAN §3.11)
+		"auto_fire": false,  ## touch only
+		"touch_layout": {},  ## button id -> [x, y, scale] (fractions of the screen)
+		"touch_opacity": 0.8,
 		"keymap": {},  ## action -> physical keycode overrides
 	},
 	"accessibility": {

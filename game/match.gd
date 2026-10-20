@@ -20,6 +20,7 @@ var input := InputAdapter.new()
 var view := FirstPersonView.new()
 var effects := Effects.new()
 var pickups := PickupVisuals.new()
+var _aim_assist := AimAssist.new()
 var audio := GameAudio.new()
 var hud: Hud
 var touch := TouchControls.new()
@@ -317,8 +318,31 @@ func _process(delta: float) -> void:
 		_watch_connection()
 		if client.is_predicting():
 			_render_client(delta)
+	_update_aim_assist(delta)
 	_update_banner()
 	_update_match_ui(delta)
+
+
+## Touch aim assist (PLAN §3.11): slowdown, magnetism and optional
+## auto-fire on visible enemies, as rendered.
+func _update_aim_assist(delta: float) -> void:
+	var me := _local_player()
+	if not touch.visible or not Settings.get_value("input", "aim_assist") or me == null or not me.state.alive:
+		touch.assist_scale = 1.0
+		input.assist_fire = false
+		return
+	var my_team := _team_of(local_id())
+	var targets := {}
+	for id: int in _visuals:
+		var v: PlayerVisual = _visuals[id]
+		if v.visible and (my_team == GameMode.NO_TEAM or _team_of(id) != my_team):
+			targets[id] = v.global_position + Vector3(0.0, 1.2, 0.0)
+	var firing := (input.touch_held & PlayerCommand.Held.FIRE) != 0
+	var pull := _aim_assist.update(delta, view.camera.global_transform, me.current_weapon(), firing,
+			Settings.get_value("input", "auto_fire"), targets, view.camera.get_world_3d().direct_space_state)
+	input.add_look(pull.x, pull.y)
+	touch.assist_scale = _aim_assist.slowdown
+	input.assist_fire = _aim_assist.wants_fire
 
 
 ## Host-loss detection on the client (PLAN §3.5.1): 3 s without packets shows

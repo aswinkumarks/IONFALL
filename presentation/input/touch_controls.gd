@@ -5,6 +5,11 @@ extends Control
 ## 2. look fingers: started on empty space on the right
 ## 3. fire finger: combined fire + look; dragging it also turns the camera
 ## 4. button fingers: all other buttons, exclusive, never become look fingers
+## Layout editor (PLAN §3.11): each button's position and size can be
+## overridden (settings input/touch_layout) and all share an opacity; in
+## `editing` mode fingers (or the mouse) drag buttons instead of playing.
+
+signal selection_changed(id: String)
 
 enum Kind { MOVE, LOOK, FIRE, BUTTON }
 
@@ -13,6 +18,8 @@ const JOYSTICK_RADIUS := 110.0
 const SPRINT_THRESHOLD := 0.9
 
 var input: InputAdapter
+## Aim assist slowdown on look fingers (AimAssist.slowdown).
+var assist_scale: float = 1.0
 ## The interact button shows only while something can be picked up.
 var show_interact: bool = false:
 	set(v):
@@ -22,7 +29,7 @@ var show_interact: bool = false:
 
 ## Buttons in fractions of the screen size. `press` actions fire on touch,
 ## `held` flags stay set while the finger is down.
-var _buttons := [
+const DEFAULT_BUTTONS := [
 	{"id": "fire", "label": "TOUCH_FIRE", "pos": Vector2(0.86, 0.62), "radius": 0.075, "kind": Kind.FIRE},
 	{"id": "jump", "label": "TOUCH_JUMP", "pos": Vector2(0.93, 0.83), "radius": 0.055, "press": PlayerCommand.Action.JUMP, "held": PlayerCommand.Held.JUMP},
 	{"id": "crouch", "label": "TOUCH_CROUCH", "pos": Vector2(0.80, 0.88), "radius": 0.05, "held": PlayerCommand.Held.CROUCH},
@@ -33,6 +40,13 @@ var _buttons := [
 	{"id": "interact", "label": "TOUCH_INTERACT", "pos": Vector2(0.62, 0.45), "radius": 0.05, "press": PlayerCommand.Action.INTERACT,
 			"contextual": true},
 ]
+const MIN_SCALE := 0.6
+const MAX_SCALE := 1.8
+
+var editing: bool = false
+var selected: String = ""
+var _buttons: Array = []  ## DEFAULT_BUTTONS with the layout applied
+var _drag_offset := Vector2.ZERO
 var _fingers: Dictionary = {}  ## index -> {kind, origin, pos, button}
 var _font: Font
 
@@ -42,6 +56,13 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = DisplayServer.is_touchscreen_available()
 	_font = get_theme_default_font()
+	apply_layout(Settings.get_value("input", "touch_layout"))
+	modulate.a = float(Settings.get_value("input", "touch_opacity"))
+	Events.settings_changed.connect(func(section: String, key: String, value: Variant) -> void:
+		if section == "input" and key == "touch_layout":
+			apply_layout(value)
+		elif section == "input" and key == "touch_opacity":
+			modulate.a = float(value))
 	get_viewport().size_changed.connect(queue_redraw)
 	queue_redraw.call_deferred()
 
@@ -52,7 +73,75 @@ func _screen() -> Vector2:
 	return get_viewport_rect().size
 
 
+## Buttons from the defaults with `layout` ({id: [x, y, scale]}) applied.
+func apply_layout(layout: Variant) -> void:
+	_buttons = []
+	for d: Dictionary in DEFAULT_BUTTONS:
+		var b := d.duplicate()
+		b["base_radius"] = d.radius
+		b["scale"] = 1.0
+		if layout is Dictionary and layout.has(d.id) and (layout[d.id] as Array).size() == 3:
+			var o: Array = layout[d.id]
+			b.pos = Vector2(clampf(o[0], 0.03, 0.97), clampf(o[1], 0.05, 0.95))
+			b.scale = clampf(o[2], MIN_SCALE, MAX_SCALE)
+			b.radius = d.radius * b.scale
+		_buttons.append(b)
+	queue_redraw()
+
+
+## The current layout, for saving: {id: [x, y, scale]}.
+func layout() -> Dictionary:
+	var out := {}
+	for b: Dictionary in _buttons:
+		out[b.id] = [b.pos.x, b.pos.y, b.scale]
+	return out
+
+
+func set_scale_of(id: String, value: float) -> void:
+	for b: Dictionary in _buttons:
+		if b.id == id:
+			b.scale = clampf(value, MIN_SCALE, MAX_SCALE)
+			b.radius = b.base_radius * b.scale
+	queue_redraw()
+
+
+func scale_of(id: String) -> float:
+	for b: Dictionary in _buttons:
+		if b.id == id:
+			return b.scale
+	return 1.0
+
+
+func _edit_input(event: InputEvent) -> void:
+	var down: bool = (event is InputEventScreenTouch and event.pressed) or \
+			(event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed)
+	var up: bool = (event is InputEventScreenTouch and not event.pressed) or \
+			(event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed)
+	var drag: bool = event is InputEventScreenDrag or (event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT)
+	if down:
+		var b := _button_at(event.position)
+		if not b.is_empty():
+			selected = b.id
+			_drag_offset = b.pos * _screen() - event.position
+			selection_changed.emit(selected)
+			get_viewport().set_input_as_handled()
+		else:
+			selected = ""
+	elif drag and not selected.is_empty():
+		for b: Dictionary in _buttons:
+			if b.id == selected:
+				var p: Vector2 = (event.position + _drag_offset) / _screen()
+				b.pos = Vector2(clampf(p.x, 0.03, 0.97), clampf(p.y, 0.05, 0.95))
+		get_viewport().set_input_as_handled()
+	elif up:
+		_drag_offset = Vector2.ZERO
+	queue_redraw()
+
+
 func _input(event: InputEvent) -> void:
+	if editing:
+		_edit_input(event)
+		return
 	if not visible or input == null or not input.enabled:
 		return
 	if event is InputEventScreenTouch:
@@ -106,7 +195,7 @@ func _on_drag(index: int, pos: Vector2, relative: Vector2) -> void:
 			else:
 				input.touch_held &= ~PlayerCommand.Held.SPRINT
 		Kind.LOOK, Kind.FIRE:
-			var sens: float = Settings.get_value("input", "touch_sensitivity")
+			var sens: float = Settings.get_value("input", "touch_sensitivity") * assist_scale
 			input.add_look(-relative.x * LOOK_RADIANS_PER_PIXEL * sens,
 					-relative.y * LOOK_RADIANS_PER_PIXEL * sens)
 	queue_redraw()
@@ -132,7 +221,7 @@ func _on_up(index: int) -> void:
 func _button_at(pos: Vector2) -> Dictionary:
 	var screen := _screen()
 	for b in _buttons:
-		if b.get("contextual", false) and not show_interact:
+		if b.get("contextual", false) and not show_interact and not editing:
 			continue
 		if pos.distance_to(b.pos * screen) <= b.radius * screen.y * 1.15:
 			return b
@@ -156,7 +245,7 @@ func _is_pressed(button: Dictionary) -> bool:
 func _draw() -> void:
 	var screen := _screen()
 	for b in _buttons:
-		if b.get("contextual", false) and not show_interact:
+		if b.get("contextual", false) and not show_interact and not editing:
 			continue
 		var center: Vector2 = b.pos * screen
 		var r: float = b.radius * screen.y
@@ -166,6 +255,8 @@ func _draw() -> void:
 		draw_arc(center, r, 0.0, TAU, 48, Color(accent, 0.9 if pressed else 0.55), 2.5)
 		draw_arc(center, r - 5.0, -PI * 0.75, -PI * 0.25, 16, Color(accent, 0.35), 2.0)
 		_icon(b.id, center, r * 0.42, Color(1, 1, 1, 0.95 if pressed else 0.8))
+		if editing and b.id == selected:
+			draw_arc(center, r + 8.0, 0.0, TAU, 48, UiStyle.WARN, 3.0)
 	var moving := false
 	for f in _fingers.values():
 		if f.kind == Kind.MOVE:
