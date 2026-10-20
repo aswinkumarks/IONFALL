@@ -11,6 +11,8 @@ var net_info: Callable
 ## Soak testing: the local player is driven by a bot (toggled in the overlay,
 ## or `--autopilot` on the command line).
 var autopilot: bool = false
+## Live effect particles (set by Effects; PLAN §3.10 budget: ≤ 2,000).
+var live_particles: int = 0
 var _overlay: CanvasLayer
 var _touches: Dictionary = {}
 

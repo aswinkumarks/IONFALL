@@ -73,6 +73,44 @@ func on_fire() -> void:
 	pass
 
 
+## Two-bone IK in skeleton space for rigs without weapon clips: `chain` is
+## [upper arm, forearm, hand]; the arm bends towards `pole` so the wrist lands
+## on `target`. The hand keeps the forearm's direction.
+static func reach(sk: Skeleton3D, chain: Array, target: Vector3, pole: Vector3) -> void:
+	var u := sk.find_bone(chain[0])
+	var f := sk.find_bone(chain[1])
+	var h := sk.find_bone(chain[2])
+	if u < 0 or f < 0 or h < 0:
+		return
+	var rest_u := sk.get_bone_global_rest(u)
+	var rest_f := sk.get_bone_global_rest(f)
+	var rest_h := sk.get_bone_global_rest(h)
+	var l1 := rest_u.origin.distance_to(rest_f.origin)
+	var l2 := rest_f.origin.distance_to(rest_h.origin)
+	var parent := sk.get_bone_global_pose(sk.get_bone_parent(u))
+	var shoulder := parent * sk.get_bone_rest(u).origin
+	var to_target := target - shoulder
+	var d := clampf(to_target.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
+	var dir := to_target.normalized()
+	var a := (l1 * l1 - l2 * l2 + d * d) / (2.0 * d)
+	var bend := (pole - dir * pole.dot(dir)).normalized()
+	var elbow := shoulder + dir * a + bend * sqrt(maxf(l1 * l1 - a * a, 0.0))
+	var wrist := shoulder + dir * d
+	var swing_u := Quaternion((rest_f.origin - rest_u.origin).normalized(), (elbow - shoulder).normalized())
+	var upper := Basis(swing_u) * rest_u.basis.orthonormalized()
+	sk.set_bone_pose_rotation(u, (parent.basis.orthonormalized().inverse() * upper).get_rotation_quaternion())
+	var fore_dir := Basis(swing_u) * (rest_h.origin - rest_f.origin).normalized()
+	var swing_f := Quaternion(fore_dir, (wrist - elbow).normalized())
+	var fore := Basis(swing_f) * Basis(swing_u) * rest_f.basis.orthonormalized()
+	sk.set_bone_pose_rotation(f, (upper.inverse() * fore).get_rotation_quaternion())
+	sk.set_bone_pose_rotation(h, sk.get_bone_rest(h).basis.get_rotation_quaternion())
+
+
+## World position of the held weapon's muzzle, or Vector3.INF without one.
+func muzzle_position() -> Vector3:
+	return Vector3.INF
+
+
 ## Turns this body into first-person arms: only the arms are kept, in the
 ## rest pose, casting no shadow; pose them with pose_first_person(). False if
 ## the rig can't.

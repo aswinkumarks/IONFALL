@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://5w2mhu2cgsma"]
+[gd_scene format=3 uid="uid://cmq5ol01oj07w"]
 
 [ext_resource type="Shader" uid="uid://djr60vna1l3fr" path="res://maps/station/space_sky.gdshader" id="1_otbd1"]
 [ext_resource type="ArrayMesh" path="res://maps/station/meshes/floor.res" id="2_xye2l"]
@@ -47,13 +47,18 @@ fog_light_color = Color(0.25, 0.35, 0.48, 1)
 fog_density = 0.003
 fog_sky_affect = 0.0
 
-[node name="StationPresentation" type="Node3D" unique_id=1712735176]
+[node name="StationPresentation" type="Node3D" unique_id=334837662]
 metadata/layout_hash = "e0ef266dcadbc364bdefb7f6ed38b6e8c2c098f405a2fa2125ff33ca1fe7d1d6"
+metadata/grade = {
+"contrast": 0.15,
+"highlights": Color(0.03, 0.015, -0.015, 1),
+"shadows": Color(-0.01, 0.025, 0.05, 1)
+}
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1409843804]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=34585772]
 environment = SubResource("Environment_vcqx5")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1056717738]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1023118647]
 transform = Transform3D(0.81915206, 0.45198438, -0.35312894, 0, 0.6156615, 0.7880107, 0.57357645, -0.6455006, 0.5043204, 0, 0, 0)
 light_color = Color(1, 0.96, 0.9, 1)
 light_energy = 1.25
@@ -61,151 +66,158 @@ shadow_enabled = true
 directional_shadow_mode = 1
 directional_shadow_max_distance = 30.0
 
-[node name="Accent0" type="OmniLight3D" parent="." unique_id=1287960519]
+[node name="Accent0" type="OmniLight3D" parent="." unique_id=339875720]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9, 0)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 14.0
 
-[node name="Accent1" type="OmniLight3D" parent="." unique_id=1288209125]
+[node name="Accent1" type="OmniLight3D" parent="." unique_id=1782516268]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 4.5, 0)
 light_color = Color(1, 0.6, 0.25, 1)
 light_energy = 2.5
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent2" type="OmniLight3D" parent="." unique_id=1469294069]
+[node name="Accent2" type="OmniLight3D" parent="." unique_id=2113087689]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1.8, -9)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.9
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent3" type="OmniLight3D" parent="." unique_id=1233485363]
+[node name="Accent3" type="OmniLight3D" parent="." unique_id=177994698]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.5, 4.5, -17)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 2.0
 light_bake_mode = 1
 omni_range = 8.0
 
-[node name="Accent4" type="OmniLight3D" parent="." unique_id=369499094]
+[node name="Accent4" type="OmniLight3D" parent="." unique_id=1534415532]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1.8, 9)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.9
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent5" type="OmniLight3D" parent="." unique_id=783166322]
+[node name="Accent5" type="OmniLight3D" parent="." unique_id=685756765]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.5, 4.5, 17)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 2.0
 light_bake_mode = 1
 omni_range = 8.0
 
-[node name="Accent6" type="OmniLight3D" parent="." unique_id=1440507157]
+[node name="Accent6" type="OmniLight3D" parent="." unique_id=187162549]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 4.5, 0)
 light_color = Color(1, 0.6, 0.25, 1)
 light_energy = 2.5
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent7" type="OmniLight3D" parent="." unique_id=1272644541]
+[node name="Accent7" type="OmniLight3D" parent="." unique_id=1243380673]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 1.8, -9)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.9
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent8" type="OmniLight3D" parent="." unique_id=576573678]
+[node name="Accent8" type="OmniLight3D" parent="." unique_id=1921971599]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.5, 4.5, -17)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 2.0
 light_bake_mode = 1
 omni_range = 8.0
 
-[node name="Accent9" type="OmniLight3D" parent="." unique_id=1883019744]
+[node name="Accent9" type="OmniLight3D" parent="." unique_id=1518016820]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 1.8, 9)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.9
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent10" type="OmniLight3D" parent="." unique_id=1033506288]
+[node name="Accent10" type="OmniLight3D" parent="." unique_id=1797818854]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.5, 4.5, 17)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 2.0
 light_bake_mode = 1
 omni_range = 8.0
 
-[node name="Floor" type="MeshInstance3D" parent="." unique_id=1235569183]
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=83276577]
 cast_shadow = 0
 mesh = ExtResource("2_xye2l")
 
-[node name="Hull" type="MeshInstance3D" parent="." unique_id=101261387]
+[node name="Hull" type="MeshInstance3D" parent="." unique_id=495699623]
 cast_shadow = 0
 mesh = ExtResource("3_weudi")
 
-[node name="Core" type="MeshInstance3D" parent="." unique_id=150184901]
+[node name="Core" type="MeshInstance3D" parent="." unique_id=254604712]
 cast_shadow = 0
 mesh = ExtResource("4_18d5o")
 
-[node name="Deck" type="MeshInstance3D" parent="." unique_id=711741537]
+[node name="Deck" type="MeshInstance3D" parent="." unique_id=706052899]
 cast_shadow = 0
 mesh = ExtResource("5_4xs34")
 
-[node name="Ramp" type="MeshInstance3D" parent="." unique_id=70220293]
+[node name="Ramp" type="MeshInstance3D" parent="." unique_id=538721625]
 cast_shadow = 0
 mesh = ExtResource("6_x5hf8")
 
-[node name="Crate" type="MeshInstance3D" parent="." unique_id=1135507379]
+[node name="Crate" type="MeshInstance3D" parent="." unique_id=1755307674]
 cast_shadow = 0
 mesh = ExtResource("7_2skin")
 
-[node name="Cover" type="MeshInstance3D" parent="." unique_id=954584166]
+[node name="Cover" type="MeshInstance3D" parent="." unique_id=35653350]
 cast_shadow = 0
 mesh = ExtResource("8_dlymm")
 
-[node name="Bridge" type="MeshInstance3D" parent="." unique_id=2071317411]
+[node name="Bridge" type="MeshInstance3D" parent="." unique_id=706554724]
 cast_shadow = 0
 mesh = ExtResource("9_s3lbk")
 
-[node name="Pillar" type="MeshInstance3D" parent="." unique_id=1165908991]
+[node name="Pillar" type="MeshInstance3D" parent="." unique_id=1242072121]
 cast_shadow = 0
 mesh = ExtResource("10_yoiwo")
 
-[node name="Module" type="MeshInstance3D" parent="." unique_id=1600036446]
+[node name="Module" type="MeshInstance3D" parent="." unique_id=1294981442]
 cast_shadow = 0
 mesh = ExtResource("11_7o2lq")
 
-[node name="Rib" type="MeshInstance3D" parent="." unique_id=2030705059]
+[node name="Rib" type="MeshInstance3D" parent="." unique_id=1278882662]
 cast_shadow = 0
 mesh = ExtResource("12_pvrtt")
 
-[node name="TrimCyan" type="MeshInstance3D" parent="." unique_id=1360008844]
+[node name="TrimCyan" type="MeshInstance3D" parent="." unique_id=836675505]
 cast_shadow = 0
 mesh = ExtResource("13_k3cva")
 
-[node name="TrimOrange" type="MeshInstance3D" parent="." unique_id=846271375]
+[node name="TrimOrange" type="MeshInstance3D" parent="." unique_id=747702816]
 cast_shadow = 0
 mesh = ExtResource("14_572dw")
 
-[node name="Hazard" type="MeshInstance3D" parent="." unique_id=1082026820]
+[node name="Hazard" type="MeshInstance3D" parent="." unique_id=1902286240]
 cast_shadow = 0
 mesh = ExtResource("15_fmubn")
 
-[node name="CoreGlow" type="MeshInstance3D" parent="." unique_id=1134024378]
+[node name="CoreGlow" type="MeshInstance3D" parent="." unique_id=1673150259]
 cast_shadow = 0
 mesh = ExtResource("16_1cp31")
 
-[node name="Beam" type="MeshInstance3D" parent="." unique_id=2083215973]
+[node name="Beam" type="MeshInstance3D" parent="." unique_id=1323303200]
 cast_shadow = 0
 mesh = ExtResource("17_kcx2b")
 
-[node name="LightmapGI" type="LightmapGI" parent="." unique_id=1141713765]
+[node name="LightmapGI" type="LightmapGI" parent="." unique_id=1614788156]
 bounces = 2
 shadowmask_mode = 2
 environment_mode = 3
 environment_custom_color = Color(0.32, 0.38, 0.5, 1)
 environment_custom_energy = 0.6
 light_data = ExtResource("18_xye2l")
+
+[node name="ReflectionProbe" type="ReflectionProbe" parent="." unique_id=1927011422]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.65, 0)
+max_distance = 69.40382
+size = Vector3(53, 14.3, 45)
+box_projection = true
+ambient_mode = 0

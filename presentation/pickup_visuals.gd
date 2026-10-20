@@ -59,6 +59,12 @@ func sync(items: Array, spot_ticks: PackedInt32Array) -> void:
 
 
 ## The middle of `node`'s meshes in its parent's space.
+## The glow colour of a pickup of weapon `id` (&"grenade" for grenades).
+static func color_of(id: StringName) -> Color:
+	var data := Weapons.by_id(id) if id != &"grenade" else null
+	return GRENADE_COLOR if data == null else (POWER_COLOR if data.is_power_weapon else WEAPON_COLOR)
+
+
 static func _center(node: Node3D) -> Vector3:
 	var box := AABB()
 	var first := true

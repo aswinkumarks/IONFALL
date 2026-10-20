@@ -71,6 +71,8 @@ var _tick_ms := FrameStats.new(3600)  ## host: server tick times of the current 
 var _sim_ms := FrameStats.new(3600)  ## host: of which simulation
 var _banner_phase: int = -1
 var _go_until: float = 0.0
+var _adaptive := AdaptiveQuality.new()
+var _perf_peaks := Vector3i.ZERO  ## this minute's most draw calls, primitives, live particles
 
 
 func _ready() -> void:
@@ -97,8 +99,12 @@ func _ready() -> void:
 	audio.listener = view.camera
 	_build_ui()
 	audio.caption.connect(hud.show_caption)
+	if not Platform.user_args.has("--no-warmup"):  # dev: cold-start comparison
+		_warm_up()
 	get_tree().root.get_window().focus_exited.connect(_on_focus_lost)
 	Diagnostics.net_info = _net_info
+	if Platform.user_args.has("--adpf"):  # ADPF spike (docs/decisions/0004-thermals-adpf.md)
+		Platform.start_performance_hints(1000.0 / maxf(float(Settings.get_value("video", "fps_cap")), 1.0))
 	# Static world bodies become queryable after the first physics step.
 	await get_tree().physics_frame
 	var loadout := Loadouts.ffa()
@@ -223,9 +229,31 @@ func _reconnect_step() -> void:
 			_reconnect_step())
 
 
+## Shader warm-up behind a loading cover (Warmup).
+func _warm_up() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 100
+	add_child(layer)
+	var cover := ColorRect.new()
+	cover.color = Color(0.03, 0.05, 0.08)
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(cover)
+	var label := UiStyle.label("LOADING", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER)
+	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	cover.add_child(label)
+	var warm := Warmup.new()
+	add_child(warm)
+	warm.finished.connect(layer.queue_free)
+	var started := Time.get_ticks_msec()
+	warm.finished.connect(func() -> void: print("Warmup: %d ms" % (Time.get_ticks_msec() - started)))
+	warm.start(view.camera, effects)
+
+
 ## The sun's realtime shadows (PLAN §3.10 scalable settings).
 func _apply_shadows(root: Node) -> void:
-	var on: bool = Settings.get_value("video", "shadows")
+	var on: bool = Settings.video("shadows")
 	for light in root.find_children("*", "DirectionalLight3D", true, false):
 		(light as DirectionalLight3D).shadow_enabled = on
 
@@ -248,6 +276,12 @@ func _game_mode() -> int:
 
 
 ## TDM team of player `id`; GameMode.NO_TEAM in FFA.
+## A teammate of the local player (TDM).
+func _is_ally(id: int) -> bool:
+	var team := _team_of(id)
+	return team != GameMode.NO_TEAM and team == _team_of(local_id())
+
+
 func _team_of(id: int) -> int:
 	if _game_mode() != GameMode.TDM:
 		return GameMode.NO_TEAM
@@ -393,7 +427,7 @@ func _render_host(delta: float) -> void:
 		var p: SimPlayer = world.players[id]
 		seen[id] = true
 		_visual_for(id, p.display_name, p.is_bot, p.character, p.color).update_from(_prev.get(id), p.state, alpha, _time)
-		audio.update_player(id, p.state, false)
+		audio.update_player(id, p.state, false, _is_ally(id))
 	audio.update_player(me.net_id, s, true)
 	_prune_visuals(seen)
 	effects.sync_projectiles(world.projectiles, alpha)
@@ -450,7 +484,7 @@ func _render_client(delta: float) -> void:
 		var info: Dictionary = names.get(id, {"name": "?", "bot": false, "character": 0, "color": 0})
 		seen[id] = true
 		_visual_for(id, info.name, info.bot, info.character, info.color).update_from(null, states[id], 1.0, _time)
-		audio.update_player(id, states[id], false)
+		audio.update_player(id, states[id], false, _is_ally(id))
 	audio.update_player(client.local_id, s, true)
 	_prune_visuals(seen)
 	# Snapshot projectiles, moved along their velocity to the current server time.
@@ -477,11 +511,19 @@ func _render_client(delta: float) -> void:
 ## tests against PLAN §3.10: frame-time percentiles, minute average fps,
 ## host tick time, network health and thermal status.
 func _log_perf(delta: float) -> void:
+	Platform.report_frame_work((Performance.get_monitor(Performance.TIME_PROCESS) \
+			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0 + RenderingServer.get_frame_setup_time_cpu())
+	if Settings.get_value("video", "adaptive_quality") and not _paused:
+		var step := _adaptive.add_frame(delta, int(Settings.get_value("video", "fps_cap")))
+		if not step.is_empty():
+			print("QUALITY step-down %s" % step)
 	var now := Time.get_ticks_msec()
 	if _perf_minute_start_ms == 0:
 		_perf_minute_start_ms = now
 	_perf_ms.add(delta * 1000.0)
 	_perf_frames += 1
+	_perf_peaks = _perf_peaks.max(Vector3i(int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), effects.live_particles))
 	if now - _perf_minute_start_ms < 60000:
 		return
 	var seconds := (now - _perf_minute_start_ms) / 1000.0
@@ -496,7 +538,11 @@ func _log_perf(delta: float) -> void:
 	if client != null:
 		line += " rtt=%.0f corrections=%d visible=%d snaps=%d" % [client.clock.rtt_ms, client.corrections,
 				client.visible_corrections, client.snaps]
-	line += " thermal=%d autopilot=%s" % [Platform.thermal_status(), Diagnostics.autopilot]
+	line += " draws_max=%d prims_max=%d particles_max=%d tex_mib=%.0f" % [_perf_peaks.x, _perf_peaks.y, _perf_peaks.z,
+			Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0]
+	line += " thermal=%d headroom=%.2f scale=%.2f autopilot=%s" % [Platform.thermal_status(), Platform.thermal_headroom(),
+			get_tree().root.scaling_3d_scale, Diagnostics.autopilot]
+	_perf_peaks = Vector3i.ZERO
 	print(line)
 	_perf_ms = FrameStats.new(7200)
 	_perf_frames = 0
@@ -626,8 +672,11 @@ func _local_sounds(s: PlayerSimState) -> void:
 		audio.play_ui("switch", -4.0)
 	_last_slot = s.weapon_slot
 	var reloading: int = s.reload[s.weapon_slot]
-	if reloading > 0 and _last_reload == 0:
-		audio.play_at("reload", view.global_position, "UI", 2, -6.0)
+	var held := s.weapon()
+	var shells := held != null and held.reload_per_round
+	# Shell-by-shell reloads restart the timer for each shell.
+	if reloading > 0 and (_last_reload == 0 or (shells and reloading > _last_reload)):
+		audio.play_at("reload_shell" if shells else "reload", view.global_position, "UI", 2, -6.0)
 	_last_reload = reloading
 	var rising := s.shield > _last_shield + 0.01
 	if rising and not _shield_rising and s.shield < Health.MAX_SHIELD * 0.5:
@@ -698,7 +747,7 @@ func _update_banner() -> void:
 		_banner.modulate = UiStyle.ACCENT if phase == MatchPhase.PLAYING else Color.WHITE
 		create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK).tween_property(_banner, "scale", Vector2.ONE, 0.3)
 		if phase == MatchPhase.COUNTDOWN or phase == MatchPhase.PLAYING:
-			audio.play_ui("kill_confirm" if phase == MatchPhase.PLAYING else "switch", -6.0)
+			audio.play_ui("go" if phase == MatchPhase.PLAYING else "countdown", -6.0)
 
 
 func _handle_event(e: Dictionary) -> void:
@@ -713,8 +762,13 @@ func _handle_event(e: Dictionary) -> void:
 			audio.play_at(sound, e.origin, "Weapons", 2 if local else 4, -4.0 if local else 0.0)
 			if not local and e.origin.distance_to(view.global_position) < 25.0:
 				hud.on_gunfire_from(e.origin)
+			var muzzle := Vector3.INF
 			if not local and _visuals.has(e.shooter):
-				(_visuals[e.shooter] as PlayerVisual).on_fire()
+				var shooter: PlayerVisual = _visuals[e.shooter]
+				shooter.on_fire()
+				muzzle = shooter.muzzle_position()
+				if muzzle != Vector3.INF and e.weapon not in [&"melee", &"frag_grenade"]:
+					effects.muzzle_flash(muzzle)
 			if local and e.weapon == &"melee":
 				view.melee()
 			elif local and e.weapon == &"frag_grenade":
@@ -726,8 +780,8 @@ func _handle_event(e: Dictionary) -> void:
 				if e.get("predicted_hit", false):
 					hud.on_hit_marker(false, false)
 			if e.has("end"):
-				var from: Vector3 = view.muzzle_position() if local else e.origin
-				effects.tracer(from, e.end)
+				var from: Vector3 = view.muzzle_position() if local else (muzzle if muzzle != Vector3.INF else e.origin)
+				effects.tracer(from, e.end, e.weapon == &"rail_sniper")
 				if e.hit_world or e.hit_player:
 					effects.impact(e.end, e.hit_player)
 		"explosion":
@@ -735,7 +789,7 @@ func _handle_event(e: Dictionary) -> void:
 			audio.play_at("explosion", e.position, "World", 3)
 		"hit":
 			if _visuals.has(e.target) and e.target != me:
-				(_visuals[e.target] as PlayerVisual).flash_hit(e.shield_broken)
+				(_visuals[e.target] as PlayerVisual).flash_hit(e.shield_broken, _position_of(e.attacker))
 			if e.attacker == me and e.target != me:
 				hud.on_hit_marker(true, e.killed)
 				audio.play_ui("kill_confirm" if e.killed else "hit_marker", -2.0)
@@ -771,6 +825,15 @@ func _handle_event(e: Dictionary) -> void:
 				_life_dealt = 0.0
 				_life_taken = 0.0
 				audio.play_ui("spawn", -6.0)
+			elif _visuals.has(e.player):
+				effects.spawn_in(e.position, (_visuals[e.player] as PlayerVisual).color)
+				audio.play_at("spawn", e.position, "World", 1, -4.0)
+		"pickup":
+			effects.pickup_burst(e.position + Vector3(0.0, 0.6, 0.0), PickupVisuals.color_of(e.weapon))
+			if e.player == me:
+				audio.play_ui("pickup", -4.0)
+			else:
+				audio.play_at("pickup", e.position, "World", 1, -6.0)
 
 
 func _net_info() -> String:

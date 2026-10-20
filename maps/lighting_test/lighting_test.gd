@@ -140,6 +140,7 @@ func _process(delta: float) -> void:
 		s.move_state = PlayerSimState.Move.AIR if i % 4 == 3 and fmod(_time + i, 3.0) < 0.6 else PlayerSimState.Move.GROUND
 		s.position.y = sin(fmod(_time + i, 3.0) / 0.6 * PI) * 0.9 if s.move_state == PlayerSimState.Move.AIR else 0.0
 		s.alive = true
+		s.weapons = PackedInt32Array([[Weapons.PULSE, Weapons.SCATTER, Weapons.RAIL][i % 3]])
 		_runners[i].update_from(null, s, 1.0, _time)
 	if _runner_count == 1:
 		# Character close-up: one figure idling (or jogging with --jog), slow orbit.
@@ -149,6 +150,7 @@ func _process(delta: float) -> void:
 		s1.alive = true
 		s1.move_state = PlayerSimState.Move.GROUND
 		s1.yaw = 0.0
+		s1.weapons = PackedInt32Array([Weapons.PULSE])
 		if Platform.user_args.has("--jog"):
 			s1.velocity = Vector3(0, 0, -4.5)
 		_runners[0].update_from(null, s1, 1.0, _time)

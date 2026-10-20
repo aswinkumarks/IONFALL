@@ -15,6 +15,7 @@ const CAPS := {"Weapons": 8, "Footsteps": 6, "World": 8, "UI": 4}
 const MAX_RAYS_PER_FRAME := 16
 const OCCLUSION_INTERVAL := 0.1
 const STRIDE := {"walk": 1.9, "sprint": 2.6}
+const BELOW_METRES := 2.5  ## sounds this far under the listener get the Below bus
 
 var listener: Node3D  ## the camera: listener position for occlusion
 
@@ -93,16 +94,17 @@ func cue(sound: String, caption_key: String) -> void:
 
 
 ## Footsteps, jumps, landings and slides from movement state (PLAN §3.12).
-## Call every frame for each visible player; `local` steps are quieter.
-func update_player(id: int, s: PlayerSimState, local: bool) -> void:
+## Call every frame for each visible player; `local` steps are quieter and
+## `ally` (teammate) steps duller, so enemy steps stand out.
+func update_player(id: int, s: PlayerSimState, local: bool, ally: bool = false) -> void:
 	var st: Dictionary = _steps.get(id, {})
 	if st.is_empty() or not s.alive:
 		_steps[id] = {"pos": s.position, "dist": 0.0, "airborne": false, "sliding": false}
 		return
 	var airborne := s.move_state == PlayerSimState.Move.AIR
 	var sliding := s.move_state == PlayerSimState.Move.SLIDE
-	var vol := -8.0 if local else 0.0
-	var priority := 1 if local else 3
+	var vol := -8.0 if local else (-3.0 if ally else 0.0)
+	var priority := 1 if local else (2 if ally else 3)
 	if airborne and not st.airborne and s.velocity.y > 2.0:
 		play_at("jump", s.position, "Footsteps", priority, vol - 4.0)
 	if not airborne and st.airborne:
@@ -116,7 +118,7 @@ func update_player(id: int, s: PlayerSimState, local: bool) -> void:
 		var stride: float = STRIDE.sprint if s.sprinting else STRIDE.walk
 		if st.dist >= stride and moved > 0.0005:
 			st.dist = 0.0
-			play_at("footstep_%d" % (randi() % 3 + 1), s.position, "Footsteps", priority, vol - (6.0 if s.stance != PlayerSimState.Stance.STAND else 0.0))
+			play_at("footstep_%s%d" % ["ally_" if ally else "", randi() % 3 + 1], s.position, "Footsteps", priority, vol - (6.0 if s.stance != PlayerSimState.Stance.STAND else 0.0))
 	st.pos = s.position
 	st.airborne = airborne
 	st.sliding = sliding
@@ -140,15 +142,18 @@ func _process(_delta: float) -> void:
 			v.bus = _occluded_bus(m.category, v.global_position)
 
 
+## The bus for a sound at `position`: Occluded behind walls, Below when it
+## comes from more than BELOW_METRES under the listener, else its category.
 func _occluded_bus(category: String, position: Vector3) -> String:
-	if listener == null or category == "UI" or _rays_this_frame >= MAX_RAYS_PER_FRAME:
+	if listener == null or category == "UI":
 		return category
-	_rays_this_frame += 1
 	var from := listener.global_position
-	if from.distance_squared_to(position) < 1.0:
-		return category
+	var fallback := "Below" if position.y < from.y - BELOW_METRES else category
+	if _rays_this_frame >= MAX_RAYS_PER_FRAME or from.distance_squared_to(position) < 1.0:
+		return fallback
+	_rays_this_frame += 1
 	var q := PhysicsRayQueryParameters3D.create(from, position, Sim.LAYER_WORLD)
-	return "Occluded" if not get_world_3d().direct_space_state.intersect_ray(q).is_empty() else category
+	return "Occluded" if not get_world_3d().direct_space_state.intersect_ray(q).is_empty() else fallback
 
 
 ## A free voice, or one stolen from the same category (over its cap) or from

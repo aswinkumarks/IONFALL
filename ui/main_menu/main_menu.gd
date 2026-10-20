@@ -31,7 +31,7 @@ var _settings := SettingsMenu.new()
 
 func _ready() -> void:
 	var music := AudioStreamPlayer.new()
-	music.stream = load("res://audio/generated/ambient_loop.wav")
+	music.stream = load("res://audio/generated/menu_theme.wav")
 	music.bus = "Music"
 	music.volume_db = -8.0
 	add_child(music)

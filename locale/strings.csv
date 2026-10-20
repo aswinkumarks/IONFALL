@@ -100,6 +100,9 @@ SETTING_FOV,Field of view (vertical)
 SETTING_RENDER_SCALE,Render scale
 SETTING_FPS_CAP,Frame rate cap
 SETTING_SHADOWS,Sun shadows
+SETTING_GLOW,Glow
+SETTING_EFFECTS,Effects density
+SETTING_ADAPTIVE_QUALITY,Adaptive quality (lowers settings when slow or hot)
 SETTING_VOL_MASTER,Master volume
 SETTING_VOL_MUSIC,Music volume
 SETTING_VOL_SFX,Effects volume
@@ -198,3 +201,4 @@ TOUCH_EDIT_SIZE,Button size
 TOUCH_EDIT_RESET,Reset
 MENU_REJOIN,Rejoin match
 PAUSE_SCAN_TO_JOIN,Scan to join
+LOADING,Loading

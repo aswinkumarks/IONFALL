@@ -2,7 +2,9 @@ class_name SkinnedRig
 extends CharacterRig
 ## One skinned CC0 character (Kenney Animated Characters 3): a single mesh
 ## and material, so 1 draw per character (plus its shadow), animated by an
-## AnimationPlayer from the pack's idle / run / jump clips.
+## AnimationPlayer from the pack's idle / run / jump clips. The pack has no
+## weapon clips, so the weapon rides on a pivot in front of the chest (pitched
+## with the look) and two-bone IK puts both hands on it after the clip.
 
 const MODEL := preload("res://art/characters/kenney/characterMedium.fbx")
 ## Armour suit painted over the pack's UV layout (tools/gen_suit.py); the
@@ -19,6 +21,23 @@ const MODEL_HEIGHT := 3.765  ## bind-pose height of characterMedium in its own u
 const RUN_ANIM_SPEED := 5.0  ## m/s at which the run clip plays at 1x
 const BLEND := 0.15
 const MAX_LEG_TWIST := deg_to_rad(50.0)
+## Weapon pivot in the rig's space (metres; forward is -Z) and how much of
+## the look pitch it follows.
+const WEAPON_AT := Vector3(0.14, 1.02, -0.34)
+const WEAPON_SCALE := 1.5  ## the stylised body has big hands and head
+const WEAPON_PITCH := 0.7
+const SUPPORT_REACH := 0.22  ## left hand: this far along the barrel from the grip
+const ARMS := [["RightArm", "RightForeArm", "RightHand"], ["LeftArm", "LeftForeArm", "LeftHand"]]
+## Elbow directions in skeleton space (the model faces +Z; its right is -X).
+const POLES := [Vector3(-0.6, -1.0, -0.3), Vector3(0.6, -1.0, -0.3)]
+
+
+## Runs the arm IK after the animation has posed the skeleton.
+class ArmIK extends SkeletonModifier3D:
+	var apply: Callable
+
+	func _process_modification_with_delta(_delta: float) -> void:
+		apply.call()
 
 static var _library: AnimationLibrary
 
@@ -29,6 +48,11 @@ var _twist: float = 0.0
 var _color := Color.WHITE
 var _glow: float = 0.0
 var _flash: float = 0.0
+var _skeleton: Skeleton3D
+var _pivot := Node3D.new()
+var _weapon_node: Node3D
+var _weapon_id: StringName = &""
+var _pitch: float = 0.0
 
 
 static func library() -> AnimationLibrary:
@@ -67,10 +91,52 @@ func setup(color: Color) -> void:
 	_anim.root_node = NodePath("..")
 	_anim.add_animation_library("", library())
 	_anim.play("idle")
+	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0]
+	var ik := ArmIK.new()
+	ik.apply = _pose_arms
+	_skeleton.add_child(ik)
+	_pivot.position = WEAPON_AT
+	_pivot.scale = Vector3.ONE * WEAPON_SCALE
+	add_child(_pivot)
+
+
+func set_weapon(id: StringName) -> void:
+	if id == _weapon_id:
+		return
+	_weapon_id = id
+	if _weapon_node != null:
+		_weapon_node.queue_free()
+		_weapon_node = null
+	var w := WeaponModels.instantiate(id)
+	if w == null:
+		return
+	_pivot.add_child(w)
+	# Hold the weapon by its handle.
+	w.position = -(w.get_node("Grip") as Node3D).position
+	_weapon_node = w
+
+
+func muzzle_position() -> Vector3:
+	var m: Node3D = _weapon_node.get_node_or_null("Muzzle") if _weapon_node != null else null
+	return m.global_position if m != null else Vector3.INF
+
+
+## Right hand on the handle, left hand along the barrel (skeleton space).
+func _pose_arms() -> void:
+	if _weapon_node == null:
+		return
+	var to_skel := _skeleton.global_transform.affine_inverse()
+	var grip := (_weapon_node.get_node("Grip") as Node3D).global_position
+	var forward := -_pivot.global_basis.z
+	reach(_skeleton, ARMS[0], to_skel * grip, POLES[0])
+	reach(_skeleton, ARMS[1], to_skel * (grip + forward * SUPPORT_REACH + _pivot.global_basis.y * 0.03), POLES[1])
 
 
 func animate(state: PlayerSimState, delta: float, height: float) -> void:
 	_model.scale.y = (1.8 / MODEL_HEIGHT) * height / 1.8
+	_pitch = lerpf(_pitch, state.pitch * WEAPON_PITCH, minf(delta * 15.0, 1.0))
+	_pivot.position = Vector3(WEAPON_AT.x, WEAPON_AT.y * height / 1.8, WEAPON_AT.z)
+	_pivot.rotation.x = _pitch
 	var flat := Vector3(state.velocity.x, 0.0, state.velocity.z)
 	var speed := flat.length()
 	var clip := "idle"

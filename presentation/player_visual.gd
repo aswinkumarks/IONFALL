@@ -29,6 +29,13 @@ var color := Color.WHITE
 var _label: Label3D
 var _height: float = 1.8
 var _last_time: float = -1.0
+var shield: float = 0.0  ## at the latest update
+var _shell: MeshInstance3D
+var _shell_mat: ShaderMaterial
+var _shell_t: float = 0.0
+
+const SHIELD_SHADER := preload("res://presentation/shield.gdshader")
+const SHELL_SECONDS := 0.3
 
 
 ## `variant` picks the character model (e.g. one astronaut per player);
@@ -46,6 +53,21 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	_label.outline_size = 8
 	_label.no_depth_test = false
 	add_child(_label)
+	var capsule := CapsuleMesh.new()
+	capsule.radius = 0.55
+	capsule.height = 2.1
+	capsule.radial_segments = 16
+	capsule.rings = 6
+	_shell_mat = ShaderMaterial.new()
+	_shell_mat.shader = SHIELD_SHADER
+	_shell_mat.set_shader_parameter("color", Color(0.45, 0.9, 1.0).lerp(p_color, 0.25))
+	_shell = MeshInstance3D.new()
+	_shell.mesh = capsule
+	_shell.material_override = _shell_mat
+	_shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shell.position.y = 0.95
+	_shell.visible = false
+	add_child(_shell)
 
 
 ## `prev`/`cur` are the states at the last two ticks; `alpha` is the fraction
@@ -54,6 +76,11 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 	var delta := clampf(time - _last_time, 0.0, 0.1) if _last_time >= 0.0 else 0.0
 	_last_time = time
 	visible = cur.alive
+	shield = cur.shield
+	if _shell_t > 0.0:
+		_shell_t = maxf(_shell_t - delta, 0.0)
+		_shell_mat.set_shader_parameter("strength", _shell_t / SHELL_SECONDS * 1.4)
+		_shell.visible = _shell_t > 0.0
 	if not cur.alive:
 		return
 	# Never interpolate across a respawn or teleport (PLAN §3.3.4).
@@ -78,9 +105,21 @@ func set_label_color(c: Color) -> void:
 	_label.modulate = c
 
 
-## Hit feedback: a white flash on the body (brighter when the shield breaks).
-func flash_hit(shield_broken: bool) -> void:
+## Hit feedback: a white flash on the body (brighter when the shield breaks)
+## and, while the shield held, the shield crackle on the side facing `from`.
+func flash_hit(shield_broken: bool, from: Vector3 = Vector3.INF) -> void:
 	rig.flash(1.0 if shield_broken else 0.6)
+	if shield > 0.0 or shield_broken:
+		var dir := Vector3.BACK if from == Vector3.INF else global_basis.inverse() * (from - global_position)
+		_shell_mat.set_shader_parameter("hit_dir", dir.normalized() if dir.length() > 0.01 else Vector3.BACK)
+		_shell_t = SHELL_SECONDS
+		_shell_mat.set_shader_parameter("strength", 1.4)
+		_shell.scale.y = _height / 1.8
+		_shell.visible = true
+
+
+func muzzle_position() -> Vector3:
+	return rig.muzzle_position()
 
 
 func on_fire() -> void:

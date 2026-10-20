@@ -7,6 +7,9 @@ extends SceneTree
 ##
 ##   tools/build_spire.sh
 
+const MAP_LOOK := preload("res://tools/map_look.gd")
+## Colour grade (ColorGrade).
+const GRADE := {"shadows": Color(0.02, 0.0, 0.06), "highlights": Color(-0.01, 0.025, 0.04), "contrast": 0.2}
 const DIR := "res://maps/spire/"
 const TEXEL_SIZE := 0.25  ## lightmap texel size in metres
 const Kind := SpireLayout.Kind
@@ -65,6 +68,7 @@ func _init() -> void:
 	lm.environment_custom_color = Color(0.34, 0.38, 0.5)
 	lm.environment_custom_energy = 1.1
 	root.add_child(lm)
+	MAP_LOOK.finish(root, GRADE)
 	for n in root.get_children():
 		n.owner = root
 	var scene := PackedScene.new()

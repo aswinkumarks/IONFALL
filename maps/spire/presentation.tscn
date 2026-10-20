@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://dvnimetboojw0"]
+[gd_scene format=3 uid="uid://cspnbw1bb0wde"]
 
 [ext_resource type="Shader" uid="uid://djr60vna1l3fr" path="res://maps/station/space_sky.gdshader" id="1_2b12t"]
 [ext_resource type="ArrayMesh" path="res://maps/spire/meshes/slab.res" id="2_u8je7"]
@@ -65,13 +65,18 @@ fog_light_color = Color(0.25, 0.33, 0.46, 1)
 fog_density = 0.004
 fog_sky_affect = 0.0
 
-[node name="SpirePresentation" type="Node3D" unique_id=1236028746]
+[node name="SpirePresentation" type="Node3D" unique_id=866778033]
 metadata/layout_hash = "ec478350d8137d9137a297cfe36b3db62e66a1f92a754a0be1c9adc1a220b915"
+metadata/grade = {
+"contrast": 0.2,
+"highlights": Color(-0.01, 0.025, 0.04, 1),
+"shadows": Color(0.02, 0, 0.06, 1)
+}
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=440484808]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=516096477]
 environment = SubResource("Environment_r8b1k")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=860710735]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=461139298]
 transform = Transform3D(0.8660254, 0.37157243, -0.33456528, 0, 0.66913056, 0.74314487, 0.5, -0.64358234, 0.57948405, 0, 0, 0)
 light_color = Color(1, 0.95, 0.88, 1)
 light_energy = 1.3
@@ -79,335 +84,342 @@ shadow_enabled = true
 directional_shadow_mode = 1
 directional_shadow_max_distance = 40.0
 
-[node name="Accent0" type="OmniLight3D" parent="." unique_id=738539597]
+[node name="Accent0" type="OmniLight3D" parent="." unique_id=1787351036]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, 0)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 18.0
 
-[node name="Accent1" type="OmniLight3D" parent="." unique_id=292252128]
+[node name="Accent1" type="OmniLight3D" parent="." unique_id=81225393]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -26, 3.2, 0)
 light_color = Color(1, 0.6, 0.25, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 11.0
 
-[node name="Accent2" type="OmniLight3D" parent="." unique_id=271525817]
+[node name="Accent2" type="OmniLight3D" parent="." unique_id=1631427239]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3.2, 4)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent3" type="OmniLight3D" parent="." unique_id=1287792320]
+[node name="Accent3" type="OmniLight3D" parent="." unique_id=684587665]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3, -4)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent4" type="OmniLight3D" parent="." unique_id=1796188163]
+[node name="Accent4" type="OmniLight3D" parent="." unique_id=1768859381]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 4, -20)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 1.5
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent5" type="OmniLight3D" parent="." unique_id=872138468]
+[node name="Accent5" type="OmniLight3D" parent="." unique_id=1540068957]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 2.5, -12)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.8
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent6" type="OmniLight3D" parent="." unique_id=748762104]
+[node name="Accent6" type="OmniLight3D" parent="." unique_id=1734049125]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3, 4)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent7" type="OmniLight3D" parent="." unique_id=1664505911]
+[node name="Accent7" type="OmniLight3D" parent="." unique_id=772696622]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 4, 20)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 1.5
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent8" type="OmniLight3D" parent="." unique_id=1045086952]
+[node name="Accent8" type="OmniLight3D" parent="." unique_id=641337910]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 2.5, 12)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.8
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent9" type="OmniLight3D" parent="." unique_id=1484088184]
+[node name="Accent9" type="OmniLight3D" parent="." unique_id=1986924872]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 3.2, 0)
 light_color = Color(1, 0.6, 0.25, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 11.0
 
-[node name="Accent10" type="OmniLight3D" parent="." unique_id=753991981]
+[node name="Accent10" type="OmniLight3D" parent="." unique_id=1251364621]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 3.2, 4)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent11" type="OmniLight3D" parent="." unique_id=1961419803]
+[node name="Accent11" type="OmniLight3D" parent="." unique_id=1956063113]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3, -4)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent12" type="OmniLight3D" parent="." unique_id=1477733905]
+[node name="Accent12" type="OmniLight3D" parent="." unique_id=1625193105]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 4, -20)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 1.5
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent13" type="OmniLight3D" parent="." unique_id=412654397]
+[node name="Accent13" type="OmniLight3D" parent="." unique_id=1472722898]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2.5, -12)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.8
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent14" type="OmniLight3D" parent="." unique_id=1356670169]
+[node name="Accent14" type="OmniLight3D" parent="." unique_id=1390587964]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3, 4)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 4.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent15" type="OmniLight3D" parent="." unique_id=1860113967]
+[node name="Accent15" type="OmniLight3D" parent="." unique_id=872012942]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 4, 20)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 1.5
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent16" type="OmniLight3D" parent="." unique_id=166862401]
+[node name="Accent16" type="OmniLight3D" parent="." unique_id=502317986]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2.5, 12)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 0.8
 light_bake_mode = 1
 omni_range = 6.0
 
-[node name="Accent17" type="OmniLight3D" parent="." unique_id=580895133]
+[node name="Accent17" type="OmniLight3D" parent="." unique_id=1614118630]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.1, -24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent18" type="OmniLight3D" parent="." unique_id=471403033]
+[node name="Accent18" type="OmniLight3D" parent="." unique_id=2026402030]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.1, -24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent19" type="OmniLight3D" parent="." unique_id=1985047181]
+[node name="Accent19" type="OmniLight3D" parent="." unique_id=240689041]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, -24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent20" type="OmniLight3D" parent="." unique_id=1744050631]
+[node name="Accent20" type="OmniLight3D" parent="." unique_id=1994094805]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.1, -24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent21" type="OmniLight3D" parent="." unique_id=1227074876]
+[node name="Accent21" type="OmniLight3D" parent="." unique_id=151547821]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.1, -24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent22" type="OmniLight3D" parent="." unique_id=814400990]
+[node name="Accent22" type="OmniLight3D" parent="." unique_id=1039470255]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.1, 24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent23" type="OmniLight3D" parent="." unique_id=1188346116]
+[node name="Accent23" type="OmniLight3D" parent="." unique_id=386953811]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.1, 24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent24" type="OmniLight3D" parent="." unique_id=1308312495]
+[node name="Accent24" type="OmniLight3D" parent="." unique_id=878051048]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent25" type="OmniLight3D" parent="." unique_id=1228707368]
+[node name="Accent25" type="OmniLight3D" parent="." unique_id=1774345165]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.1, 24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Accent26" type="OmniLight3D" parent="." unique_id=1860528863]
+[node name="Accent26" type="OmniLight3D" parent="." unique_id=1507992641]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.1, 24.5)
 light_color = Color(0.35, 0.9, 1, 1)
 light_energy = 5.0
 light_bake_mode = 1
 omni_range = 9.0
 
-[node name="Slab" type="MeshInstance3D" parent="." unique_id=1419213406]
+[node name="Slab" type="MeshInstance3D" parent="." unique_id=487343531]
 cast_shadow = 0
 mesh = ExtResource("2_u8je7")
 
-[node name="Wall" type="MeshInstance3D" parent="." unique_id=1634325423]
+[node name="Wall" type="MeshInstance3D" parent="." unique_id=1804229132]
 cast_shadow = 0
 mesh = ExtResource("3_fk1e4")
 
-[node name="Cover" type="MeshInstance3D" parent="." unique_id=1335402874]
+[node name="Cover" type="MeshInstance3D" parent="." unique_id=580898715]
 cast_shadow = 0
 mesh = ExtResource("4_okgc6")
 
-[node name="TrimCyan" type="MeshInstance3D" parent="." unique_id=698096623]
+[node name="TrimCyan" type="MeshInstance3D" parent="." unique_id=917212845]
 cast_shadow = 0
 mesh = ExtResource("5_g6yyq")
 
-[node name="TrimOrange" type="MeshInstance3D" parent="." unique_id=282724258]
+[node name="TrimOrange" type="MeshInstance3D" parent="." unique_id=1487593343]
 cast_shadow = 0
 mesh = ExtResource("6_hiha0")
 
-[node name="SpireGlow" type="MeshInstance3D" parent="." unique_id=1360680183]
+[node name="SpireGlow" type="MeshInstance3D" parent="." unique_id=1269406472]
 cast_shadow = 0
 mesh = ExtResource("7_co00d")
 
-[node name="KitTTrim02BasecolorBlueWn" type="MeshInstance3D" parent="." unique_id=287169944]
+[node name="KitTTrim02BasecolorBlueWn" type="MeshInstance3D" parent="." unique_id=1308424561]
 cast_shadow = 0
 mesh = ExtResource("8_4nksp")
 
-[node name="KitTTrim01BasecolorWn" type="MeshInstance3D" parent="." unique_id=90820711]
+[node name="KitTTrim01BasecolorWn" type="MeshInstance3D" parent="." unique_id=176437483]
 cast_shadow = 0
 mesh = ExtResource("9_3t63l")
 
-[node name="KitTTrim01BasecolorWs" type="MeshInstance3D" parent="." unique_id=1798554457]
+[node name="KitTTrim01BasecolorWs" type="MeshInstance3D" parent="." unique_id=616632388]
 cast_shadow = 0
 mesh = ExtResource("10_remnl")
 
-[node name="KitTTrim02BasecolorBlueWs" type="MeshInstance3D" parent="." unique_id=947607543]
+[node name="KitTTrim02BasecolorBlueWs" type="MeshInstance3D" parent="." unique_id=895794332]
 cast_shadow = 0
 mesh = ExtResource("11_lds5a")
 
-[node name="KitTTrim02BasecolorWn" type="MeshInstance3D" parent="." unique_id=1914279502]
+[node name="KitTTrim02BasecolorWn" type="MeshInstance3D" parent="." unique_id=352174173]
 cast_shadow = 0
 mesh = ExtResource("12_liroa")
 
-[node name="KitTTrim02BasecolorWs" type="MeshInstance3D" parent="." unique_id=1126877875]
+[node name="KitTTrim02BasecolorWs" type="MeshInstance3D" parent="." unique_id=647384820]
 cast_shadow = 0
 mesh = ExtResource("13_8vhvu")
 
-[node name="KitTTrim02BasecolorEn" type="MeshInstance3D" parent="." unique_id=1075813271]
+[node name="KitTTrim02BasecolorEn" type="MeshInstance3D" parent="." unique_id=1561570831]
 cast_shadow = 0
 mesh = ExtResource("14_nhpqt")
 
-[node name="KitTTrim02BasecolorBlueEn" type="MeshInstance3D" parent="." unique_id=2081415339]
+[node name="KitTTrim02BasecolorBlueEn" type="MeshInstance3D" parent="." unique_id=1290145459]
 cast_shadow = 0
 mesh = ExtResource("15_e1ixm")
 
-[node name="KitTTrim01BasecolorEn" type="MeshInstance3D" parent="." unique_id=463436303]
+[node name="KitTTrim01BasecolorEn" type="MeshInstance3D" parent="." unique_id=1693725189]
 cast_shadow = 0
 mesh = ExtResource("16_uikl2")
 
-[node name="KitTTrim01BasecolorEs" type="MeshInstance3D" parent="." unique_id=1482811281]
+[node name="KitTTrim01BasecolorEs" type="MeshInstance3D" parent="." unique_id=2058933790]
 cast_shadow = 0
 mesh = ExtResource("17_xqbjb")
 
-[node name="KitTTrim02BasecolorBlueEs" type="MeshInstance3D" parent="." unique_id=158310261]
+[node name="KitTTrim02BasecolorBlueEs" type="MeshInstance3D" parent="." unique_id=1824826921]
 cast_shadow = 0
 mesh = ExtResource("18_r6tau")
 
-[node name="KitTTrim02BasecolorEs" type="MeshInstance3D" parent="." unique_id=933273418]
+[node name="KitTTrim02BasecolorEs" type="MeshInstance3D" parent="." unique_id=50941831]
 cast_shadow = 0
 mesh = ExtResource("19_2ygo8")
 
-[node name="KitTDecalsWs" type="MeshInstance3D" parent="." unique_id=1624031358]
+[node name="KitTDecalsWs" type="MeshInstance3D" parent="." unique_id=1304745915]
 cast_shadow = 0
 mesh = ExtResource("20_ufv3g")
 
-[node name="KitTDecalsWn" type="MeshInstance3D" parent="." unique_id=983544472]
+[node name="KitTDecalsWn" type="MeshInstance3D" parent="." unique_id=1118885634]
 cast_shadow = 0
 mesh = ExtResource("21_5ewxr")
 
-[node name="KitTDecalsEs" type="MeshInstance3D" parent="." unique_id=1636546277]
+[node name="KitTDecalsEs" type="MeshInstance3D" parent="." unique_id=543816476]
 cast_shadow = 0
 mesh = ExtResource("22_l1sex")
 
-[node name="KitTDecalsEn" type="MeshInstance3D" parent="." unique_id=269219848]
+[node name="KitTDecalsEn" type="MeshInstance3D" parent="." unique_id=1381526380]
 cast_shadow = 0
 mesh = ExtResource("23_1r7ug")
 
-[node name="KitTTrim03BasecolorWn" type="MeshInstance3D" parent="." unique_id=366306435]
+[node name="KitTTrim03BasecolorWn" type="MeshInstance3D" parent="." unique_id=1744824270]
 cast_shadow = 0
 mesh = ExtResource("24_ippgy")
 
-[node name="KitTTrim03CablesWn" type="MeshInstance3D" parent="." unique_id=1209207990]
+[node name="KitTTrim03CablesWn" type="MeshInstance3D" parent="." unique_id=524188076]
 cast_shadow = 0
 mesh = ExtResource("25_glb6x")
 
-[node name="KitTTrim03BasecolorWs" type="MeshInstance3D" parent="." unique_id=205831232]
+[node name="KitTTrim03BasecolorWs" type="MeshInstance3D" parent="." unique_id=143364941]
 cast_shadow = 0
 mesh = ExtResource("26_taqn4")
 
-[node name="KitTTrim03CablesWs" type="MeshInstance3D" parent="." unique_id=1227696733]
+[node name="KitTTrim03CablesWs" type="MeshInstance3D" parent="." unique_id=1399680881]
 cast_shadow = 0
 mesh = ExtResource("27_nt47p")
 
-[node name="KitTTrim03BasecolorEn" type="MeshInstance3D" parent="." unique_id=82416814]
+[node name="KitTTrim03BasecolorEn" type="MeshInstance3D" parent="." unique_id=884952308]
 cast_shadow = 0
 mesh = ExtResource("28_agf74")
 
-[node name="KitTTrim03CablesEn" type="MeshInstance3D" parent="." unique_id=947559965]
+[node name="KitTTrim03CablesEn" type="MeshInstance3D" parent="." unique_id=1147835855]
 cast_shadow = 0
 mesh = ExtResource("29_swsy4")
 
-[node name="KitTTrim03BasecolorEs" type="MeshInstance3D" parent="." unique_id=886236776]
+[node name="KitTTrim03BasecolorEs" type="MeshInstance3D" parent="." unique_id=1961406301]
 cast_shadow = 0
 mesh = ExtResource("30_aqsys")
 
-[node name="KitTTrim03CablesEs" type="MeshInstance3D" parent="." unique_id=1219897524]
+[node name="KitTTrim03CablesEs" type="MeshInstance3D" parent="." unique_id=560526518]
 cast_shadow = 0
 mesh = ExtResource("31_fhohi")
 
-[node name="KitTPropsCratesBasecolorWn" type="MeshInstance3D" parent="." unique_id=2069090593]
+[node name="KitTPropsCratesBasecolorWn" type="MeshInstance3D" parent="." unique_id=644192538]
 cast_shadow = 0
 mesh = ExtResource("32_7psef")
 
-[node name="KitTPropsCratesBasecolorWs" type="MeshInstance3D" parent="." unique_id=1249586553]
+[node name="KitTPropsCratesBasecolorWs" type="MeshInstance3D" parent="." unique_id=1736177566]
 cast_shadow = 0
 mesh = ExtResource("33_dlvm4")
 
-[node name="KitTPropsCratesBasecolorEn" type="MeshInstance3D" parent="." unique_id=1861978132]
+[node name="KitTPropsCratesBasecolorEn" type="MeshInstance3D" parent="." unique_id=1056638485]
 cast_shadow = 0
 mesh = ExtResource("34_7jmd3")
 
-[node name="KitTPropsCratesBasecolorEs" type="MeshInstance3D" parent="." unique_id=1784425813]
+[node name="KitTPropsCratesBasecolorEs" type="MeshInstance3D" parent="." unique_id=60996038]
 cast_shadow = 0
 mesh = ExtResource("35_bltcs")
 
-[node name="LightmapGI" type="LightmapGI" parent="." unique_id=1977375542]
+[node name="LightmapGI" type="LightmapGI" parent="." unique_id=439440801]
 bounces = 2
 shadowmask_mode = 2
 environment_mode = 3
 environment_custom_color = Color(0.34, 0.38, 0.5, 1)
 environment_custom_energy = 1.1
 light_data = ExtResource("36_u8je7")
+
+[node name="ReflectionProbe" type="ReflectionProbe" parent="." unique_id=1561807817]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.319783, 0)
+max_distance = 94.49466
+size = Vector3(73.528, 22.760435, 57.527992)
+box_projection = true
+ambient_mode = 0

@@ -48,7 +48,7 @@ func _process(delta: float) -> void:
 		return
 	_refresh_timer = 0.25
 	var stats := Diagnostics.frame_stats
-	_label.text = "%s\n%s | %s\nFPS %d\nframe ms  p50 %.1f  p95 %.1f  p99 %.1f\ndraw calls %d  primitives %d\nvideo mem %.0f MiB" % [
+	_label.text = "%s\n%s | %s\nFPS %d\nframe ms  p50 %.1f  p95 %.1f  p99 %.1f\ndraw calls %d  primitives %d  particles %d\nvideo mem %.0f MiB" % [
 		BuildInfo.display_string(),
 		OS.get_name(),
 		RenderingServer.get_video_adapter_name(),
@@ -58,6 +58,7 @@ func _process(delta: float) -> void:
 		stats.percentile(99.0),
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+		Diagnostics.live_particles,
 		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 	]
 	if not _replay_result.is_empty():

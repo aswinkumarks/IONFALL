@@ -59,6 +59,11 @@ func setup(color: Color) -> void:
 
 
 ## Shows `id`'s weapon model in the right hand.
+func muzzle_position() -> Vector3:
+	var m: Node3D = _weapon_node.get_node_or_null("Muzzle") if _weapon_node != null else null
+	return m.global_position if m != null else Vector3.INF
+
+
 func set_weapon(id: StringName) -> void:
 	if id == _weapon_id or _hand == null:
 		return

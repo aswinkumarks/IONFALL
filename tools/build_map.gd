@@ -6,6 +6,9 @@ extends SceneTree
 ##
 ##   tools/build_station.sh
 
+const MAP_LOOK := preload("res://tools/map_look.gd")
+## Colour grade (ColorGrade).
+const GRADE := {"shadows": Color(-0.01, 0.025, 0.05), "highlights": Color(0.03, 0.015, -0.015), "contrast": 0.15}
 const DIR := "res://maps/station/"
 const TEXEL_SIZE := 0.2  ## lightmap texel size in metres
 const Kind := StationLayout.Kind
@@ -47,6 +50,7 @@ func _init() -> void:
 	lm.environment_custom_color = Color(0.32, 0.38, 0.5)
 	lm.environment_custom_energy = 0.6
 	root.add_child(lm)
+	MAP_LOOK.finish(root, GRADE)
 	for n in root.get_children():
 		n.owner = root
 	var scene := PackedScene.new()

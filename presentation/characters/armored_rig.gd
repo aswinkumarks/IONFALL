@@ -347,6 +347,11 @@ func on_fire() -> void:
 	_tree.set("parameters/shoot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 
 
+func muzzle_position() -> Vector3:
+	var m: Node3D = _weapon_node.get_node_or_null("Muzzle") if _weapon_node != null else null
+	return m.global_position if m != null else Vector3.INF
+
+
 func set_weapon(id: StringName) -> void:
 	if id == _weapon_id or _hand == null:
 		return

@@ -39,6 +39,15 @@ func _init() -> void:
 	_save("rail_sniper", _gun(0.5, 1900.0, 180.0, 0.8, 1.0))
 	_save("frag_grenade", _whoosh(0.22, 700.0))
 	_save("melee", _whoosh(0.18, 1500.0))
+	# M4 audio pass.
+	_save("footstep_ally_1", _soft_step(0.0))
+	_save("footstep_ally_2", _soft_step(0.4))
+	_save("footstep_ally_3", _soft_step(0.8))
+	_save("pickup", _chime([880.0, 1108.73, 1318.51], 0.4))
+	_save("countdown", _tick(880.0, 0.12))
+	_save("go", _chime([659.25, 987.77, 1318.51], 0.5))
+	_save("reload_shell", _tick(700.0, 0.05))
+	_save_loop("menu_theme", _theme(19.2))
 	print("gen_sounds: done")
 	quit()
 
@@ -114,6 +123,21 @@ func _step(variant: float) -> PackedFloat32Array:
 		lp = _lp(lp, _rng.randf_range(-1.0, 1.0), 1800.0 + variant * 900.0)
 		phase += TAU * f / RATE
 		b[i] = sin(phase) * 0.7 * _env(t, 0.002, 0.03) + lp * 0.55 * _env(t, 0.0005, 0.015)
+	return b
+
+
+## A teammate's footstep (PLAN §3.12): duller and lower than an enemy's, so
+## enemy steps stand out.
+func _soft_step(variant: float) -> PackedFloat32Array:
+	var b := _buffer(0.12)
+	var lp := 0.0
+	var phase := 0.0
+	var f := 70.0 + variant * 20.0
+	for i in b.size():
+		var t := float(i) / RATE
+		lp = _lp(lp, _rng.randf_range(-1.0, 1.0), 600.0 + variant * 300.0)
+		phase += TAU * f / RATE
+		b[i] = sin(phase) * 0.6 * _env(t, 0.003, 0.035) + lp * 0.5 * _env(t, 0.001, 0.02)
 	return b
 
 
@@ -227,6 +251,37 @@ func _ambient(seconds: float) -> PackedFloat32Array:
 			v += sin(TAU * f * t) + 0.5 * sin(TAU * f * 1.003 * t)
 		lp = _lp(lp, v, 900.0)
 		b[i] = lp * 0.06 * (0.4 + 0.6 * fade)
+	return b
+
+
+## Menu theme: the ambient chords under a slow arpeggio and a soft bass
+## pulse (100 bpm, 8 bars), seamless loop.
+func _theme(seconds: float) -> PackedFloat32Array:
+	var b := _buffer(seconds)
+	var chords := [[110.0, 164.81, 220.0, 277.18], [98.0, 146.83, 196.0, 246.94],
+			[123.47, 185.0, 246.94, 293.66], [103.83, 155.56, 207.65, 261.63]]
+	var per := seconds / chords.size()
+	var step := 60.0 / 100.0 / 2.0  # eighth notes
+	var pad := 0.0
+	var lead := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var idx := int(t / per) % chords.size()
+		var chord: Array = chords[idx]
+		var local := fmod(t, per)
+		var fade := clampf(local / 1.0, 0.0, 1.0) * clampf((per - local) / 1.0, 0.0, 1.0)
+		var v := 0.0
+		for f: float in chord:
+			v += sin(TAU * f * t) + 0.4 * sin(TAU * f * 1.004 * t)
+		pad = _lp(pad, v, 700.0)
+		var n := int(t / step)
+		var note: float = chord[[0, 2, 1, 3, 2, 1, 3, 2][n % 8]] * 2.0
+		var nt := fmod(t, step)
+		var tri := absf(fmod(note * t, 1.0) * 4.0 - 2.0) - 1.0
+		lead = _lp(lead, tri * _env(nt, 0.005, 0.12), 2400.0)
+		var beat := fmod(t, step * 2.0)
+		var bass := sin(TAU * chord[0] * 0.5 * t) * _env(beat, 0.01, 0.18)
+		b[i] = pad * 0.045 * (0.5 + 0.5 * fade) + lead * 0.16 + bass * 0.16
 	return b
 
 
