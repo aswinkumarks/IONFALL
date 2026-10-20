@@ -52,8 +52,24 @@ first-use shader compiles). The Sentinel itself is not the cost: the
 | Low | 59.2 | 16.7 / 18.1 / 23.8 |
 
 Sun shadows (every character drawn twice) are the main remaining cost.
-Medium (the phone default) is now: 0.75 render scale, FXAA, glow, no
+Medium (the phone default) was then: 0.75 render scale, FXAA, glow, no
 soft shadows and no sun shadows; baked lighting still shadows the map.
 FSR1 needs the Forward+ renderer; the project uses Mobile, so the FSR rows
 above were bilinear in practice (hence the identical numbers). `apply_video`
 now only asks for FSR under Forward+.
+
+### Halcyon Spire (2026-10-20)
+
+Spire on the Mi 11X, 3 bots, autopilot, minutes 2–3. The larger map is
+fill-rate bound at 0.75 render scale; glow costs almost nothing.
+
+| Video settings | fps avg | Frame p50 / p95 / p99 (ms) |
+|---|---|---|
+| Medium (0.75 scale) | 55.9–57.1 | 16.7 / 24–25 / 31–32 |
+| Medium without glow | 56.9–57.7 | 16.7 / 23–24 / 30–31 |
+| Medium at 0.6 scale | 58.6–59.3 | 16.7 / 16.7–18.1 / 22–27 |
+| Low | 59.2–59.5 | 16.7 / 16.7 / 18–23 |
+
+Medium now uses a 0.6 render scale (on a 2400×1080 screen the 3D view is
+1440×648; the HUD stays at full resolution). Players who want a sharper
+image can raise the render scale in Settings.
