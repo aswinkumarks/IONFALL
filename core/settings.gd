@@ -14,6 +14,7 @@ const DEFAULTS := {
 		"map": "station",  ## Maps.PLAYABLE, for Play and Host
 		"mode": "ffa",  ## GameMode.IDS, for Play and Host
 		"friendly_fire": false,  ## TDM, when hosting (PLAN §2.3)
+		"bot_difficulty": "normal",  ## BotBrain.DIFFICULTY_IDS
 	},
 	"video": {
 		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive

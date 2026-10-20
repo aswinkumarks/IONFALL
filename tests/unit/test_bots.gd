@@ -134,3 +134,22 @@ func test_bots_fetch_power_weapons() -> void:
 				picked += 1
 	gut.p("power weapon pickups in 30 s: %d" % picked)
 	assert_gt(picked, 0, "bots go and get power weapons")
+
+
+## PLAN §2.7: higher difficulties aim better (less delay and error), and
+## none aims perfectly.
+func test_difficulty_changes_accuracy() -> void:
+	var acc := []
+	for level: int in [BotBrain.Difficulty.EASY, BotBrain.Difficulty.INSANE]:
+		for id in brains.keys():
+			world.remove_player(id)
+		brains = {}
+		for i in 2:
+			var id := 2000 + level * 10 + i
+			world.add_player(id, Loadouts.ffa(), "Bot %d" % i, true)
+			brains[id] = BotBrain.new(world, nav, id, 31 + i, level)
+		var r := _run(3600)
+		acc.append(float(r.hits) / maxf(r.shots, 1))
+		gut.p("difficulty %d: shots %d hits %d accuracy %.0f%%" % [level, r.shots, r.hits, 100.0 * acc[-1]])
+	assert_gt(acc[1], acc[0], "Insane hits more often than Easy")
+	assert_lt(acc[1], 0.9, "Insane still misses")

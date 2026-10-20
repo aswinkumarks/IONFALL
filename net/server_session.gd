@@ -47,6 +47,7 @@ var use_primaries: bool = false
 ## GameMode.FFA or TDM (set before start()); friendly fire is a host setting.
 var game_mode: int = GameMode.FFA
 var friendly_fire: bool = false
+var bot_difficulty: int = BotBrain.Difficulty.NORMAL
 var match_id: int = 0
 var phase: int = MatchPhase.WAITING
 var phase_seq: int = 0
@@ -235,7 +236,7 @@ func update_bot_fill() -> void:
 		var bot_name: String = BOT_NAMES[_bot_seq % BOT_NAMES.size()]
 		var id := 1000 + _bot_seq
 		if bot_nav != null:
-			add_bot(bot_name, BotBrain.new(world, bot_nav, id, _rng.randi()))
+			add_bot(bot_name, BotBrain.new(world, bot_nav, id, _rng.randi(), bot_difficulty))
 		else:
 			add_bot(bot_name, TargetDummyDriver.new(_bot_seq * 50))
 	_broadcast_roster()

@@ -4,6 +4,7 @@ extends Node
 ## Arguments (after `--`): `--port N` (default 47710), `--map ID` (maps/maps.gd), `--bots N` fills the match
 ## with training dummies up to N combatants, `--status-interval S` seconds between status lines,
 ## `--name NAME` shown in LAN server lists, `--mode ffa|tdm`, `--friendly-fire` (TDM),
+## `--bot-difficulty easy|normal|hard|insane`,
 ## `--no-discovery` stops beacons, `--smoke-test`
 ## exits right after startup so CI can verify that the exported server boots.
 ## Logs go to stderr; stdout is reserved for the managed-mode JSON protocol.
@@ -36,6 +37,7 @@ func _ready() -> void:
 	server.use_primaries = true
 	server.game_mode = GameMode.from_id(Platform.get_user_arg("--mode", "ffa"))
 	server.friendly_fire = Platform.user_args.has("--friendly-fire")
+	server.bot_difficulty = maxi(BotBrain.DIFFICULTY_IDS.find(Platform.get_user_arg("--bot-difficulty", "normal")), 0)
 	add_child(server)
 	var loadout := Loadouts.ffa()
 	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points(), gameplay.pickup_spots())

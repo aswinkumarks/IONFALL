@@ -117,6 +117,7 @@ func _ready() -> void:
 		server.use_primaries = true
 		server.game_mode = config.game_mode
 		server.friendly_fire = config.friendly_fire
+		server.bot_difficulty = config.bot_difficulty
 		add_child(server)
 		var port := config.port if config.mode == MatchConfig.Mode.HOST else -1
 		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots())

@@ -14,11 +14,18 @@ const Held := PlayerCommand.Held
 const Action := PlayerCommand.Action
 const T := BotNavigation.Traversal
 
-## Normal difficulty.
-const REACTION_TICKS := 15
-const MAX_TURN := 0.1  ## rad per tick (~340°/s)
-const AIM_ERROR := 0.035  ## rad of tracking error (~2°)
-const AIM_SPEED_ERROR := 0.006  ## extra rad per m/s of target lateral speed
+enum Difficulty { EASY, NORMAL, HARD, INSANE }
+const DIFFICULTY_IDS := ["easy", "normal", "hard", "insane"]
+## Per difficulty (PLAN §2.7: higher levels only react faster and aim with
+## less error; none sees through walls or aims perfectly):
+## [reaction ticks, max turn rad/tick, tracking error rad, extra error rad
+## per m/s of target lateral speed, grenade chance per sighting].
+const TUNING := [
+	[30, 0.06, 0.07, 0.012, 0.05],
+	[15, 0.1, 0.035, 0.006, 0.2],
+	[9, 0.14, 0.022, 0.004, 0.25],
+	[5, 0.18, 0.014, 0.0025, 0.3],
+]
 const VIEW_RANGE := 60.0
 const VIEW_COS := 0.45  ## ~127° field of view
 const CLOSE_AWARENESS := 6.0  ## seen at any angle this close
@@ -29,7 +36,6 @@ const STUCK_CHECK_TICKS := 90
 ## Splash weapons are kept for this range band (too close hurts the bot).
 const SPLASH_RANGE := Vector2(6.0, 30.0)
 const GRENADE_RANGE := Vector2(7.0, 18.0)
-const GRENADE_CHANCE := 0.2  ## per new sighting in range
 const MELEE_RANGE := 1.8
 ## Out of combat, bots fetch power weapons and grenades this close.
 const POWER_FETCH_RANGE := 35.0
@@ -38,6 +44,7 @@ const SLOT_PRIMARY := 0
 const SLOT_SIDEARM := 1
 
 var goal: int = Goal.ROAM
+var difficulty: int = Difficulty.NORMAL
 var target_id: int = 0
 var stuck_teleports: int = 0
 
@@ -79,11 +86,25 @@ func go_to(pos: Vector3) -> void:
 	_last_repath = -100000
 
 
-func _init(world: SimWorld, nav: BotNavigation, id: int, seed_value: int) -> void:
+var _reaction_ticks: int = 15
+var _max_turn: float = 0.1
+var _aim_error: float = 0.035
+var _aim_speed_error: float = 0.006
+var _grenade_chance: float = 0.2
+
+
+func _init(world: SimWorld, nav: BotNavigation, id: int, seed_value: int, p_difficulty: int = Difficulty.NORMAL) -> void:
 	_world = world
 	_nav = nav
 	_id = id
 	_rng.seed = seed_value
+	difficulty = clampi(p_difficulty, 0, TUNING.size() - 1)
+	var t: Array = TUNING[difficulty]
+	_reaction_ticks = t[0]
+	_max_turn = t[1]
+	_aim_error = t[2]
+	_aim_speed_error = t[3]
+	_grenade_chance = t[4]
 	_noise_phase = Vector4(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU)
 
 
@@ -155,9 +176,9 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 		want_pitch = atan2(to.y, Vector2(to.x, to.z).length())
 	elif move.length_squared() > 0.01:
 		want_yaw = atan2(-move.x, -move.z)
-	_yaw += clampf(wrapf(want_yaw - _yaw, -PI, PI), -MAX_TURN, MAX_TURN)
+	_yaw += clampf(wrapf(want_yaw - _yaw, -PI, PI), -_max_turn, _max_turn)
 	_yaw = wrapf(_yaw, -PI, PI)
-	_pitch += clampf(want_pitch - _pitch, -MAX_TURN, MAX_TURN)
+	_pitch += clampf(want_pitch - _pitch, -_max_turn, _max_turn)
 	if goal == Goal.ATTACK and target != null:
 		held = (held & ~Held.SPRINT) | _trigger(tick, p, target, want_yaw, want_pitch)
 	else:
@@ -209,8 +230,8 @@ func _perceive(tick: int, p: SimPlayer) -> void:
 			if primary.is_projectile() and (best_d < SPLASH_RANGE.x or best_d > SPLASH_RANGE.y):
 				_slot = SLOT_SIDEARM
 			if p.state.grenades > 0 and best_d >= GRENADE_RANGE.x and best_d <= GRENADE_RANGE.y \
-					and _rng.randf() < GRENADE_CHANCE:
-				_throw_at = tick + REACTION_TICKS + 10
+					and _rng.randf() < _grenade_chance:
+				_throw_at = tick + _reaction_ticks + 10
 		target_id = best
 		_last_seen_pos = _world.players[best].state.position
 		_last_seen_tick = tick
@@ -401,7 +422,7 @@ func _aim_point(target: SimPlayer, p: SimPlayer) -> Vector3:
 	var to := base - p.eye_position()
 	var d := maxf(to.length(), 1.0)
 	var lateral := (ts.velocity - ts.velocity.project(to.normalized())).length()
-	var amplitude := AIM_ERROR + AIM_SPEED_ERROR * lateral
+	var amplitude := _aim_error + _aim_speed_error * lateral
 	var t := float(_world.tick) * 0.05
 	var err_yaw := amplitude * (sin(t * 1.3 + _noise_phase.x) * 0.7 + sin(t * 3.1 + _noise_phase.y) * 0.3)
 	var err_pitch := amplitude * 0.6 * (sin(t * 1.7 + _noise_phase.z) * 0.7 + sin(t * 2.9 + _noise_phase.w) * 0.3)
@@ -411,7 +432,7 @@ func _aim_point(target: SimPlayer, p: SimPlayer) -> Vector3:
 
 func _trigger(tick: int, p: SimPlayer, target: SimPlayer, want_yaw: float, want_pitch: float) -> int:
 	var s := p.state
-	if tick - _seen_since < REACTION_TICKS or not _visible:
+	if tick - _seen_since < _reaction_ticks or not _visible:
 		return 0
 	var w := s.weapon_slot
 	var d := p.state.position.distance_to(target.state.position)

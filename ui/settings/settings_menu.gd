@@ -31,6 +31,7 @@ const SCHEMA := {
 		["video", "shadows", "SETTING_SHADOWS", "check"],
 	],
 	"SETTINGS_TAB_GAME": [
+		["profile", "bot_difficulty", "SETTING_BOT_DIFFICULTY", "choice", ["easy", "normal", "hard", "insane"]],
 		["profile", "friendly_fire", "SETTINGS_FRIENDLY_FIRE", "check"],
 	],
 	"SETTINGS_TAB_AUDIO": [
