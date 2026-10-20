@@ -106,7 +106,7 @@ func _ready() -> void:
 	_loadout = loadout
 	_spawns = spawns
 	if config.mode == MatchConfig.Mode.JOIN:
-		if not _start_client(0):
+		if not _start_client(config.reconnect_token):
 			return
 		_info.text = tr("NET_CONNECTING") % config.address
 	else:
@@ -195,6 +195,12 @@ func _start_client(token: int) -> bool:
 func _on_client_lost(reason: String) -> void:
 	if _reconnect_until_ms != 0:
 		return  # the reconnect loop retries
+	# Dropped mid-match (our network blipped, or the server timed us out):
+	# rejoin with our token while the server keeps our place.
+	if reason == "disconnected" and _started and not _leaving and client.reconnect_token != 0:
+		_reconnect_until_ms = Time.get_ticks_msec() + ServerSession.RECONNECT_WINDOW_MS
+		_reconnect_step.call_deferred()
+		return
 	match reason:
 		"disconnected":
 			_fail("NET_DISCONNECTED")
@@ -982,6 +988,11 @@ func _leave() -> void:
 ## Back to the menu, which shows `reason` (a translation key or text).
 func _fail(reason: String) -> void:
 	MatchConfig.last_error = reason
+	# Lost to the network after joining: the menu offers to rejoin while the
+	# server would still take our token back.
+	if client != null and client.reconnect_token != 0 and reason.begins_with("NET_"):
+		MatchConfig.rejoin = {"config": config, "token": client.reconnect_token,
+				"until_ms": Time.get_ticks_msec() + ServerSession.RECONNECT_WINDOW_MS - 10000}
 	_leave()
 
 

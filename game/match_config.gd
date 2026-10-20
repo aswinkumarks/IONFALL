@@ -8,6 +8,9 @@ enum Mode { OFFLINE, HOST, JOIN }
 
 static var pending: MatchConfig
 static var last_error: String = ""
+## After losing a match to the network: how to rejoin it (PLAN §3.4: the
+## server keeps our score and team for 60 s). {config, token, until_ms}.
+static var rejoin: Dictionary = {}
 
 var mode: int = Mode.OFFLINE
 var address: String = "127.0.0.1"
@@ -22,6 +25,12 @@ var game_mode: int = GameMode.FFA  ## hosting: the mode to run
 var friendly_fire: bool = false  ## hosting TDM
 var bot_difficulty: int = 1  ## BotBrain.Difficulty
 var map_retried: bool = false  ## joined once already and reloaded with the host's map
+var reconnect_token: int = 0  ## JOIN: rejoin a match we dropped out of
+
+
+## The rejoin offer if it is still open, else {}.
+static func open_rejoin() -> Dictionary:
+	return rejoin if not rejoin.is_empty() and Time.get_ticks_msec() < int(rejoin.until_ms) else {}
 
 
 ## PLAN §3.5.1: a phone host is limited to 4 combatants until it passes the

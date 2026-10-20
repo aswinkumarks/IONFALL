@@ -69,6 +69,7 @@ func _ready() -> void:
 		_status.text = tr(MatchConfig.last_error)
 		_status.visible = true
 		MatchConfig.last_error = ""
+	_offer_rejoin()
 	_update_player_card()
 	Profile.changed.connect(_update_player_card)
 	_play_button.grab_focus()
@@ -110,6 +111,29 @@ func _next_mode() -> void:
 func _update_mode_button() -> void:
 	var i := GameMode.from_id(str(Settings.get_value("profile", "mode")))
 	%ModeButton.text = tr("MENU_MODE") % tr(GameMode.NAME_KEYS[i])
+
+
+## After a match was lost to the network, a button rejoins it with our
+## token while the server keeps our place (PLAN §3.4: 60 s).
+func _offer_rejoin() -> void:
+	var offer := MatchConfig.open_rejoin()
+	if offer.is_empty():
+		return
+	var button := UiStyle.menu_button("MENU_REJOIN", &"PrimaryButton")
+	button.custom_minimum_size.y = 50
+	_status.get_parent().add_child(button)
+	_status.get_parent().move_child(button, _status.get_index() + 1)
+	button.pressed.connect(func() -> void:
+		var config: MatchConfig = offer.config
+		config.reconnect_token = offer.token
+		config.map_retried = false
+		MatchConfig.rejoin = {}
+		MatchConfig.pending = config
+		get_tree().change_scene_to_file(MATCH))
+	get_tree().create_timer((int(offer.until_ms) - Time.get_ticks_msec()) / 1000.0).timeout.connect(func() -> void:
+		if is_instance_valid(button):
+			button.queue_free())
+	button.grab_focus.call_deferred()
 
 
 func _update_map_button() -> void:

@@ -104,3 +104,25 @@ func test_host_notice_and_silence() -> void:
 	server.notify_clients(Protocol.Notice.HOST_RESUMED)
 	await wait_until(func() -> bool: return not a.host_paused, 2.0)
 	assert_false(a.host_paused)
+
+
+func test_tdm_reconnect_rejoins_the_same_team() -> void:
+	server.game_mode = GameMode.TDM
+	server.world.teams_enabled = true
+	server.bot_fill = 4
+	server.update_bot_fill()
+	var a := _join("Alpha")
+	await _wait_predicting(a)
+	var id := a.local_id
+	var token := a.reconnect_token
+	var team: int = server.world.players[id].team
+	await wait_until(func() -> bool: return a.team_of(id) == team, 3.0)
+	assert_eq(a.team_of(id), team, "the client learns its team from the roster")
+	a.leave()
+	await wait_until(func() -> bool: return server.clients.is_empty(), 3.0)
+	# Tip the balance so a fresh join would go to the other team.
+	server.world.players.values().filter(func(p: SimPlayer) -> bool: return p.is_bot and p.team != team)[0].team = team
+	var back := _join("Alpha", token)
+	await _wait_predicting(back)
+	assert_eq(back.local_id, id)
+	assert_eq(server.world.players[id].team, team, "same team after reconnecting")
