@@ -32,6 +32,9 @@ const SCHEMA := {
 		["video", "render_scale", "SETTING_RENDER_SCALE", "percent", 0.5, 1.0, 0.05],
 		["video", "fps_cap", "SETTING_FPS_CAP", "choice", [30, 60, 90, 120]],
 		["video", "shadows", "SETTING_SHADOWS", "check"],
+		["video", "glow", "SETTING_GLOW", "check"],
+		["video", "effects", "SETTING_EFFECTS", "percent", 0.25, 1.0, 0.05],
+		["video", "adaptive_quality", "SETTING_ADAPTIVE_QUALITY", "check"],
 	],
 	"SETTINGS_TAB_GAME": [
 		["profile", "bot_difficulty", "SETTING_BOT_DIFFICULTY", "choice", ["easy", "normal", "hard", "insane"]],

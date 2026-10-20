@@ -15,12 +15,12 @@ func _ready() -> void:
 	add_child(station)
 	Settings.apply_environment(station)
 	for light in station.find_children("*", "DirectionalLight3D", true, false):
-		(light as DirectionalLight3D).shadow_enabled = Settings.get_value("video", "shadows")
+		(light as DirectionalLight3D).shadow_enabled = Settings.video("shadows")
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
 		if section == "video" and is_inside_tree():
 			Settings.apply_environment(station)
 			for light in station.find_children("*", "DirectionalLight3D", true, false):
-				(light as DirectionalLight3D).shadow_enabled = Settings.get_value("video", "shadows"))
+				(light as DirectionalLight3D).shadow_enabled = Settings.video("shadows"))
 	_camera.fov = 62.0
 	_camera.current = true
 	add_child(_camera)

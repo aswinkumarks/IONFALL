@@ -148,6 +148,65 @@ func thermal_status() -> int:
 	return int(power.call("getCurrentThermalStatus")) if power != null else -1
 
 
+## Android thermal headroom (PowerManager.getThermalHeadroom, API 30+):
+## 0 = cool, 1.0 = the device starts throttling, forecast `seconds` ahead.
+## NaN where unknown. Android rate-limits it (about once per second), so the
+## value is cached for 5 s.
+func thermal_headroom(seconds: int = 10) -> float:
+	var now := Time.get_ticks_msec()
+	if now - _headroom_at < 5000 and _headroom_at != 0:
+		return _headroom
+	_headroom_at = now
+	_headroom = NAN
+	var power: Variant = _power_manager()
+	if power != null:
+		var v: Variant = power.call("getThermalHeadroom", seconds)
+		if v != null:
+			_headroom = float(v)
+	return _headroom
+
+
+var _headroom: float = NAN
+var _headroom_at: int = 0
+
+
+## ADPF spike (PLAN §3.10, docs/decisions/0004-thermals-adpf.md): a
+## PerformanceHintManager session for the calling (main) thread, told the
+## target frame time and each frame's actual work time so the OS can pick
+## CPU clocks. Opt-in with `--adpf`; returns false if unavailable.
+func start_performance_hints(target_ms: float) -> bool:
+	if not is_android() or not Engine.has_singleton("AndroidRuntime"):
+		return false
+	var ctx: Variant = Engine.get_singleton("AndroidRuntime").call("getApplicationContext")
+	var manager: Variant = ctx.call("getSystemService", "performance_hint") if ctx != null else null
+	if manager == null:
+		push_warning("Platform: no PerformanceHintManager")
+		return false
+	var process: Variant = JavaClassWrapper.wrap("android.os.Process")
+	var tid := int(process.call("myTid")) if process != null else 0
+	if tid == 0:
+		return false
+	_hint_session = manager.call("createHintSession", PackedInt32Array([tid]), int(target_ms * 1e6))
+	print("Platform: ADPF hint session for tid %d: %s" % [tid, "ok" if _hint_session != null else "failed"])
+	return _hint_session != null
+
+
+## Reports one frame's work time to the ADPF session (no-op without one).
+func report_frame_work(work_ms: float) -> void:
+	if _hint_session != null:
+		_hint_session.call("reportActualWorkDuration", int(work_ms * 1e6))
+
+
+var _hint_session: Variant = null
+
+
+func _power_manager() -> Variant:
+	if not is_android() or not Engine.has_singleton("AndroidRuntime"):
+		return null
+	var ctx: Variant = Engine.get_singleton("AndroidRuntime").call("getApplicationContext")
+	return ctx.call("getSystemService", "power") if ctx != null else null
+
+
 func _android_activity() -> Variant:
 	if not is_android() or not Engine.has_singleton("AndroidRuntime"):
 		return null

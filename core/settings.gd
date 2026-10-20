@@ -24,6 +24,9 @@ const DEFAULTS := {
 		"fps_cap": 60,
 		"fov": 68.0,  ## vertical degrees (≈ 100° horizontal at 16:9)
 		"shadows": true,
+		"glow": true,
+		"effects": 1.0,  ## particle density
+		"adaptive_quality": true,  ## automatic step-down when slow or hot (PLAN §3.10)
 	},
 	"input": {
 		"sensitivity_x": 1.0,
@@ -54,6 +57,10 @@ const DEFAULTS := {
 }
 
 var _cfg := ConfigFile.new()
+## Session-only step-downs from the adaptive quality governor (PLAN §3.10):
+## video key -> value used instead of the setting. Never saved; cleared when
+## the player changes a video setting.
+var adaptive: Dictionary = {}
 ## `--quality <preset>[,key=value...]` (debug builds): this session uses
 ## that preset's video values, with any overrides, without saving them, for
 ## performance tests. Example: `--quality medium,glow=false`.
@@ -81,9 +88,10 @@ func _ready() -> void:
 
 
 ## Bus layout (PLAN §3.12): Master → Music, SFX → Weapons, Footsteps, World,
-## UI, and Occluded (−6 dB, 2 kHz low-pass) for sounds behind walls.
+## UI, Occluded (−6 dB, 2 kHz low-pass) for sounds behind walls and Below
+## (−1.5 dB, 5 kHz low-pass) for sounds from the level below: the vertical cue.
 const BUSES := [["Music", "Master"], ["SFX", "Master"], ["Weapons", "SFX"], ["Footsteps", "SFX"], ["World", "SFX"],
-		["UI", "SFX"], ["Occluded", "SFX"]]
+		["UI", "SFX"], ["Occluded", "SFX"], ["Below", "SFX"]]
 
 
 func _ensure_buses() -> void:
@@ -96,11 +104,16 @@ func _ensure_buses() -> void:
 		AudioServer.set_bus_send(idx, b[1])
 	var occluded := AudioServer.get_bus_index("Occluded")
 	AudioServer.set_bus_volume_db(occluded, -6.0)
+	var below := AudioServer.get_bus_index("Below")
+	AudioServer.set_bus_volume_db(below, -1.5)
 	# Browsers' default (Sample) playback has no bus effects: volume only.
 	if not Platform.is_web():
 		var lowpass := AudioEffectLowPassFilter.new()
 		lowpass.cutoff_hz = 2000.0
 		AudioServer.add_bus_effect(occluded, lowpass)
+		var muffle := AudioEffectLowPassFilter.new()
+		muffle.cutoff_hz = 5000.0
+		AudioServer.add_bus_effect(below, muffle)
 		var night := AudioEffectCompressor.new()
 		night.threshold = -20.0
 		night.ratio = 6.0
@@ -148,7 +161,7 @@ func apply_video() -> void:
 	if not windowed and res != Vector2i.ZERO:
 		res_scale = clampf(float(res.y) / maxf(DisplayServer.window_get_size().y, 1.0), 0.25, 1.0)
 	var preset := quality_preset()
-	var scale := clampf(float(get_value("video", "render_scale")) * res_scale, 0.25, 1.0)
+	var scale := clampf(float(video("render_scale")) * res_scale, 0.25, 1.0)
 	# FSR only helps when actually upscaling; it also sharpens. The Mobile
 	# renderer (phones) doesn't support it and would warn, so they get bilinear.
 	if preset.upscale == "fsr" and scale < 0.99 and RenderingServer.get_current_rendering_method() == "forward_plus":
@@ -160,6 +173,7 @@ func apply_video() -> void:
 	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][preset.msaa]
 	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if preset.fxaa else Viewport.SCREEN_SPACE_AA_DISABLED
 	root.anisotropic_filtering_level = preset.aniso
+	root.mesh_lod_threshold = preset.lod
 	RenderingServer.directional_shadow_atlas_set_size(preset.shadow_size, true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset.soft_shadows)
@@ -208,13 +222,33 @@ func get_value(section: String, key: String) -> Variant:
 		var q := default_quality()
 		if key == "quality":
 			return q
-		if QUALITY[q].has(key):
-			return QUALITY[q][key]
+		# Keys added after the file was saved follow the chosen preset.
+		var preset: Dictionary = QUALITY.get(_cfg.get_value("video", "quality", q), QUALITY[q])
+		if preset.has(key):
+			return preset[key]
 	return _cfg.get_value(section, key, DEFAULTS.get(section, {}).get(key))
+
+
+## A video value as it applies now: the setting (or the preset's extra),
+## unless the adaptive governor has stepped it down.
+func video(key: String) -> Variant:
+	if adaptive.has(key):
+		return adaptive[key]
+	if DEFAULTS.video.has(key):
+		return get_value("video", key)
+	return quality_preset().get(key)
+
+
+## The governor lowers `key` for this session (AdaptiveQuality).
+func set_adaptive(key: String, value: Variant) -> void:
+	adaptive[key] = value
+	Events.settings_changed.emit("video", key, value)
 
 
 func set_value(section: String, key: String, value: Variant) -> void:
 	_cfg.set_value(section, key, value)
+	if section == "video":
+		adaptive.clear()
 	if section == "video" and not _applying_preset:
 		if key == "quality" and QUALITY.has(value):
 			# A preset writes the values it controls (the screen shows them).
@@ -229,22 +263,23 @@ func set_value(section: String, key: String, value: Variant) -> void:
 	Events.settings_changed.emit(section, key, value)
 
 
-## Graphics presets. render_scale and shadows are also individual settings
+## Graphics presets. render_scale, shadows, glow and effects (particle
+## density) are also individual settings
 ## (changing them by hand switches the preset to "custom"); the rest is
 ## applied from the preset ("custom" keeps the last preset's extras).
 const QUALITY := {
-	"low": {"render_scale": 0.6, "shadows": false, "upscale": "bilinear", "msaa": 0, "fxaa": false,
-			"shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "glow": false},
+	"low": {"render_scale": 0.6, "shadows": false, "glow": false, "effects": 0.4, "upscale": "bilinear", "msaa": 0,
+			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0},
 	## Phone default: sized to hold 60 fps on the Mi 11X (docs/perf/m2-station.md).
-	"medium": {"render_scale": 0.6, "shadows": false, "upscale": "fsr", "msaa": 0, "fxaa": true,
-			"shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "glow": true},
-	"high": {"render_scale": 1.0, "shadows": true, "upscale": "bilinear", "msaa": 1, "fxaa": false,
-			"shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "glow": true},
-	"ultra": {"render_scale": 1.0, "shadows": true, "upscale": "bilinear", "msaa": 2, "fxaa": false,
-			"shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "glow": true},
+	"medium": {"render_scale": 0.6, "shadows": false, "glow": true, "effects": 0.7, "upscale": "fsr", "msaa": 0,
+			"fxaa": true, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0},
+	"high": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 1,
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0},
+	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5},
 }
 const QUALITY_NAMES := ["low", "medium", "high", "ultra", "custom"]
-const PRESET_KEYS := ["render_scale", "shadows"]
+const PRESET_KEYS := ["render_scale", "shadows", "glow", "effects"]
 
 var _applying_preset: bool = false
 
@@ -279,14 +314,18 @@ func save_settings() -> Error:
 	return AtomicFile.write_text(PATH, _cfg.encode_to_text())
 
 
-## Applies the quality preset's environment parts (glow) and a little colour
-## grading (contrast, saturation) to a scene's WorldEnvironment.
+## Applies the quality preset's environment parts (glow) and colour grading
+## (a little contrast and saturation, plus the map's LUT from its "grade"
+## meta, ColorGrade) to a scene's WorldEnvironment.
 func apply_environment(root: Node) -> void:
+	var grade: Dictionary = root.get_meta("grade", {})
 	for we in root.find_children("*", "WorldEnvironment", true, false):
 		var env: Environment = (we as WorldEnvironment).environment
 		if env == null:
 			continue
-		env.glow_enabled = quality_preset().glow
+		env.glow_enabled = bool(video("glow"))
 		env.adjustment_enabled = true
 		env.adjustment_contrast = 1.08
 		env.adjustment_saturation = 1.12
+		if not grade.is_empty():
+			env.adjustment_color_correction = ColorGrade.lut(grade)
