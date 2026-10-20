@@ -56,3 +56,36 @@ func test_sentinel_retarget() -> void:
 	assert_between(hips.y, 85.0, 110.0, "hips stay near the model's rest height (cm)")
 	rig.set_weapon(Loadouts.PISTOL.id)
 	assert_almost_eq(SentinelRig._grip.basis.get_scale().x, SentinelRig.SENTINEL_GRIP_SCALE * 100.0, 0.5, "grip scaled into centimetres")
+
+
+## The Sentinel's finger bones (tools/rig_sentinel_fingers.gd): three per
+## finger and thumb on both hands, skinned, and curled towards the palm.
+func test_sentinel_fingers() -> void:
+	var rig := SentinelRig.new()
+	add_child_autofree(rig)
+	rig.setup(Color.ORANGE)
+	var sk := rig._skeleton
+	for side: String in ["Right", "Left"]:
+		for finger: String in SentinelRig.GRIP_CURL:
+			for k in 3:
+				var bone := sk.find_bone("%sHand%s%d" % [side, finger, k + 1])
+				assert_gt(bone, -1, "%s %s %d exists" % [side, finger, k + 1])
+				if bone >= 0:
+					assert_ne(sk.get_bone_pose_rotation(bone), Quaternion.IDENTITY, "%s %s %d curled" % [side, finger, k + 1])
+	var mesh: ArrayMesh = load(SentinelRig.FINGER_MESH)
+	var skin: Skin = load(SentinelRig.FINGER_SKIN)
+	var arrays := mesh.surface_get_arrays(0)
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var on_fingers := {}
+	for i in weights.size() / 4:
+		var total := 0.0
+		for k in 4:
+			total += weights[i * 4 + k]
+			if weights[i * 4 + k] > 0.5:
+				on_fingers[String(skin.get_bind_name(bones[i * 4 + k]))] = true
+		if absf(total - 1.0) > 0.01:
+			fail_test("vertex %d weights sum to %f" % [i, total])
+			return
+	for name: String in ["RightHandIndex3", "RightHandPinky2", "RightHandThumb3", "LeftHandMiddle3"]:
+		assert_true(on_fingers.has(name), "%s moves vertices" % name)

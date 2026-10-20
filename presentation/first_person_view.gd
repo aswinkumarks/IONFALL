@@ -235,7 +235,8 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 			var to_rig := _arms.global_transform.affine_inverse()
 			var grip := weapon_node.global_position
 			var support := grip.lerp(_muzzle.global_position, SUPPORT_ALONG) - camera.global_basis.y * SUPPORT_DROP
-			_arms.pose_first_person(to_rig * weapon_node.global_transform, to_rig * support)
+			var handle := (weapon_node.get_node("Grip") as Node3D).global_position
+			_arms.pose_first_person(to_rig * weapon_node.global_transform, to_rig * handle, to_rig * support)
 
 
 ## Death cam (PLAN §2.6): from where we died, looking at the killer.

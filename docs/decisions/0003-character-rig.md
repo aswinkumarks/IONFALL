@@ -100,3 +100,25 @@ character plus the weapon.
 Budget: ~78k triangles for five characters with shadows (PLAN §3.10 caps
 the frame at 300k on the Mi 11X). Laptop, 8 characters, shadows on: GPU
 p50 6.96 ms (armoured rig 6.59 ms). Mi 11X measurement pending.
+
+## Update 5 (2026-10-20): Sentinel finger bones
+
+Meshy's auto-rig has no finger bones, so the Sentinel's hands couldn't close
+on a weapon. `tools/rig_sentinel_fingers.gd` adds them in Godot, without
+Blender or Mixamo: three bones per finger and thumb on each hand (30 in
+all), placed from the hand mesh. In the hand bone's space the fingers run
+along +Y; past the knuckles the thumb's tip sits across a gap from the
+four fingers, which split into four bands across the hand. Each finger's
+joints come from the centre of its band at the knuckle, 42 % and 72 % of
+its length and the tip. Vertices on the hand are re-skinned by inverse
+distance (⁴) to the bone segments, the palm included, with finger weights
+fading out just below the knuckles so the palm stays rigid. The tool
+writes the re-weighted mesh (LODs regenerated) and a skin whose extra
+binds name the new bones; `SentinelRig` adds those bones at load, taking
+their rests from the bind poses.
+
+The clips have no finger tracks, so the curl is set once: the right hand
+closed around the grip, the left cupped for the fore-end. In first person
+the right palm goes against the weapon's handle (the middle of the lowest
+third of the model, the "Grip" marker) and the IK's forearm takes the
+hand's roll, so the wrist only bends.

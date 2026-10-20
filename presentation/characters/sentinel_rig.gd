@@ -2,7 +2,8 @@ class_name SentinelRig
 extends ArmoredRig
 ## Cybernetic Sentinel (default): a Meshy community model (CC0, by tborcen),
 ## reduced to ~15.6k triangles and auto-rigged by Meshy (24-bone humanoid,
-## centimetres, A-pose). It reuses ArmoredRig's AnimationTree with the
+## centimetres, A-pose), plus 30 finger bones added by
+## tools/rig_sentinel_fingers.gd. It reuses ArmoredRig's AnimationTree with the
 ## Universal Animation Library clips, retargeted in model space: each bone
 ## takes the source bone's rotation relative to its rest, after a per-bone
 ## correction from the T-pose rest to this A-pose rest. The armour's blue
@@ -10,6 +11,10 @@ extends ArmoredRig
 ## sentinel.gdshader.
 
 const SENTINEL_SCENE := "res://art/characters/sentinel/sentinel.glb"
+## Finger bones (Meshy's rig has none), from tools/rig_sentinel_fingers.gd:
+## the re-weighted mesh and a skin whose extra binds are the new bones.
+const FINGER_MESH := "res://art/characters/sentinel/sentinel_fingers_mesh.res"
+const FINGER_SKIN := "res://art/characters/sentinel/sentinel_fingers_skin.tres"
 const SHADER := preload("res://presentation/characters/sentinel.gdshader")
 ## Animation-library bone -> Sentinel bone.
 const BONE_MAP := {
@@ -32,6 +37,14 @@ const CHAIN := {
 const SENTINEL_UPPER := ["Spine01", "Spine", "neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand",
 		"RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const SAMPLE_FPS := 30.0
+## Finger curl in degrees per joint (base, middle, tip), towards the palm:
+## the right hand closes around the grip, the left cups the fore-end.
+const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [60.0, 75.0, 45.0], "Middle": [70.0, 80.0, 50.0],
+		"Ring": [75.0, 80.0, 50.0], "Pinky": [80.0, 80.0, 50.0]}
+const SUPPORT_CURL := {"Thumb": [10.0, 20.0, 15.0], "Index": [35.0, 40.0, 25.0], "Middle": [40.0, 45.0, 30.0],
+		"Ring": [45.0, 45.0, 30.0], "Pinky": [50.0, 45.0, 30.0]}
+## The palm's normal in the hand bones' space (fingers +Y).
+const PALM := Vector3(0.0, 0.0, -1.0)
 const SENTINEL_GRIP_SCALE := 2.0  ## a touch smaller than ArmoredRig: slimmer hands
 
 static var _sentinel_library: AnimationLibrary
@@ -46,7 +59,11 @@ func setup(color: Color) -> void:
 	_model.rotation.y = PI  # faces +Z; Godot forward is -Z
 	add_child(_model)
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0]
+	var skin: Skin = load(FINGER_SKIN)
+	_add_finger_bones(_skeleton, skin)
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		mi.mesh = load(FINGER_MESH)
+		mi.skin = skin
 		var base := mi.get_active_material(0) as StandardMaterial3D
 		_mat = ShaderMaterial.new()
 		_mat.shader = SHADER
@@ -61,14 +78,60 @@ func setup(color: Color) -> void:
 	_hand.bone_name = "RightHand"
 	_skeleton.add_child(_hand)
 	_build_tree(_retarget_to(_skeleton, String(_model.get_path_to(_skeleton))), SENTINEL_UPPER)
+	_curl_hands()
+
+
+## The animations don't move the fingers, so their curl is set once (again
+## after make_first_person resets the pose).
+func _curl_hands() -> void:
+	_curl(_skeleton, "Right", GRIP_CURL)
+	_curl(_skeleton, "Left", SUPPORT_CURL)
+
+
+## Bends each joint of `side`'s fingers by `curl` degrees about the axis that
+## turns it towards the palm (its direction × the palm normal).
+static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
+	for finger: String in curl:
+		for k in 3:
+			var bone := sk.find_bone("%sHand%s%d" % [side, finger, k + 1])
+			if bone < 0:
+				continue
+			var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
+			var dir := sk.get_bone_rest(next if next >= 0 else bone).origin.normalized()
+			sk.set_bone_pose_rotation(bone, Quaternion(dir.cross(PALM).normalized(), deg_to_rad(curl[finger][k])))
+
+
+func make_first_person() -> bool:
+	var ok := super()
+	_curl_hands()
+	return ok
+
+
+## Adds the skin's binds that `sk` lacks as bones: "<Side>Hand<Finger><n>",
+## parented to joint n-1 (the first to the hand). Rests come from the bind
+## poses: parent bind × child bind⁻¹.
+static func _add_finger_bones(sk: Skeleton3D, skin: Skin) -> void:
+	var poses := {}
+	for b in skin.get_bind_count():
+		poses[String(skin.get_bind_name(b))] = skin.get_bind_pose(b)
+	for b in skin.get_bind_count():
+		var name := String(skin.get_bind_name(b))
+		if sk.find_bone(name) >= 0:
+			continue
+		var n := name.right(1).to_int()
+		var parent := name.left(-1) + str(n - 1) if n > 1 else name.left(name.find("Hand") + 4)
+		var bone := sk.add_bone(name)
+		sk.set_bone_parent(bone, sk.find_bone(parent))
+		sk.set_bone_rest(bone, poses[parent] * (poses[name] as Transform3D).affine_inverse())
+	sk.reset_bone_poses()
 
 
 func _grip_local() -> Transform3D:
 	return _grip
 
 
-## Meshy's rig has no finger bones, so in first person the open hand lies
-## against the grip. Hand bone space (cm): fingers +Y, palm -Z, thumb -X.
+## First person: the palm against the handle, fingers curled round it
+## (GRIP_CURL). Hand bone space (cm): fingers +Y, palm -Z, thumb -X.
 func _fp_hand() -> Array:
 	return [Vector3.UP, Vector3.FORWARD, Vector3(-1.0, 8.0, -4.0)]
 

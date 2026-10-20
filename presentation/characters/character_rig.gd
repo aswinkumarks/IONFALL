@@ -87,6 +87,7 @@ func head_position() -> Vector3:
 
 
 ## First person: reach the right hand to grip `weapon` (its transform in this
-## rig's space) and the left hand to `support` (a point, same space).
-func pose_first_person(_weapon: Transform3D, _support: Vector3) -> void:
+## rig's space), whose handle is at `handle`, and the left hand to `support`
+## (points, same space).
+func pose_first_person(_weapon: Transform3D, _handle: Vector3, _support: Vector3) -> void:
 	pass

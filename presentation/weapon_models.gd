@@ -35,7 +35,8 @@ static func has(id: StringName) -> bool:
 	return MODELS.has(id)
 
 
-## A ready-to-add model for `id` (muzzle marker as child "Muzzle"), or null.
+## A ready-to-add model for `id` (markers as children "Muzzle" and "Grip",
+## the middle of the handle), or null.
 static func instantiate(id: StringName) -> Node3D:
 	if not MODELS.has(id):
 		return null
@@ -51,7 +52,45 @@ static func instantiate(id: StringName) -> Node3D:
 	muzzle.name = "Muzzle"
 	muzzle.position = (def[3] as Vector3) * float(def[1])
 	root.add_child(muzzle)
+	var grip := Node3D.new()
+	grip.name = "Grip"
+	grip.position = _handle(model)
+	root.add_child(grip)
 	return root
+
+
+## The handle: the middle of the lowest third of the model (the pistol grip
+## hangs lowest on every blaster), in the model's parent's space.
+static func _handle(model: Node3D) -> Vector3:
+	var pts := PackedVector3Array()
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		var xf := model.transform * _local_to(model, mi)
+		for s in mi.mesh.get_surface_count():
+			for v: Vector3 in mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+				pts.append(xf * v)
+	if pts.is_empty():
+		return Vector3.ZERO
+	var lo := INF
+	var hi := -INF
+	for p in pts:
+		lo = minf(lo, p.y)
+		hi = maxf(hi, p.y)
+	var c := Vector3.ZERO
+	var count := 0
+	for p in pts:
+		if p.y < lerpf(lo, hi, 0.35):
+			c += p
+			count += 1
+	return c / count
+
+
+static func _local_to(ancestor: Node3D, node: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var n: Node = node
+	while n != ancestor:
+		xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	return xf
 
 
 static func hip_offset(id: StringName) -> Vector3:
