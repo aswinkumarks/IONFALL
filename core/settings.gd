@@ -46,16 +46,23 @@ const DEFAULTS := {
 }
 
 var _cfg := ConfigFile.new()
-## `--quality <preset>` (debug builds): this session uses that preset's
-## video values without saving them, for performance tests.
+## `--quality <preset>[,key=value...]` (debug builds): this session uses
+## that preset's video values, with any overrides, without saving them, for
+## performance tests. Example: `--quality medium,glow=false`.
 var _quality_override: String = ""
+var _override_preset: Dictionary = {}
 
 
 func _ready() -> void:
 	load_settings()
-	var q := Platform.get_user_arg("--quality")
-	if OS.is_debug_build() and QUALITY.has(q):
-		_quality_override = q
+	var q := Platform.get_user_arg("--quality").split(",")
+	if OS.is_debug_build() and QUALITY.has(q[0]):
+		_quality_override = q[0]
+		_override_preset = QUALITY[q[0]].duplicate()
+		for pair in q.slice(1):
+			var key := pair.get_slice("=", 0)
+			if _override_preset.has(key):
+				_override_preset[key] = str_to_var(pair.get_slice("=", 1))
 	apply_video()
 	apply_audio()
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
@@ -186,8 +193,8 @@ func resolution_options() -> Array:
 
 
 func get_value(section: String, key: String) -> Variant:
-	if section == "video" and not _quality_override.is_empty() and (key == "quality" or QUALITY[_quality_override].has(key)):
-		return _quality_override if key == "quality" else QUALITY[_quality_override][key]
+	if section == "video" and not _quality_override.is_empty() and (key == "quality" or _override_preset.has(key)):
+		return _quality_override if key == "quality" else _override_preset[key]
 	if section == "video" and not _cfg.has_section_key(section, key):
 		# Video defaults follow the platform's quality preset.
 		var q := default_quality()
@@ -244,6 +251,8 @@ func default_quality() -> String:
 ## The preset whose extras apply: the chosen one, or for "custom" the
 ## platform default.
 func quality_preset() -> Dictionary:
+	if not _override_preset.is_empty():
+		return _override_preset
 	var q: String = get_value("video", "quality")
 	return QUALITY.get(q, QUALITY[default_quality()])
 
