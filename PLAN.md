@@ -47,8 +47,8 @@ Quake/Titanfall-inspired acceleration model. All values live in a `MovementConfi
 ### 2.2 Health / shield
 | Stat | Value *(provisional)* |
 |---|---|
-| Shield | 100. Recharge starts **210 ticks (3.5 s)** after the last damage, at 50/s |
-| Health | 100. Regen starts **360 ticks (6 s)** after the last damage, at 25/s |
+| Shield | 100. Recharge starts **300 ticks (5 s)** after the last damage, at 10/s |
+| Health | 100. Regen starts once the shield is full (so at least 5 s after the last damage), at 5/s |
 | Damage order | Shield first; overflow carries into health in the same hit |
 | Headshots | Multiplier applies **only to damage dealt to health**, except for *precision* weapons (Rail Sniper), whose multiplier also applies through shields |
 | Regen interruption | Any damage (including self-damage) resets both timers |

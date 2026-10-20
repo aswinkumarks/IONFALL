@@ -4,10 +4,12 @@ extends RefCounted
 
 const MAX_SHIELD := 100.0
 const MAX_HEALTH := 100.0
-const SHIELD_DELAY_TICKS := 210
-const HEALTH_DELAY_TICKS := 360
-const SHIELD_REGEN_PER_TICK := 50.0 / Sim.TICK_RATE
-const HEALTH_REGEN_PER_TICK := 25.0 / Sim.TICK_RATE
+## Both regens wait 5 s after the last damage; health then waits for a full
+## shield.
+const SHIELD_DELAY_TICKS := 300
+const HEALTH_DELAY_TICKS := 300
+const SHIELD_REGEN_PER_TICK := 10.0 / Sim.TICK_RATE  ## 10% per second
+const HEALTH_REGEN_PER_TICK := 5.0 / Sim.TICK_RATE  ## 5% per second
 
 
 class Result:
@@ -56,7 +58,7 @@ static func tick_regen(s: PlayerSimState) -> void:
 		s.shield = minf(MAX_SHIELD, s.shield + SHIELD_REGEN_PER_TICK)
 	if s.health_delay_ticks > 0:
 		s.health_delay_ticks -= 1
-	else:
+	elif s.shield >= MAX_SHIELD:
 		s.health = minf(MAX_HEALTH, s.health + HEALTH_REGEN_PER_TICK)
 
 
