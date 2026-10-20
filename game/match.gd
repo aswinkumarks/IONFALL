@@ -65,6 +65,9 @@ var _tally := MatchStats.new()
 var _tally_match: int = 0
 var _results_applied: bool = false
 var _perf_ms := FrameStats.new(7200)  ## frame times of the current minute
+var _perf_gpu := FrameStats.new(7200)  ## GPU time per frame (ms)
+var _perf_cpu := FrameStats.new(7200)  ## main thread: process + physics time (ms)
+var _perf_render_cpu := FrameStats.new(7200)  ## rendering CPU time (ms)
 var _perf_minute_start_ms: int = 0
 var _perf_frames: int = 0
 var _tick_ms := FrameStats.new(3600)  ## host: server tick times of the current minute
@@ -252,7 +255,7 @@ func _warm_up() -> void:
 		_warming = false
 		layer.queue_free())
 	var started := Time.get_ticks_msec()
-	warm.finished.connect(func() -> void: print("Warmup: %d ms" % (Time.get_ticks_msec() - started)))
+	warm.finished.connect(func() -> void: Platform.perf_log("Warmup: %d ms" % (Time.get_ticks_msec() - started)))
 	warm.start(view.camera, effects)
 
 
@@ -358,18 +361,24 @@ func _process(delta: float) -> void:
 		return
 	_time += delta
 	_log_perf(delta)
+	var t0 := Time.get_ticks_usec()
 	var events: Array[Dictionary] = server.drain_host_events() if server != null else client.drain_events()
 	for e in events:
 		_handle_event(e)
+	Diagnostics.time_section("events", t0)
+	t0 = Time.get_ticks_usec()
 	if server != null:
 		_render_host(delta)
 	else:
 		_watch_connection()
 		if client.is_predicting():
 			_render_client(delta)
+	Diagnostics.time_section("visuals", t0)
+	t0 = Time.get_ticks_usec()
 	_update_aim_assist(delta)
 	_update_banner()
 	_update_match_ui(delta)
+	Diagnostics.time_section("ui", t0)
 
 
 ## Touch aim assist (PLAN §3.11): slowdown, magnetism and optional
@@ -526,11 +535,16 @@ func _log_perf(delta: float) -> void:
 	if Settings.get_value("video", "adaptive_quality") and not _paused:
 		var step := _adaptive.add_frame(delta, int(Settings.get_value("video", "fps_cap")))
 		if not step.is_empty():
-			print("QUALITY step-down %s" % step)
+			Platform.perf_log("QUALITY step-down %s" % step)
 	var now := Time.get_ticks_msec()
 	if _perf_minute_start_ms == 0:
 		_perf_minute_start_ms = now
 	_perf_ms.add(delta * 1000.0)
+	var vp := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(vp, true)
+	_perf_gpu.add(RenderingServer.viewport_get_measured_render_time_gpu(vp))
+	_perf_cpu.add((Performance.get_monitor(Performance.TIME_PROCESS) + Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0)
+	_perf_render_cpu.add(RenderingServer.viewport_get_measured_render_time_cpu(vp) + RenderingServer.get_frame_setup_time_cpu())
 	_perf_frames += 1
 	if delta * 1000.0 > HITCH_MS:
 		_perf_hitches += 1
@@ -543,6 +557,10 @@ func _log_perf(delta: float) -> void:
 		["offline", "host", "client"][config.mode], _perf_frames / seconds,
 		_perf_ms.percentile(50.0), _perf_ms.percentile(95.0), _perf_ms.percentile(99.0), _perf_hitches]
 	_perf_hitches = 0
+	line += " " + Diagnostics.section_report()
+	line += " gpu_p50=%.1f gpu_p95=%.1f main_p50=%.1f main_p95=%.1f render_cpu_p50=%.1f render_cpu_p95=%.1f" % [
+			_perf_gpu.percentile(50.0), _perf_gpu.percentile(95.0), _perf_cpu.percentile(50.0), _perf_cpu.percentile(95.0),
+			_perf_render_cpu.percentile(50.0), _perf_render_cpu.percentile(95.0)]
 	if server != null:
 		line += " tick_p50=%.2f tick_p99=%.2f sim_p99=%.2f players=%d clients=%d" % [_tick_ms.percentile(50.0),
 				_tick_ms.percentile(99.0), _sim_ms.percentile(99.0), server.world.players.size(), server.clients.size()]
@@ -556,8 +574,11 @@ func _log_perf(delta: float) -> void:
 	line += " thermal=%d headroom=%.2f scale=%.2f autopilot=%s" % [Platform.thermal_status(), Platform.thermal_headroom(),
 			get_tree().root.scaling_3d_scale, Diagnostics.autopilot]
 	_perf_peaks = Vector3i.ZERO
-	print(line)
+	Platform.perf_log(line)
 	_perf_ms = FrameStats.new(7200)
+	_perf_gpu = FrameStats.new(7200)
+	_perf_cpu = FrameStats.new(7200)
+	_perf_render_cpu = FrameStats.new(7200)
 	_perf_frames = 0
 	_perf_minute_start_ms = now
 

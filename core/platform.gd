@@ -37,6 +37,16 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	# Release builds on Android (not run-as debuggable, and no logcat output):
+	# the same one-shot file in the app's external files directory, which only
+	# the app and adb can reach (`adb push launch_args.txt
+	# /sdcard/Android/data/<app>/files/`). Read here: AndroidRuntime isn't
+	# there yet in _init. Autoloads after this one see the arguments.
+	var external := external_files_dir()
+	if not external.is_empty() and FileAccess.file_exists(external.path_join("launch_args.txt")):
+		var path := external.path_join("launch_args.txt")
+		user_args.append_array(FileAccess.get_file_as_string(path).strip_edges().split(" ", false))
+		DirAccess.remove_absolute(path)
 	storage_available = _probe_storage()
 	if not storage_available:
 		push_warning("Platform: user:// is not writable; the profile won't be saved.")
@@ -135,6 +145,36 @@ static func parse_join_link(url: String) -> Dictionary:
 	return out if out.host.is_valid_ip_address() else {}
 
 
+## Android: the app's external files directory (readable over adb without
+## root), else "".
+func external_files_dir() -> String:
+	if not is_android() or not Engine.has_singleton("AndroidRuntime"):
+		return ""
+	if _external_dir.is_empty():
+		var ctx: Variant = Engine.get_singleton("AndroidRuntime").call("getApplicationContext")
+		if ctx != null:
+			_external_dir = "/storage/emulated/0/Android/data/%s/files" % ctx.call("getPackageName")
+	return _external_dir
+
+
+var _external_dir: String = ""
+
+
+## Prints a line for measurements and, with `--perf-log`, appends it to
+## perf.log in the external files directory (Android) or user:// (elsewhere),
+## since Android release builds don't log to logcat.
+func perf_log(line: String) -> void:
+	print(line)
+	if not user_args.has("--perf-log"):
+		return
+	var dir := external_files_dir()
+	var path := dir.path_join("perf.log") if not dir.is_empty() else "user://perf.log"
+	var f := FileAccess.open(path, FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE)
+	if f != null:
+		f.seek_end()
+		f.store_line("%s %s" % [Time.get_datetime_string_from_system(), line])
+
+
 ## Android thermal status (PowerManager.THERMAL_STATUS_*: 0 none … 6
 ## shutdown), or -1 where unknown. For soak logs and, later, quality
 ## step-down (PLAN §3.10).
@@ -187,7 +227,7 @@ func start_performance_hints(target_ms: float) -> bool:
 	if tid == 0:
 		return false
 	_hint_session = manager.call("createHintSession", PackedInt32Array([tid]), int(target_ms * 1e6))
-	print("Platform: ADPF hint session for tid %d: %s" % [tid, "ok" if _hint_session != null else "failed"])
+	perf_log("ADPF hint session for tid %d: %s" % [tid, "ok" if _hint_session != null else "failed"])
 	return _hint_session != null
 
 

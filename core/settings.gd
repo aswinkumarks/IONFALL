@@ -61,7 +61,7 @@ var _cfg := ConfigFile.new()
 ## video key -> value used instead of the setting. Never saved; cleared when
 ## the player changes a video setting.
 var adaptive: Dictionary = {}
-## `--quality <preset>[,key=value...]` (debug builds): this session uses
+## `--quality <preset>[,key=value...]`: this session uses
 ## that preset's video values, with any overrides, without saving them, for
 ## performance tests. Example: `--quality medium,glow=false`.
 var _quality_override: String = ""
@@ -71,12 +71,12 @@ var _override_preset: Dictionary = {}
 func _ready() -> void:
 	load_settings()
 	var q := Platform.get_user_arg("--quality").split(",")
-	if OS.is_debug_build() and QUALITY.has(q[0]):
+	if QUALITY.has(q[0]):
 		_quality_override = q[0]
 		_override_preset = QUALITY[q[0]].duplicate()
 		for pair in q.slice(1):
 			var key := pair.get_slice("=", 0)
-			if _override_preset.has(key):
+			if _override_preset.has(key) or DEFAULTS.video.has(key):
 				_override_preset[key] = str_to_var(pair.get_slice("=", 1))
 	apply_video()
 	apply_audio()

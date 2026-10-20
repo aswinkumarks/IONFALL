@@ -36,6 +36,8 @@ static func open_rejoin() -> Dictionary:
 ## PLAN §3.5.1: a phone host is limited to 4 combatants until it passes the
 ## 20-minute 8-combatant host test; a PC host takes 8.
 func max_combatants() -> int:
+	if Platform.get_user_arg("--host-cap").is_valid_int():  # dev: the phone host test
+		return clampi(Platform.get_user_arg("--host-cap").to_int(), 2, Protocol.MAX_PEERS)
 	return 4 if Platform.is_mobile() else 8
 
 

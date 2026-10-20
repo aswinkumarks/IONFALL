@@ -169,6 +169,12 @@ func reset_metrics() -> void:
 func _process(delta: float) -> void:
 	if local_id == 0:
 		return
+	var t0 := Time.get_ticks_usec()
+	_process_frame(delta)
+	Diagnostics.time_section("predict", t0)
+
+
+func _process_frame(delta: float) -> void:
 	_ping_timer -= delta
 	if _ping_timer <= 0.0:
 		transport.send(1, Protocol.encode_ping(Time.get_ticks_msec() & 0xFFFFFFFF), Protocol.CH_GAME, false)
@@ -246,7 +252,13 @@ func _predicted_fire_event(shot: WeaponSim.Shot) -> Dictionary:
 
 # --- Messages ---
 
-func _on_message(_id: int, data: PackedByteArray) -> void:
+func _on_message(id: int, data: PackedByteArray) -> void:
+	var t0 := Time.get_ticks_usec()
+	_handle_message(id, data)
+	Diagnostics.time_section("net_in", t0)
+
+
+func _handle_message(_id: int, data: PackedByteArray) -> void:
 	_last_packet_ms = Time.get_ticks_msec()
 	match Protocol.message_type(data):
 		Protocol.Msg.NOTICE:
