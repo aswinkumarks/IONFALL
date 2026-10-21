@@ -1,6 +1,6 @@
 # 0005: Internet play: player-hosted matches over Epic Online Services P2P
 
-- **Status:** accepted (2026-10-22), implementation in progress
+- **Status:** accepted and implemented (2026-10-22); see [docs/online.md](../online.md)
 - **Context:** PLAN §3.8 planned internet play as public dedicated servers
   behind our own accounts backend (O1–O2). The owner wants internet play
   without running any game server: players host, as on LAN.

@@ -119,10 +119,11 @@ class Client:
 	var primary: int = 0  ## Loadouts.PRIMARIES index
 
 
-## `port` < 0 runs without networking (offline play). `spots`: the map's
-## pickup spots (SimWorld.pickup_spots).
+## `port` < 0 runs without networking (offline play) unless `peer` is given:
+## an already listening MultiplayerPeer (internet play over EOS, decision
+## 0005). `spots`: the map's pickup spots (SimWorld.pickup_spots).
 func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D],
-		spots: Array = []) -> Error:
+		spots: Array = [], peer: MultiplayerPeer = null) -> Error:
 	movement = movement_config
 	loadout = weapons
 	_rng.randomize()
@@ -138,12 +139,12 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	world.configure(_rng.randi(), movement, spawns, spots)
 	add_child(world)
 	add_child(transport)
-	if port >= 0:
+	if port >= 0 or peer != null:
 		transport.auth_validator = _validate_hello
 		transport.peer_joined.connect(_on_peer_joined)
 		transport.peer_left.connect(_on_peer_left)
 		transport.message.connect(_on_message)
-		var err := transport.host(port)
+		var err := transport.host_peer(peer) if peer != null else transport.host(port)
 		if err != OK:
 			return err
 		networked = true

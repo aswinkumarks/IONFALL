@@ -21,9 +21,9 @@ TOUCH_CROUCH,Crouch
 TOUCH_RELOAD,Reload
 TOUCH_SWAP,Swap
 MENU_NAME_PLACEHOLDER,Your name
-MENU_ADDRESS_PLACEHOLDER,Host address (e.g. 192.168.0.10)
+MENU_ADDRESS_PLACEHOLDER,Host address (e.g. 192.168.0.10) or invite code
 MENU_CONNECT,Connect
-MENU_BAD_ADDRESS,Enter the host's IP address
+MENU_BAD_ADDRESS,Enter the host's IP address or a 6-letter invite code
 PHASE_WAITING,Waiting for players
 PHASE_COUNTDOWN,Match starts in %d
 PHASE_PLAYING,
@@ -202,3 +202,10 @@ TOUCH_EDIT_RESET,Reset
 MENU_REJOIN,Rejoin match
 PAUSE_SCAN_TO_JOIN,Scan to join
 LOADING,Loading
+MENU_HOST_ONLINE,Host Online
+NET_ONLINE_SIGNING_IN,Connecting to online services…
+NET_ONLINE_HOSTING,"Online game · invite code %s"
+NET_ONLINE_ERROR,Online play failed (%s)
+NET_ONLINE_NOT_FOUND,No online game with code %s
+NET_ONLINE_JOINING,Joining online game %s…
+PAUSE_INVITE_CODE,Invite code

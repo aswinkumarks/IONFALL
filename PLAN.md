@@ -354,6 +354,8 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 - **Fuzz tests** for all client entry points (§5)
 
 ### 3.8 Internet path (after LAN v1.0)
+**Update (2026-10-22, decision 0005):** internet play ships first as **player-hosted matches over Epic Online Services P2P** (invite codes, anonymous device-ID login, Epic relays; Linux, Windows, Android), with no game server of ours; see `docs/online.md`. WebRTC follows for the web build. The phases below remain the plan for hosted servers and trusted online progression.
+
 **Rule: no internet exposure until O1 is complete.** Accounts, encryption and baseline hardening ship together, so a login token is never sent over an unencrypted connection.
 
 | Phase | Content |

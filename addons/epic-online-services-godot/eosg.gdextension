@@ -1,0 +1,16 @@
+[configuration]
+
+entry_symbol = "eosg_library_init"
+compatibility_minimum = 4.1
+
+; IONFALL: release wrappers only (VENDORED.md); debug exports and the editor
+; use them too through the tag-less entries.
+[libraries]
+linux.x86_64 = "bin/linux/libeosg.linux.template_release.x86_64.so"
+windows.x86_64 = "bin/windows/libeosg.windows.template_release.x86_64.dll"
+android.arm64 = "bin/android/libeosg.android.template_release.arm64.so"
+android.x86_64 = "bin/android/libeosg.android.template_release.x86_64.so"
+
+[dependencies]
+linux.x86_64 = {"bin/linux/libEOSSDK-Linux-Shipping.so": ""}
+windows.x86_64 = {"bin/windows/EOSSDK-Win64-Shipping.dll": "", "bin/windows/x64/xaudio2_9redist.dll": ""}

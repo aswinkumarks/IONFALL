@@ -26,6 +26,10 @@ var friendly_fire: bool = false  ## hosting TDM
 var bot_difficulty: int = 1  ## BotBrain.Difficulty
 var map_retried: bool = false  ## joined once already and reloaded with the host's map
 var reconnect_token: int = 0  ## JOIN: rejoin a match we dropped out of
+## Internet play over EOS (decision 0005): HOST advertises an invite code,
+## JOIN connects to the game with `online_code` instead of `address`.
+var online: bool = false
+var online_code: String = ""
 
 
 ## The rejoin offer if it is still open, else {}.

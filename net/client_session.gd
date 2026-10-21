@@ -76,7 +76,10 @@ var _last_packet_ms: int = 0
 var _last_remote_states: Dictionary = {}  ## as rendered (optimistic hit markers)
 
 
-func join(address: String, port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D]) -> Error:
+## `peer`: an already connecting MultiplayerPeer (internet play over EOS,
+## decision 0005) instead of ENet to `address`:`port`.
+func join(address: String, port: int, movement_config: MovementConfig, weapons: Array[WeaponData],
+		spawns: Array[Transform3D], peer: MultiplayerPeer = null) -> Error:
 	movement = movement_config
 	loadout = weapons
 	world = SimWorld.new()
@@ -88,8 +91,9 @@ func join(address: String, port: int, movement_config: MovementConfig, weapons: 
 	transport.disconnected.connect(func() -> void: left.emit("disconnected"))
 	transport.message.connect(_on_message)
 	_last_packet_ms = Time.get_ticks_msec()
-	return transport.join(address, port, Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
-			uuid, player_name, reconnect_token, character, color, primary))
+	var hello := Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
+			uuid, player_name, reconnect_token, character, color, primary)
+	return transport.join_peer(peer, hello) if peer != null else transport.join(address, port, hello)
 
 
 ## The primary for our next spawn (PLAN §2.5).

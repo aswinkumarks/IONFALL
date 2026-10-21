@@ -27,6 +27,8 @@ Settings="*res://core/settings.gd"
 Profile="*res://core/profile.gd"
 Diagnostics="*res://core/diagnostics.gd"
 UiStyle="*res://ui/theme/ui_style.gd"
+EOSGRuntime="*res://net/online/eos_runtime.gd"
+Online="*res://core/online.gd"
 
 [display]
 

@@ -14,6 +14,8 @@ const HOST_DUMMIES := 2
 @onready var _quit_button: Button = %QuitButton
 @onready var _play_button: Button = %PlayButton
 @onready var _host_button: Button = %HostButton
+var _host_online_button: Button
+static var _quick_launched: bool = false
 @onready var _join_button: Button = %JoinButton
 @onready var _join_panel: Control = %JoinPanel
 @onready var _address_edit: LineEdit = %AddressEdit
@@ -50,6 +52,13 @@ func _ready() -> void:
 	%ModeButton.pressed.connect(_next_mode)
 	_update_mode_button()
 	_host_button.pressed.connect(_start.bind(MatchConfig.Mode.HOST))
+	# Internet play (decision 0005): only where the EOS backend is available.
+	_host_online_button = _host_button.duplicate() as Button
+	_host_online_button.unique_name_in_owner = false
+	_host_online_button.text = "MENU_HOST_ONLINE"
+	_host_online_button.visible = Online.available()
+	_host_button.add_sibling(_host_online_button)
+	_host_online_button.pressed.connect(_start.bind(MatchConfig.Mode.HOST, Protocol.DEFAULT_PORT, "", true))
 	_join_button.pressed.connect(_show_join.bind(true))
 	_back_button.pressed.connect(_show_join.bind(false))
 	_connect_button.pressed.connect(_start.bind(MatchConfig.Mode.JOIN))
@@ -76,6 +85,11 @@ func _ready() -> void:
 	_animate_in()
 	if _try_join_link():
 		return
+	# Quick-launch flags act once per session: coming back to the menu (e.g.
+	# after a failed join) must not start the same match again.
+	if _quick_launched:
+		return
+	_quick_launched = true
 	if Platform.user_args.has("--open-settings"):
 		_settings.open()
 	elif Platform.user_args.has("--open-profile"):
@@ -85,7 +99,7 @@ func _ready() -> void:
 	elif Platform.user_args.has("--play"):
 		_start.call_deferred(MatchConfig.Mode.OFFLINE)
 	elif Platform.user_args.has("--host"):
-		_start.call_deferred(MatchConfig.Mode.HOST)
+		_start.call_deferred(MatchConfig.Mode.HOST, Protocol.DEFAULT_PORT, "", Platform.user_args.has("--online"))
 	elif Platform.user_args.has("--join") and not Platform.user_args.has("--test-clients"):
 		_address_edit.text = Platform.get_user_arg("--join", "127.0.0.1")
 		_start.call_deferred(MatchConfig.Mode.JOIN)
@@ -194,8 +208,9 @@ func _show_join(show: bool) -> void:
 	elif not show and _browser != null:
 		_browser.queue_free()
 		_browser = null
-	for b: Control in [_play_button, %MapButton, %ModeButton, _host_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
-		b.visible = not show and (b != _quit_button or not (Platform.is_web() or Platform.is_mobile()))
+	for b: Control in [_play_button, %MapButton, %ModeButton, _host_button, _host_online_button, _join_button, %ProfileButton, %SettingsButton, _quit_button]:
+		b.visible = not show and (b != _quit_button or not (Platform.is_web() or Platform.is_mobile())) \
+				and (b != _host_online_button or Online.available())
 	if show:
 		_address_edit.grab_focus()
 	else:
@@ -228,14 +243,21 @@ func _refresh_games() -> void:
 
 
 ## `map`: the host's map when known (LAN list), so a client loads it first.
-func _start(mode: int, port: int = Protocol.DEFAULT_PORT, map: String = "") -> void:
+## `online`: host over EOS with an invite code (decision 0005).
+func _start(mode: int, port: int = Protocol.DEFAULT_PORT, map: String = "", online: bool = false) -> void:
 	var player_name := ServerSession.sanitize_name(_name_edit.text)
 	# A dev `--name` is for this session only; typed names are saved.
 	if player_name != MatchConfig.profile_name() and not Platform.user_args.has("--name"):
 		Settings.set_value("profile", "name", player_name)
 	var bots := OFFLINE_DUMMIES if mode == MatchConfig.Mode.OFFLINE else HOST_DUMMIES if mode == MatchConfig.Mode.HOST else 0
 	var config := MatchConfig.make(mode, player_name, bots)
-	if mode == MatchConfig.Mode.JOIN:
+	config.online = online
+	var code := Online.parse_code(_address_edit.text) if mode == MatchConfig.Mode.JOIN else ""
+	if not code.is_empty() and Online.available():
+		config.online = true
+		config.online_code = code
+		Settings.set_value("profile", "last_address", code)
+	elif mode == MatchConfig.Mode.JOIN:
 		var address := _address_edit.text.strip_edges()
 		var colon := address.rfind(":")
 		if colon > 0 and address.count(":") == 1 and address.substr(colon + 1).is_valid_int():

@@ -38,6 +38,7 @@ var _loadout: Array[WeaponData] = []
 var _spawns: Array[Transform3D] = []
 var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended)
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
+var _online_code: String = ""  ## hosting online: the invite code (decision 0005)
 var _confirm_panel: Control
 var _settings_menu: SettingsMenu
 var _autopilot: WanderInput
@@ -117,9 +118,12 @@ func _ready() -> void:
 	_loadout = loadout
 	_spawns = spawns
 	if config.mode == MatchConfig.Mode.JOIN:
-		if not _start_client(config.reconnect_token):
+		if config.online:
+			_info.text = tr("NET_ONLINE_JOINING") % config.online_code
+		if not await _start_client(config.reconnect_token):
 			return
-		_info.text = tr("NET_CONNECTING") % config.address
+		if not config.online:
+			_info.text = tr("NET_CONNECTING") % config.address
 	else:
 		server = ServerSession.new()
 		server.name = "Server"
@@ -131,8 +135,17 @@ func _ready() -> void:
 		server.friendly_fire = config.friendly_fire
 		server.bot_difficulty = config.bot_difficulty
 		add_child(server)
-		var port := config.port if config.mode == MatchConfig.Mode.HOST else -1
-		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots())
+		var port := config.port if config.mode == MatchConfig.Mode.HOST and not config.online else -1
+		var online_peer: MultiplayerPeer = null
+		if config.online:
+			_info.text = tr("NET_ONLINE_SIGNING_IN")
+			var hosted: Dictionary = await Online.host(config.player_name, config.max_combatants())
+			if hosted.has("error"):
+				_fail(tr("NET_ONLINE_ERROR") % hosted.error)
+				return
+			online_peer = hosted.peer
+			_online_code = hosted.code
+		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots(), online_peer)
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
 			return
@@ -145,7 +158,10 @@ func _ready() -> void:
 		server.bot_fill = 1 + config.bots
 		var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
 		input.look_yaw = me.state.yaw
-		if config.mode == MatchConfig.Mode.HOST:
+		if config.online:
+			_info.text = tr("NET_ONLINE_HOSTING") % _online_code
+			Platform.perf_log("ONLINE hosting with invite code %s" % _online_code)
+		elif config.mode == MatchConfig.Mode.HOST:
 			_info.text = tr("NET_HOSTING") % [", ".join(lan_addresses()), config.port]
 			var advertiser := Discovery.Advertiser.new()
 			advertiser.beacon_source = server.beacon.bind(tr("NET_GAME_OF") % config.player_name, false, config.port)
@@ -160,6 +176,8 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	Platform.set_low_latency_network(false)
+	if not _online_code.is_empty():
+		Online.stop_hosting()
 	if Diagnostics.net_info == _net_info:
 		Diagnostics.net_info = Callable()
 
@@ -196,7 +214,15 @@ func _start_client(token: int) -> bool:
 				_fail(tr("NET_MAP_MISMATCH") % client.map_id))
 	client.failed.connect(_on_client_lost)
 	client.left.connect(_on_client_lost)
-	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns)
+	var online_peer: MultiplayerPeer = null
+	if config.online:
+		var joined: Dictionary = await Online.join(config.player_name, config.online_code)
+		if joined.has("error"):
+			_fail(tr("NET_ONLINE_NOT_FOUND") % config.online_code if joined.error == "not_found"
+					else tr("NET_ONLINE_ERROR") % joined.error)
+			return false
+		online_peer = joined.peer
+	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns, online_peer)
 	if err != OK:
 		_fail(tr("NET_CONNECT_ERROR") % error_string(err))
 		return false
@@ -1041,6 +1067,11 @@ func _make_join_code() -> Control:
 	box.offset_bottom = 230
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 10)
+	if not _online_code.is_empty():
+		box.add_child(UiStyle.label("PAUSE_INVITE_CODE", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER))
+		var code := UiStyle.label(_online_code, &"TitleLabel", HORIZONTAL_ALIGNMENT_CENTER)
+		box.add_child(code)
+		return box
 	if addresses.is_empty():
 		return box
 	var link := "ionfall://join?host=%s&port=%d" % [addresses[0], config.port]
@@ -1134,6 +1165,7 @@ func _leave() -> void:
 ## Back to the menu, which shows `reason` (a translation key or text).
 func _fail(reason: String) -> void:
 	MatchConfig.last_error = reason
+	Platform.perf_log("MATCH left: %s" % tr(reason))
 	# Lost to the network after joining: the menu offers to rejoin while the
 	# server would still take our token back.
 	if client != null and client.reconnect_token != 0 and reason.begins_with("NET_"):

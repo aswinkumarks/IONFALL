@@ -19,9 +19,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
+      # LFS objects come from a cache keyed on their IDs, so a run downloads
+      # only new or changed files (GitHub's LFS bandwidth quota is small).
       - uses: actions/checkout@v7
+
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d' ' -f1 | sort > .lfs-ids
+
+      - name: Cache LFS objects
+        uses: actions/cache@v6
         with:
-          lfs: true
+          path: .git/lfs/objects
+          key: lfs-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-
+
+      - name: Fetch LFS files
+        run: git lfs pull
 
       - name: Cache Godot
         id: cache-godot
