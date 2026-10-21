@@ -35,6 +35,10 @@ var _beam_mesh := BoxMesh.new()
 var _kinds: Dictionary = {}
 var _meshes: Dictionary = {}  ## "kind/color" -> Mesh
 var _flash_mats: Dictionary = {}  ## color -> StandardMaterial3D
+## Idle nodes for reuse: pool key -> Array. Effects fire many times a second
+## in a fight; creating and freeing nodes (and particle buffers) for each was
+## a measurable main-thread cost on the Mi 11X (M4).
+var _pool: Dictionary = {}
 
 
 func _ready() -> void:
@@ -123,22 +127,20 @@ func tracer(from: Vector3, to: Vector3, rail: bool = false) -> void:
 	if length < 0.1:
 		return
 	var up := Vector3.UP if absf((to - from).normalized().y) < 0.99 else Vector3.RIGHT
-	var beam := MeshInstance3D.new()
+	var beam := _mesh_node()
 	beam.mesh = _beam_mesh
 	beam.material_override = _trail_mat
 	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(beam)
 	beam.global_position = (from + to) * 0.5
 	beam.look_at(to, up)
 	var width := 0.05 if rail else 0.012
 	beam.scale = Vector3(width, width, length)
 	beam.set_meta("width", width)
 	_fading.append([beam, 0.0, 0.6 if rail else 0.12, "thin"])
-	var bolt := MeshInstance3D.new()
+	var bolt := _mesh_node()
 	bolt.mesh = _bolt_mesh
 	bolt.material_override = _tracer_mat
 	bolt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(bolt)
 	bolt.global_position = from
 	bolt.look_at(to, up)
 	bolt.set_meta("from", from)
@@ -159,19 +161,17 @@ func impact(at: Vector3, big: bool = false) -> void:
 
 
 func explosion(at: Vector3, radius: float) -> void:
-	var mi := MeshInstance3D.new()
+	var mi := _mesh_node()
 	mi.mesh = _sphere
 	mi.material_override = _explosion_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
 	mi.global_position = at
 	mi.set_meta("radius", radius * 0.8)
 	_fading.append([mi, 0.0, 0.35, "grow"])
-	var ring := MeshInstance3D.new()
+	var ring := _mesh_node()
 	ring.mesh = _ring_mesh
 	ring.material_override = _ring_mat
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(ring)
 	ring.global_position = at
 	ring.set_meta("radius", radius * 1.4)
 	_fading.append([ring, 0.0, 0.4, "ring"])
@@ -199,11 +199,10 @@ func derez(feet: Vector3, color: Color) -> void:
 
 ## Another player materialises: a column of light, a ring and rising motes.
 func spawn_in(feet: Vector3, color: Color) -> void:
-	var col := MeshInstance3D.new()
+	var col := _mesh_node()
 	col.mesh = _column
 	col.material_override = _soft_glow(color, 2.0)
 	col.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(col)
 	col.global_position = feet + Vector3(0.0, 1.2, 0.0)
 	_fading.append([col, 0.0, 0.5, "column"])
 	_ring(feet + Vector3(0.0, 0.05, 0.0), color, 1.2, 0.45)
@@ -218,21 +217,19 @@ func pickup_burst(at: Vector3, color: Color) -> void:
 
 
 func _ring(at: Vector3, color: Color, radius: float, life: float) -> void:
-	var ring := MeshInstance3D.new()
+	var ring := _mesh_node()
 	ring.mesh = _ring_mesh
 	ring.material_override = _soft_glow(color, 2.5)
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(ring)
 	ring.global_position = at
 	ring.set_meta("radius", radius)
 	_fading.append([ring, 0.0, life, "ring"])
 
 
 func _spark_flash(at: Vector3, size: float, color: Color, life: float) -> void:
-	var mi := MeshInstance3D.new()
+	var mi := _mesh_node()
 	mi.mesh = _quad
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
 	mi.global_position = at
 	mi.set_meta("size", size)
 	mi.scale = Vector3.ONE * size
@@ -244,6 +241,41 @@ func _spark_flash(at: Vector3, size: float, color: Color, life: float) -> void:
 	_fading.append([mi, 0.0, life, "pop"])
 
 
+## A MeshInstance3D from the pool, visible and reset; the caller sets its
+## mesh, material and transform.
+func _mesh_node() -> MeshInstance3D:
+	var mi: MeshInstance3D = _take("mesh")
+	if mi == null:
+		mi = MeshInstance3D.new()
+		mi.set_meta("pool", "mesh")
+		add_child(mi)
+	mi.transform = Transform3D.IDENTITY
+	mi.transparency = 0.0
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visible = true
+	return mi
+
+
+func _take(key: String) -> Node3D:
+	var idle: Array = _pool.get(key, [])
+	return idle.pop_back() if not idle.is_empty() else null
+
+
+## Returns a finished effect node to its pool (or frees it).
+func _release(node: Node3D) -> void:
+	live_particles -= int(node.get_meta("particles", 0))
+	if not node.has_meta("pool"):
+		node.queue_free()
+		return
+	node.visible = false
+	if node is GPUParticles3D:
+		(node as GPUParticles3D).emitting = false
+	var key: String = node.get_meta("pool")
+	if not _pool.has(key):
+		_pool[key] = []
+	(_pool[key] as Array).append(node)
+
+
 ## A one-shot GPU particle burst of `kind` (see _ready), `amount` scaled by
 ## the effects density and limited by MAX_PARTICLES.
 func _burst(at: Vector3, kind: String, color: Color, amount: int, lifetime: float,
@@ -252,21 +284,26 @@ func _burst(at: Vector3, kind: String, color: Color, amount: int, lifetime: floa
 	n = mini(n, MAX_PARTICLES - live_particles)
 	if n <= 0:
 		return
-	var p := GPUParticles3D.new()
-	p.one_shot = true
-	p.amount = n
-	p.lifetime = lifetime
-	p.explosiveness = explosiveness
-	p.process_material = _kinds[kind]
-	p.draw_pass_1 = _particle_mesh(kind, color)
-	p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Y_TO_VELOCITY \
-			if (_kinds[kind] as ParticleProcessMaterial).particle_flag_align_y else GPUParticles3D.TRANSFORM_ALIGN_DISABLED
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	p.visibility_aabb = AABB(Vector3(-6, -6, -6), Vector3(12, 12, 12))
-	add_child(p)
+	var key := "p/%s/%s/%d/%.2f/%.2f" % [kind, color.to_html(), n, lifetime, explosiveness]
+	var p: GPUParticles3D = _take(key)
+	if p == null:
+		p = GPUParticles3D.new()
+		p.one_shot = true
+		p.amount = n
+		p.lifetime = lifetime
+		p.explosiveness = explosiveness
+		p.process_material = _kinds[kind]
+		p.draw_pass_1 = _particle_mesh(kind, color)
+		p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Y_TO_VELOCITY \
+				if (_kinds[kind] as ParticleProcessMaterial).particle_flag_align_y else GPUParticles3D.TRANSFORM_ALIGN_DISABLED
+		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		p.visibility_aabb = AABB(Vector3(-6, -6, -6), Vector3(12, 12, 12))
+		p.set_meta("pool", key)
+		p.set_meta("particles", n)
+		add_child(p)
+	p.visible = true
 	p.global_position = at
-	p.emitting = true
-	p.set_meta("particles", n)
+	p.restart()
 	live_particles += n
 	_fading.append([p, 0.0, lifetime + 0.1, "none"])
 
@@ -404,8 +441,7 @@ func _process(delta: float) -> void:
 		var t: float = f[1] / f[2]
 		var node: Node3D = f[0]
 		if t >= 1.0:
-			live_particles -= int(node.get_meta("particles", 0))
-			node.queue_free()
+			_release(node)
 			continue
 		match f[3]:
 			"thin":

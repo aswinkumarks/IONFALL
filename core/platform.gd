@@ -226,8 +226,11 @@ func start_performance_hints(target_ms: float) -> bool:
 	var tid := int(process.call("myTid")) if process != null else 0
 	if tid == 0:
 		return false
+	# -1: the device doesn't support hint sessions.
+	var rate: Variant = manager.call("getPreferredUpdateRateNanos")
 	_hint_session = manager.call("createHintSession", PackedInt32Array([tid]), int(target_ms * 1e6))
-	perf_log("ADPF hint session for tid %d: %s" % [tid, "ok" if _hint_session != null else "failed"])
+	perf_log("ADPF hint session for tid %d (preferred update rate %s ns): %s" % [tid, rate,
+			"ok" if _hint_session != null else "failed"])
 	return _hint_session != null
 
 

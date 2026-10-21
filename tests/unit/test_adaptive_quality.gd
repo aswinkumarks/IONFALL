@@ -50,7 +50,7 @@ func test_heat_steps_down_without_slow_frames_then_order() -> void:
 	_feed(aq, 400.0, 16.7)
 	assert_almost_eq(float(Settings.video("render_scale")), AdaptiveQuality.MIN_SCALE, 0.001)
 	assert_almost_eq(float(Settings.video("effects")), AdaptiveQuality.LOW_EFFECTS, 0.001)
-	assert_false(Settings.video("glow"))
+	assert_true(Settings.video("glow"), "glow is never touched")
 	assert_false(Settings.video("shadows"))
 	assert_eq(AdaptiveQuality.step_down(), "", "nothing left to lower")
 

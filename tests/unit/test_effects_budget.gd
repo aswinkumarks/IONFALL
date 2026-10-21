@@ -42,3 +42,20 @@ func test_warm_up_covers_every_kind() -> void:
 	add_child_autofree(fx)
 	fx.warm_up(Vector3(0, 0, -4))
 	assert_gt(fx.get_child_count(), 15)
+
+
+func test_effect_nodes_are_reused() -> void:
+	var fx := Effects.new()
+	add_child_autofree(fx)
+	Settings.set_value("video", "effects", 1.0)
+	fx.impact(Vector3.ZERO, true)
+	fx.tracer(Vector3.ZERO, Vector3(0, 0, -10))
+	for i in 3:
+		fx._process(1.0)
+	var nodes := fx.get_child_count()
+	for i in 5:
+		fx.impact(Vector3.ZERO, true)
+		fx.tracer(Vector3.ZERO, Vector3(0, 0, -10))
+		for j in 3:
+			fx._process(1.0)
+	assert_eq(fx.get_child_count(), nodes, "finished effects go back to their pools")

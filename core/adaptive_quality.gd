@@ -3,9 +3,11 @@ extends RefCounted
 ## Automatic quality step-down (PLAN §3.10): when frame times stay above the
 ## target, or the phone reports thermal pressure, lower one video setting at a
 ## time for the rest of the session (Settings.adaptive, never saved). Order:
-## render scale in 0.1 steps down to 0.5, then effects density, glow, sun
-## shadows. It never steps back up by itself: heat builds slowly and the
-## player can always restore settings by hand.
+## render scale in 0.1 steps down to 0.5, then effects density, then sun
+## shadows. Glow is left alone: toggling it changes pipeline specializations,
+## and on the Mi 11X the resulting compile burst made frames worse (M4). It
+## never steps back up by itself: heat builds slowly and the player can always
+## restore settings by hand.
 
 const WINDOW_SECONDS := 10.0
 const SLOW_WINDOWS := 3  ## consecutive slow windows (30 s) before a step
@@ -59,8 +61,6 @@ static func step_down() -> String:
 		return _lower("render_scale", maxf(snappedf(scale - 0.1, 0.05), MIN_SCALE))
 	if float(Settings.video("effects")) > LOW_EFFECTS + 0.01:
 		return _lower("effects", LOW_EFFECTS)
-	if Settings.video("glow"):
-		return _lower("glow", false)
 	if Settings.video("shadows"):
 		return _lower("shadows", false)
 	return ""
