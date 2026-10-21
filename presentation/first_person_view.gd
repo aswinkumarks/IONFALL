@@ -245,6 +245,7 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	_flash_time -= delta
 	_flash.visible = _flash_time > 0.0
 	_flash_light.light_energy = 2.5 if _flash_time > 0.0 else 0.0
+	_flash_light.visible = _flash_time > 0.0 and Settings.video("lights") == true
 	if _muzzle != null:
 		_flash_light.global_position = _muzzle.global_position
 	_viewmodel.visible = s.alive

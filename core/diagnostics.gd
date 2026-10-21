@@ -18,6 +18,14 @@ var _overlay: CanvasLayer
 ## name -> FrameStats of each frame's total (ms); this frame's sums in _frame_us.
 var _sections: Dictionary = {}
 var _frame_us: Dictionary = {}
+## Log each frame over 50 ms with its section times (set by the match).
+var hitch_log: bool = false
+## Pipeline compilations by kind (Performance monitors), last frame's totals.
+const PIPELINES := {"canvas": Performance.PIPELINE_COMPILATIONS_CANVAS, "mesh": Performance.PIPELINE_COMPILATIONS_MESH,
+		"surface": Performance.PIPELINE_COMPILATIONS_SURFACE, "draw": Performance.PIPELINE_COMPILATIONS_DRAW,
+		"spec": Performance.PIPELINE_COMPILATIONS_SPECIALIZATION}
+var _pipelines: Dictionary = {}
+var _hitches_logged: int = 0
 var _touches: Dictionary = {}
 
 
@@ -41,6 +49,20 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	frame_stats.add(delta * 1000.0)
+	# A hitch: log what the slow frame's sections took (autoloads process
+	# first, so _frame_us still holds that frame's sums).
+	var compiled := PackedStringArray()
+	for kind: String in PIPELINES:
+		var n := int(Performance.get_monitor(PIPELINES[kind]))
+		if n != int(_pipelines.get(kind, n)):
+			compiled.append("%s+%d" % [kind, n - int(_pipelines[kind])])
+		_pipelines[kind] = n
+	if delta > 0.05 and hitch_log and _hitches_logged < 40:
+		_hitches_logged += 1
+		var parts := PackedStringArray()
+		for name: String in _frame_us:
+			parts.append("%s=%.1f" % [name, _frame_us[name] / 1000.0])
+		Platform.perf_log("HITCH %.0f ms %s pipelines[%s]" % [delta * 1000.0, " ".join(parts), ",".join(compiled)])
 	for name: String in _frame_us:
 		if not _sections.has(name):
 			_sections[name] = FrameStats.new(7200)

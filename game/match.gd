@@ -253,17 +253,21 @@ func _warm_up() -> void:
 	_warming = true
 	warm.finished.connect(func() -> void:
 		_warming = false
+		Diagnostics.hitch_log = Platform.user_args.has("--perf-log")
 		layer.queue_free())
 	var started := Time.get_ticks_msec()
 	warm.finished.connect(func() -> void: Platform.perf_log("Warmup: %d ms" % (Time.get_ticks_msec() - started)))
 	warm.start(view.camera, effects)
 
 
-## The sun's realtime shadows (PLAN §3.10 scalable settings).
+## The sun's realtime shadows and the map's reflection probe (PLAN §3.10
+## scalable settings).
 func _apply_shadows(root: Node) -> void:
 	var on: bool = Settings.video("shadows")
 	for light in root.find_children("*", "DirectionalLight3D", true, false):
 		(light as DirectionalLight3D).shadow_enabled = on
+	for probe in root.find_children("*", "ReflectionProbe", true, false):
+		(probe as ReflectionProbe).visible = Settings.video("probe") != false
 
 
 ## First-person arms in the player's character and colour, once the local
@@ -364,7 +368,9 @@ func _process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	var events: Array[Dictionary] = server.drain_host_events() if server != null else client.drain_events()
 	for e in events:
+		var te := Time.get_ticks_usec()
 		_handle_event(e)
+		Diagnostics.time_section("ev_" + str(e.type), te)
 	Diagnostics.time_section("events", t0)
 	t0 = Time.get_ticks_usec()
 	if server != null:
@@ -557,6 +563,7 @@ func _log_perf(delta: float) -> void:
 		["offline", "host", "client"][config.mode], _perf_frames / seconds,
 		_perf_ms.percentile(50.0), _perf_ms.percentile(95.0), _perf_ms.percentile(99.0), _perf_hitches]
 	_perf_hitches = 0
+	line += " spec_total=%d" % Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SPECIALIZATION)
 	line += " " + Diagnostics.section_report()
 	line += " gpu_p50=%.1f gpu_p95=%.1f main_p50=%.1f main_p95=%.1f render_cpu_p50=%.1f render_cpu_p95=%.1f" % [
 			_perf_gpu.percentile(50.0), _perf_gpu.percentile(95.0), _perf_cpu.percentile(50.0), _perf_cpu.percentile(95.0),

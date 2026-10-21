@@ -177,6 +177,8 @@ func explosion(at: Vector3, radius: float) -> void:
 	_fading.append([ring, 0.0, 0.4, "ring"])
 	_spark_flash(at, radius * 1.2, Color(1.0, 0.7, 0.4), 0.15)
 	_burst(at, "debris", Color(1.0, 0.65, 0.3), 24, 0.8)
+	if Settings.video("lights") != true:
+		return
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.6, 0.3)
 	light.light_energy = 6.0
@@ -326,6 +328,8 @@ func _grenade_node() -> MeshInstance3D:
 		mi.material_override = WeaponModels.material()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(model)
+	if Settings.video("lights") != true:
+		return root
 	var blink := OmniLight3D.new()
 	blink.light_color = Color(1.0, 0.45, 0.15)
 	blink.omni_range = 1.6

@@ -263,20 +263,24 @@ func set_value(section: String, key: String, value: Variant) -> void:
 	Events.settings_changed.emit(section, key, value)
 
 
-## Graphics presets. render_scale, shadows, glow and effects (particle
-## density) are also individual settings
+## Graphics presets. "lights": short-lived dynamic lights from effects
+## (muzzle flash, explosions, grenades, pickups); off on phones, where each
+## surface first lit by one compiles a new pipeline mid-match (M4 hitch log).
+## render_scale, shadows, glow and effects (particle density) are also
+## individual settings
 ## (changing them by hand switches the preset to "custom"); the rest is
 ## applied from the preset ("custom" keeps the last preset's extras).
 const QUALITY := {
 	"low": {"render_scale": 0.6, "shadows": false, "glow": false, "effects": 0.4, "upscale": "bilinear", "msaa": 0,
-			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0},
-	## Phone default: sized to hold 60 fps on the Mi 11X (docs/perf/m2-station.md).
+			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0, "probe": false, "lights": false},
+	## Phone default: sized to hold 60 fps on the Mi 11X (docs/perf/m2-station.md,
+	## m4.md: FXAA off kept GPU frames under the vsync budget).
 	"medium": {"render_scale": 0.6, "shadows": false, "glow": true, "effects": 0.7, "upscale": "fsr", "msaa": 0,
-			"fxaa": true, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0},
+			"fxaa": false, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0, "probe": true, "lights": false},
 	"high": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 1,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "probe": true, "lights": true},
 	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "probe": true, "lights": true},
 }
 const QUALITY_NAMES := ["low", "medium", "high", "ultra", "custom"]
 const PRESET_KEYS := ["render_scale", "shadows", "glow", "effects"]
