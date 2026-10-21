@@ -11,6 +11,7 @@
 *.keystore
 *.jks
 export_credentials.cfg
+eos_credentials.cfg
 .env
 
 # Generated at export time
