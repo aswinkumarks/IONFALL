@@ -51,6 +51,7 @@ func _exit_tree() -> void:
 	get_tree().set_multiplayer(null, get_path())
 
 
+## LAN and dedicated servers: ENet over UDP.
 func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_peers, CHANNELS)
@@ -61,9 +62,7 @@ func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 	# packets to ~1/32 once per second. Remove the bogus limit before anyone
 	# connects.
 	peer.host.bandwidth_limit(0, 0)
-	is_server = true
-	api.multiplayer_peer = peer
-	return OK
+	return host_peer(peer)
 
 
 func join(address: String, port: int, hello: PackedByteArray) -> Error:
@@ -71,6 +70,20 @@ func join(address: String, port: int, hello: PackedByteArray) -> Error:
 	var err := peer.create_client(address, port, CHANNELS)
 	if err != OK:
 		return err
+	return join_peer(peer, hello)
+
+
+## Any server-mode MultiplayerPeer that is already listening (ENet, or an
+## online backend such as Epic P2P; decision 0005). The handshake, message
+## whitelist and ingress limits are the same for every backend.
+func host_peer(peer: MultiplayerPeer) -> Error:
+	is_server = true
+	api.multiplayer_peer = peer
+	return OK
+
+
+## Any client-mode MultiplayerPeer that is already connecting to a server.
+func join_peer(peer: MultiplayerPeer, hello: PackedByteArray) -> Error:
 	is_server = false
 	_hello = hello
 	api.multiplayer_peer = peer
