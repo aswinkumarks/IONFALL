@@ -75,6 +75,12 @@ func is_mobile() -> bool:
 	return OS.has_feature("mobile")
 
 
+## "Android M2012K11AG", "Linux GenericDevice", …: a device label for
+## services that ask for one (EOS device IDs).
+func device_model() -> String:
+	return "%s %s" % [OS.get_name(), OS.get_model_name()]
+
+
 ## Returns the value following `flag` in the user arguments, or `default`.
 func get_user_arg(flag: String, default: String = "") -> String:
 	var i := user_args.find(flag)

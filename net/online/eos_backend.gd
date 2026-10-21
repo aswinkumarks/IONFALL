@@ -54,7 +54,7 @@ func sign_in_async(display_name: String) -> String:
 	if not err.is_empty():
 		return err
 	var device := EOS.Connect.CreateDeviceIdOptions.new()
-	device.device_model = "%s %s" % [OS.get_name(), OS.get_model_name()]
+	device.device_model = Platform.device_model()
 	EOS.Connect.ConnectInterface.create_device_id(device)
 	var created: Dictionary = await IEOS.connect_interface_create_device_id_callback
 	if created.result_code != EOS.Result.Success and created.result_code != EOS.Result.DuplicateNotAllowed:
