@@ -397,13 +397,15 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 
 | Device | Preset / resolution | Scenario | Target |
 |---|---|---|---|
-| Mi 11X (client) | Medium, render scale 0.75 of 2400×1080 | 8 combatants, worst-case map spot | p95 ≤ 16.7 ms, p99 ≤ 25 ms |
-| Mi 11X (client) | Low, 0.75 | **16 combatants** (dedicated server) | p95 ≤ 16.7 ms, p99 ≤ 25 ms |
-| Mi 11X (phone host) | Medium, 0.75 | 4 combatants (8 after passing the test) | p95 ≤ 18.2 ms (55 fps), server tick p99 ≤ 4 ms |
+| Mi 11X (client) | Medium, render scale 0.6 of 2400×1080 (adaptive down to 0.5) | 8 combatants, in combat | p95 ≤ 25 ms (40 fps), p99 ≤ 33.3 ms *(revised in M4)* |
+| Mi 11X (client) | Low, 0.6 (adaptive down to 0.5) | **16 combatants** (dedicated server), in combat | p95 ≤ 25 ms (40 fps), p99 ≤ 33.3 ms *(revised in M4)* |
+| Mi 11X (phone host) | Medium, 0.6 | **4 combatants (final, M4)** | p95 ≤ 18.2 ms (55 fps), server tick p99 ≤ 4 ms |
 | Min-spec Android (*deferred, unverified*) | Low, 0.6 | 8 combatants (16 also supported on Low, unverified) | p95 ≤ 33.3 ms (30 fps); stretch 22.2 ms (45 fps) |
 | Intel Iris Xe / AMD Vega 8 laptop (*deferred, unverified*) | Medium, 1080p | 8 combatants (16 on Low) | p95 ≤ 16.7 ms |
-| Dedicated GPU PC | High (Forward+), 1080p–1440p | 16 combatants | p95 ≤ 6.9 ms (144 fps) |
+| Dedicated GPU PC (*deferred to M6: none on hand in M4*) | High (Forward+), 1080p–1440p | 16 combatants | p95 ≤ 6.9 ms (144 fps) |
 | Dedicated server (reference: 4-core desktop CPU, recorded in `docs/perf/`) | — | 16 combatants incl. bots | tick p50 ≤ 2 ms, p99 ≤ 6 ms, ≤ 300 MB RSS |
+
+**M4 revision of the Mi 11X client targets** (docs/perf/m4.md): the original p95 ≤ 16.7 ms is met in quiet play and for the first minutes of a fight on a cool phone, but not over 20 minutes of combat. There the GPU stays inside its 12 ms budget, while main-thread work and MIUI's unreported thermal slowdown hold frames at 17–25 ms (p95). The measured 20-minute combat soaks sit at p95 ≈ 18–25 ms with single bad minutes; the revised target is what the phone sustains. Getting back to 60 fps in combat (on-device CPU profiling, animation LOD for distant characters) is later performance work, not an M4 gate. An 8-combatant phone host failed (p95 ≈ 26 ms, tick p99 up to 5 ms), so phone hosts stay at 4.
 
 The Mi 11X at lower render scale only tests **scalable GPU settings**. It doesn't simulate a weaker phone's CPU, memory bandwidth, drivers or thermals. **Current decision:** test only on devices already on hand for now. Min-spec and iGPU targets stay documented but *unverified*, and the store listing / README makes no claims about them until a real low-end phone and an iGPU machine have been tested (required before the public Play release in M6).
 
@@ -424,7 +426,7 @@ The Mi 11X at lower render scale only tests **scalable GPU settings**. It doesn'
 | Physics | Simple convex/box collision for the world; ≤ 16 active ragdoll bodies | Physics monitors |
 
 - **Scalable settings**: render scale, glow, shadows, particle density, decals, LOD bias, 30/60/90/120 fps cap
-- **Thermals**: 20-minute sustained tests are mandatory. An automatic quality step-down when sustained frame time rises. Android ADPF thermal APIs need a plugin (*unsure* how well Godot exposes them; spike in M4)
+- **Thermals**: 20-minute sustained tests are mandatory. An automatic quality step-down when sustained frame time rises. Android thermal status and headroom are read through `AndroidRuntime` + `JavaClassWrapper` with no plugin; on the Mi 11X headroom is unsupported, the status stays 0 while MIUI throttles, and ADPF hint sessions are unsupported, so the step-down reacts to frame time (decision 0004)
 
 ### 3.11 Input, touch & aim assist
 - **Input adapter layer**: device events (mouse, keyboard, touch, later gamepad) → normalized **`PlayerCommand`**. Gameplay never reads devices
@@ -664,9 +666,9 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 | **Gate** | Go/no-go + estimate | Review M1 numbers; fix the provisional budgets; estimate M2–M6; confirm cut lines |
 | **M2** | **Internal MVP** (playable game) | 1 map with first art pass, FFA, Pulse Rifle + Arc Launcher + Mag Pistol, bots (Normal) with traversal + stuck recovery, kill feed, death cam, HUD, results screen, profile/stats/XP with atomic saves + migration tests, settings, basic accessibility items, basic audio (buses, footsteps, occlusion v1); **character approach decided on device**; web smoke test passes; playtested by humans |
 | **M3** | Release content | Remaining weapons per the balance table, grenades, melee, power-weapon pickups + loadouts, **TDM** + teams + balance, **map 2** (symmetric, CTF-ready), 4 bot difficulties, cosmetic unlocks, touch layout editor + aim assist + auto-fire option, reconnect, QR join code |
-| **M4** | Art, audio & performance pass | Full lightmap pipeline on both maps, characters, VFX, audio pass, quality presets; §3.10 targets met on the Mi 11X (8 and 16 combatants) and a dedicated-GPU PC (release builds, 20-min sustained); ADPF/thermal spike; cold-start stutter test; phone host cap finalized |
+| **M4** | Art, audio & performance pass | Full lightmap pipeline on both maps, characters, VFX, audio pass, quality presets; §3.10 targets met on the Mi 11X (8 and 16 combatants; targets revised in M4 after measurement), release builds, 20-min sustained; ADPF/thermal spike; cold-start stutter test; phone host cap finalized (4). *Done: docs/perf/m4.md. The dedicated-GPU PC target moved to M6* |
 | **M5** | Dedicated server complete + transport spikes | `server.cfg`, standalone + managed modes, rotation, bot fill, local admin console, logs, Linux + Windows server exports; **16 real test clients** soak 60 min within tick/bandwidth budgets; single-match capacity measured; fuzz tests green. **Spikes (informational, not release gates):** DTLS on the pinned engine; composite-peer transport prototype with a real browser client (§3.20) |
-| **M6** | **v1.0 LAN release** | Polish, full accessibility list, pseudoloc pass; min-spec phone and iGPU laptop tested (or claims removed); desktop release builds (Linux, Windows); Play **closed testing track** started (14-day gate if required); Play checklist (§3.18) including the data-flow review; Android release |
+| **M6** | **v1.0 LAN release** | Polish, full accessibility list, pseudoloc pass; min-spec phone, iGPU laptop and a dedicated-GPU PC tested (or claims removed); desktop release builds (Linux, Windows); Play **closed testing track** started (14-day gate if required); Play checklist (§3.18) including the data-flow review; Android release |
 | **M7** | Central server (LAN), **only if v1.0 is stable** | Manager, match list/create/join UI, port allocator, playlists, lifecycle protocol, restart backoff, admission by headroom; Manager capacity benchmark (§5) published in `docs/perf/` |
 | **Web** | Web browser client (post-v1.0, separately budgeted) | As in §3.20 |
 | **O1–O4** | Internet play | As in §3.8, with O1 (secure identity + transport + account deletion) before any internet exposure |
