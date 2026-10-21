@@ -35,6 +35,7 @@ var _shell_mat: ShaderMaterial
 var _shell_t: float = 0.0
 
 const SHIELD_SHADER := preload("res://presentation/shield.gdshader")
+const NAMEPLATE_RANGE := 30.0  ## metres
 const SHELL_SECONDS := 0.3
 
 
@@ -52,6 +53,11 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	_label.font_size = 40
 	_label.outline_size = 8
 	_label.no_depth_test = false
+	# Two draw calls each (text and outline): past this range nameplates are
+	# unreadable on a phone anyway, and 16 of them broke the draw budget (m4.md).
+	_label.visibility_range_end = NAMEPLATE_RANGE
+	_label.visibility_range_end_margin = 4.0
+	_label.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	add_child(_label)
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.55

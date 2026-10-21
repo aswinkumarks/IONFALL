@@ -11,12 +11,17 @@ extends Node3D
 ## §3.10: ≤ 2,000 live).
 
 const MAX_PARTICLES := 2000
+## Live effect nodes (about one draw call each) at full effects density;
+## cosmetic effects are skipped beyond it (§3.10: ≤ 250 draw calls with 16
+## players in a fight, m4.md). Tracers, rockets and explosions always show.
+const MAX_EFFECT_NODES := 60
 
 ## Live particles (for the debug overlay and the budget).
 var live_particles: int = 0
 
 var _seen: Dictionary = {}  ## event id -> local time first seen (ms)
 var _fading: Array = []  ## [node, age, lifetime, kind]
+var _uncapped: bool = false  ## during warm_up: every kind must be drawn
 var _rockets: Dictionary = {}  ## projectile id -> [node, prev_pos, cur_pos]
 var _tracer_mat := _glow(Color(0.45, 0.9, 1.0), 5.0)
 var _trail_mat := _glow(Color(0.35, 0.85, 1.0), 2.0, true)
@@ -86,6 +91,7 @@ func _ready() -> void:
 ## pipelines compile behind the loading cover instead of mid-fight.
 func warm_up(at: Vector3) -> void:
 	var side := Vector3(1.5, 0.0, 0.0)
+	_uncapped = true
 	tracer(at - side, at + side)
 	tracer(at - side, at + side + Vector3.UP, true)
 	muzzle_flash(at)
@@ -95,6 +101,7 @@ func warm_up(at: Vector3) -> void:
 	derez(at - Vector3.UP, Color(0.35, 0.9, 1.0))
 	spawn_in(at - Vector3.UP, Color(1.0, 0.6, 0.25))
 	pickup_burst(at, Color(0.45, 1.0, 0.55))
+	_uncapped = false
 	for node: Node3D in [_rocket_node(), _grenade_node()]:
 		node.global_position = at
 		_fading.append([node, 0.0, 0.3, "none"])
@@ -150,11 +157,15 @@ func tracer(from: Vector3, to: Vector3, rail: bool = false) -> void:
 
 ## A third-person muzzle flash.
 func muzzle_flash(at: Vector3, color: Color = Color(0.7, 0.95, 1.0)) -> void:
+	if _crowded():
+		return
 	_spark_flash(at, 0.35, color, 0.05)
 
 
 ## Sparks and a flash; player hits are bigger and shield-coloured.
 func impact(at: Vector3, big: bool = false) -> void:
+	if _crowded():
+		return
 	var color := Color(0.45, 0.9, 1.0) if big else Color(1.0, 0.82, 0.5)
 	_spark_flash(at, 0.5 if big else 0.32, color, 0.09)
 	_burst(at, "sparks", color, 14 if big else 9, 0.35)
@@ -191,6 +202,8 @@ func explosion(at: Vector3, radius: float) -> void:
 
 ## A player's body breaks up into glowing fragments that rise and fade.
 func derez(feet: Vector3, color: Color) -> void:
+	if _crowded():
+		return
 	var at := feet + Vector3(0.0, 0.9, 0.0)
 	_spark_flash(at, 1.6, color, 0.2)
 	_burst(at, "derez", color, 28, 0.9, 0.85)
@@ -199,6 +212,8 @@ func derez(feet: Vector3, color: Color) -> void:
 
 ## Another player materialises: a column of light, a ring and rising motes.
 func spawn_in(feet: Vector3, color: Color) -> void:
+	if _crowded():
+		return
 	var col := _mesh_node()
 	col.mesh = _column
 	col.material_override = _soft_glow(color, 2.0)
@@ -211,6 +226,8 @@ func spawn_in(feet: Vector3, color: Color) -> void:
 
 ## A pickup was taken: a small ring and sparks in the item's colour.
 func pickup_burst(at: Vector3, color: Color) -> void:
+	if _crowded():
+		return
 	_spark_flash(at, 0.8, color, 0.15)
 	_ring(at, color, 0.8, 0.35)
 	_burst(at, "sparks", color, 10, 0.4)
@@ -239,6 +256,11 @@ func _spark_flash(at: Vector3, size: float, color: Color, life: float) -> void:
 		_flash_mats[color] = mat
 	mi.material_override = _flash_mats[color]
 	_fading.append([mi, 0.0, life, "pop"])
+
+
+## True when the live effect nodes reach the density-scaled budget.
+func _crowded() -> bool:
+	return not _uncapped and _fading.size() >= roundi(MAX_EFFECT_NODES * clampf(float(Settings.video("effects")), 0.0, 1.0))
 
 
 ## A MeshInstance3D from the pool, visible and reset; the caller sets its

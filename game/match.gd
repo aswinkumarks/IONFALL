@@ -248,11 +248,17 @@ func _warm_up() -> void:
 	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	cover.add_child(label)
+	# A kill-feed row too: its fonts' first glyphs cost up to ~0.6 s on the
+	# Mi 11X (m4.md), which used to land on the first kill.
+	var glyphs := "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789_-.,+"
+	_kill_feed.add_death({"killer": -1, "victim": -2, "weapon": &"rail_sniper", "suicide": false,
+			"headshot": true, "assists": [-3]}, func(_id: int) -> String: return glyphs, -1)
 	var warm := Warmup.new()
 	add_child(warm)
 	_warming = true
 	warm.finished.connect(func() -> void:
 		_warming = false
+		_kill_feed.clear()
 		Diagnostics.hitch_log = Platform.user_args.has("--perf-log")
 		layer.queue_free())
 	var started := Time.get_ticks_msec()
