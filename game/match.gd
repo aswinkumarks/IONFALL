@@ -218,8 +218,10 @@ func _start_client(token: int) -> bool:
 	if config.online:
 		var joined: Dictionary = await Online.join(config.player_name, config.online_code)
 		if joined.has("error"):
-			_fail(tr("NET_ONLINE_NOT_FOUND") % config.online_code if joined.error == "not_found"
-					else tr("NET_ONLINE_ERROR") % joined.error)
+			match joined.error:
+				"not_found": _fail(tr("NET_ONLINE_NOT_FOUND") % config.online_code)
+				"version": _fail("NET_ONLINE_VERSION")
+				_: _fail(tr("NET_ONLINE_ERROR") % joined.error)
 			return false
 		online_peer = joined.peer
 	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns, online_peer)

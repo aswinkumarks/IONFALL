@@ -209,3 +209,4 @@ NET_ONLINE_ERROR,Online play failed (%s)
 NET_ONLINE_NOT_FOUND,No online game with code %s
 NET_ONLINE_JOINING,Joining online game %s…
 PAUSE_INVITE_CODE,Invite code
+NET_ONLINE_VERSION,That game runs a different version of IONFALL

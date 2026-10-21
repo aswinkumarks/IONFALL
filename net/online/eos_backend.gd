@@ -9,6 +9,9 @@ const CREDENTIALS := "res://eos_credentials.cfg"
 const SOCKET := "ionfall"  ## EOS P2P socket name (alphanumeric, ≤ 32)
 const ATTR_CODE := "code"
 const ATTR_COMPAT := "compat"
+const BUCKET := "ionfall"  ## all builds; joins check ATTR_COMPAT
+const SEARCH_ATTEMPTS := 5
+const SEARCH_RETRY_SECONDS := 2.0
 
 var product_user_id: String = ""
 var _platform_ready: bool = false
@@ -44,6 +47,10 @@ func init_platform() -> String:
 	if not EOS.PlatformSdk.PlatformInterface.create(create):
 		return "EOS platform could not be created"
 	_platform_ready = true
+	if Platform.user_args.has("--eos-log"):  # dev: the SDK's own log
+		IEOS.logging_interface_callback.connect(func(msg: Dictionary) -> void:
+			print("EOS %s %s: %s" % [msg.get("level", ""), msg.get("category", ""), msg.get("message", "")]))
+		EOS.Logging.set_log_level(EOS.Logging.LogCategory.AllCategories, EOS.Logging.LogLevel.Info)
 	return ""
 
 
@@ -88,7 +95,7 @@ func host_async(max_members: int) -> Dictionary:
 		return {"error": "P2P server: %s" % error_string(err)}
 	var opts := EOS.Lobby.CreateLobbyOptions.new()
 	opts.local_user_id = product_user_id
-	opts.bucket_id = _bucket()
+	opts.bucket_id = BUCKET
 	opts.max_lobby_members = clampi(max_members, 2, 64)
 	opts.permission_level = EOS.Lobby.LobbyPermissionLevel.PublicAdvertised
 	opts.presence_enabled = false
@@ -127,25 +134,38 @@ func host_async(max_members: int) -> Dictionary:
 ## Joining: finds the lobby with `code` and connects to its owner.
 ## Returns {peer} or {error} (error "not_found" when no such game).
 func join_async(code: String) -> Dictionary:
-	var search_opts := EOS.Lobby.CreateLobbySearchOptions.new()
-	search_opts.max_results = 1
-	var search_ret: Dictionary = EOS.Lobby.LobbyInterface.create_lobby_search(search_opts)
-	if search_ret.result_code != EOS.Result.Success:
-		return {"error": "search: %s" % EOS.result_str(search_ret)}
-	var search: EOSGLobbySearch = search_ret.lobby_search
-	search.set_parameter(EOS.Lobby.SEARCH_BUCKET_ID, _bucket(), EOS.ComparisonOp.Equal)
-	search.set_parameter(ATTR_CODE, code, EOS.ComparisonOp.Equal)
-	search.find(product_user_id)
-	var found: Dictionary = await IEOS.lobby_search_find_callback
-	if found.result_code == EOS.Result.NotFound or (found.result_code == EOS.Result.Success
-			and search.get_search_result_count() == 0):
+	# A new lobby takes a few seconds to become searchable (seen on the
+	# laptop test: a joiner starting 3 s after the host found nothing), so an
+	# empty result is retried before the code is reported unknown.
+	var copied: Dictionary = {}
+	for attempt in SEARCH_ATTEMPTS:
+		var search_opts := EOS.Lobby.CreateLobbySearchOptions.new()
+		search_opts.max_results = 1
+		var search_ret: Dictionary = EOS.Lobby.LobbyInterface.create_lobby_search(search_opts)
+		if search_ret.result_code != EOS.Result.Success:
+			return {"error": "search: %s" % EOS.result_str(search_ret)}
+		var search: EOSGLobbySearch = search_ret.lobby_search
+		search.set_parameter(EOS.Lobby.SEARCH_BUCKET_ID, BUCKET, EOS.ComparisonOp.Equal)
+		search.set_parameter(ATTR_CODE, code, EOS.ComparisonOp.Equal)
+		search.find(product_user_id)
+		var found: Dictionary = await IEOS.lobby_search_find_callback
+		if found.result_code != EOS.Result.Success and found.result_code != EOS.Result.NotFound:
+			return {"error": "search: %s" % EOS.result_str(found)}
+		if found.result_code == EOS.Result.Success and search.get_search_result_count() > 0:
+			copied = search.copy_search_result_by_index(0)
+			break
+		await get_tree().create_timer(SEARCH_RETRY_SECONDS).timeout
+	if copied.is_empty():
 		return {"error": "not_found"}
-	if found.result_code != EOS.Result.Success:
-		return {"error": "search: %s" % EOS.result_str(found)}
-	var copied: Dictionary = search.copy_search_result_by_index(0)
 	if copied.result_code != EOS.Result.Success:
 		return {"error": "search: %s" % EOS.result_str(copied)}
-	var info: Dictionary = (copied.lobby_details as EOSGLobbyDetails).copy_info()
+	var details: EOSGLobbyDetails = copied.lobby_details
+	# Lobbies of every build share the bucket, so a version mismatch is
+	# reported as such rather than as an unknown code.
+	var compat: Dictionary = details.copy_attribute_by_key(ATTR_COMPAT)
+	if compat.result_code != EOS.Result.Success or str(compat.attribute.data.value) != BuildInfo.compat_hash:
+		return {"error": "version"}
+	var info: Dictionary = details.copy_info()
 	if info.result_code != EOS.Result.Success:
 		return {"error": "lobby info: %s" % EOS.result_str(info)}
 	var host_id: String = info.lobby_details.lobby_owner_user_id
@@ -168,7 +188,4 @@ func leave_async() -> void:
 	await IEOS.lobby_interface_destroy_lobby_callback
 
 
-## Lobbies only match builds that can play together.
-static func _bucket() -> String:
-	return "ionfall:%s" % BuildInfo.compat_hash
 

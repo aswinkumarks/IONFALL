@@ -71,7 +71,8 @@ func host(display_name: String, max_members: int) -> Dictionary:
 	return await _backend.host_async(max_members)
 
 
-## Returns {peer} or {error}; error "not_found" when no game has that code.
+## Returns {peer} or {error}; error "not_found" when no game has that code,
+## "version" when the host runs an incompatible build.
 func join(display_name: String, code: String) -> Dictionary:
 	var err := await ensure_signed_in(display_name)
 	if not err.is_empty():

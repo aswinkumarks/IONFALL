@@ -58,8 +58,13 @@ Intel Xe laptop, 2026-10-22:
 | Host signs in, creates the lobby, gets a code | yes (sign-in and lobby in a few seconds) |
 | Join by code, windowed and headless | connected; host `clients=1 players=3` |
 | Netcode over EOS (3 minutes, same machine) | RTT 49–66 ms, 16–18 corrections (3–4 visible) per minute, client p95 16.7 ms |
-| Unknown code | "No online game with code ABCDEF", back to the menu |
+| Exported Linux release builds (host and joiner), twice | connected; RTT 49 and 66 ms |
+| Joiner starts ~3 s after the host | the new lobby isn't searchable yet; the search retries for up to 10 s, then connects |
+| Unknown code | after ~10 s of retries: "No online game with code ABCDEF", back to the menu |
+| Host on another build (`compat_hash`) | "That game runs a different version of IONFALL" |
 | Host quits | client: "Host disconnected", back to the menu |
+
+`--eos-log` prints the EOS SDK's own log (Info level) for debugging.
 
 The 49–66 ms RTT on one machine suggests the traffic went through Epic's
 relays rather than directly; that's the worst case for real players.
