@@ -13,7 +13,8 @@ extends Node3D
 const MAX_PARTICLES := 2000
 ## Live effect nodes (about one draw call each) at full effects density;
 ## cosmetic effects are skipped beyond it (§3.10: ≤ 250 draw calls with 16
-## players in a fight, m4.md). Tracers, rockets and explosions always show.
+## players in a fight, m4.md). Tracers lose their beam beyond it and are
+## skipped beyond twice it; rockets and explosions always show.
 const MAX_EFFECT_NODES := 60
 
 ## Live particles (for the debug overlay and the budget).
@@ -134,16 +135,21 @@ func tracer(from: Vector3, to: Vector3, rail: bool = false) -> void:
 	if length < 0.1:
 		return
 	var up := Vector3.UP if absf((to - from).normalized().y) < 0.99 else Vector3.RIGHT
-	var beam := _mesh_node()
-	beam.mesh = _beam_mesh
-	beam.material_override = _trail_mat
-	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	beam.global_position = (from + to) * 0.5
-	beam.look_at(to, up)
-	var width := 0.05 if rail else 0.012
-	beam.scale = Vector3(width, width, length)
-	beam.set_meta("width", width)
-	_fading.append([beam, 0.0, 0.6 if rail else 0.12, "thin"])
+	# Tracers matter for gameplay, so they get twice the cosmetic budget; when
+	# effects are already crowded only the bolt is drawn, not the faint beam.
+	if _crowded(2.0):
+		return
+	if not _crowded():
+		var beam := _mesh_node()
+		beam.mesh = _beam_mesh
+		beam.material_override = _trail_mat
+		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		beam.global_position = (from + to) * 0.5
+		beam.look_at(to, up)
+		var width := 0.05 if rail else 0.012
+		beam.scale = Vector3(width, width, length)
+		beam.set_meta("width", width)
+		_fading.append([beam, 0.0, 0.6 if rail else 0.12, "thin"])
 	var bolt := _mesh_node()
 	bolt.mesh = _bolt_mesh
 	bolt.material_override = _tracer_mat
@@ -259,8 +265,9 @@ func _spark_flash(at: Vector3, size: float, color: Color, life: float) -> void:
 
 
 ## True when the live effect nodes reach the density-scaled budget.
-func _crowded() -> bool:
-	return not _uncapped and _fading.size() >= roundi(MAX_EFFECT_NODES * clampf(float(Settings.video("effects")), 0.0, 1.0))
+func _crowded(budget_scale: float = 1.0) -> bool:
+	return not _uncapped and _fading.size() >= roundi(
+			MAX_EFFECT_NODES * budget_scale * clampf(float(Settings.video("effects")), 0.0, 1.0))
 
 
 ## A MeshInstance3D from the pool, visible and reset; the caller sets its

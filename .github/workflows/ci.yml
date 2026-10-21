@@ -117,4 +117,4 @@ jobs:
         with:
           name: ionfall-${{ github.run_number }}
           path: build/
-          retention-days: 14
+          retention-days: 3  # ~280 MB per run; 14 days hit the storage quota in M4

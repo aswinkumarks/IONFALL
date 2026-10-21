@@ -80,3 +80,15 @@ func test_warm_up_ignores_the_cap() -> void:
 	Settings.set_value("video", "effects", 0.0)
 	fx.warm_up(Vector3(0, 0, -4))
 	assert_gt(fx.get_child_count(), 15)
+
+
+func test_tracers_keep_the_bolt_and_stop_at_twice_the_cap() -> void:
+	var fx := Effects.new()
+	add_child_autofree(fx)
+	Settings.set_value("video", "effects", 0.4)
+	var cap := roundi(Effects.MAX_EFFECT_NODES * 0.4)
+	for i in 200:
+		fx.tracer(Vector3.ZERO, Vector3(0, 0, -40))
+	assert_lte(fx._fading.size(), cap * 2 + 1)
+	fx.explosion(Vector3.ZERO, 4.0)
+	assert_gt(fx._fading.size(), cap * 2 + 1, "explosions always show")
