@@ -57,7 +57,16 @@ func _ready() -> void:
 	_host_online_button.unique_name_in_owner = false
 	_host_online_button.text = "MENU_HOST_ONLINE"
 	_host_online_button.visible = Online.available()
-	_host_button.add_sibling(_host_online_button)
+	if Online.available():
+		# Side by side, like Play and Map, so the column (and the title above
+		# it) keeps its height on 720p screens.
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		_host_button.add_sibling(row)
+		_host_button.reparent(row)
+		row.add_child(_host_online_button)
+		for b: Button in [_host_button, _host_online_button]:
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_host_online_button.pressed.connect(_start.bind(MatchConfig.Mode.HOST, Protocol.DEFAULT_PORT, "", true))
 	_join_button.pressed.connect(_show_join.bind(true))
 	_back_button.pressed.connect(_show_join.bind(false))

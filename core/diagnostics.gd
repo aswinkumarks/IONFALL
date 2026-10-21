@@ -40,6 +40,9 @@ func _ready() -> void:
 	add_child(_overlay)
 	# Automated visual checks: `-- --shot file.png --shot-after 8` saves a
 	# screenshot after that many seconds and quits.
+	var ui_steps := Platform.get_user_arg("--ui")
+	if not ui_steps.is_empty():
+		_run_ui_steps(ui_steps)
 	var shot := Platform.get_user_arg("--shot")
 	if not shot.is_empty() and not Platform.user_args.has("--lighting-test"):
 		await get_tree().create_timer(Platform.get_user_arg("--shot-after", "5").to_float()).timeout
@@ -103,3 +106,67 @@ func toggle_overlay() -> void:
 		return
 	_overlay.visible = not _overlay.visible
 	Events.diagnostics_toggled.emit(_overlay.visible)
+
+
+## Automated UI checks through real input events (dev): `-- --ui
+## "wait:3,click:MENU_JOIN,type:KFS7WQ,click:MENU_CONNECT,shot:/tmp/a.png"`.
+## `click` presses the visible button whose label (or its key) matches, at
+## its on-screen centre; `type` sends key events to the focused control;
+## `shot` saves the screen. Every step is logged ("UI ...").
+func _run_ui_steps(spec: String) -> void:
+	for step in spec.split(",", false):
+		var kv := step.split(":", true, 1)
+		var arg := kv[1] if kv.size() > 1 else ""
+		match kv[0]:
+			"wait":
+				await get_tree().create_timer(arg.to_float()).timeout
+			"click":
+				var button := _find_button(get_tree().root, arg)
+				if button == null:
+					Platform.perf_log("UI click %s: no such visible button" % arg)
+					continue
+				var at := get_viewport().get_final_transform() * button.get_global_rect().get_center()
+				for pressed: bool in [true, false]:
+					var e := InputEventMouseButton.new()
+					e.button_index = MOUSE_BUTTON_LEFT
+					e.pressed = pressed
+					e.position = at
+					e.global_position = at
+					Input.parse_input_event(e)
+					await get_tree().process_frame
+				Platform.perf_log("UI click %s at %s" % [arg, at])
+			"type":
+				for c in arg:
+					for pressed: bool in [true, false]:
+						var k := InputEventKey.new()
+						k.unicode = c.unicode_at(0)
+						k.keycode = OS.find_keycode_from_string(c.to_upper())
+						k.pressed = pressed
+						Input.parse_input_event(k)
+						await get_tree().process_frame
+				var focus := get_viewport().gui_get_focus_owner()
+				Platform.perf_log("UI type %s into %s" % [arg, focus.name if focus else "nothing"])
+			"clear":  # select all, then delete, in the focused text field
+				for key: Key in [KEY_A, KEY_BACKSPACE]:
+					for pressed: bool in [true, false]:
+						var k := InputEventKey.new()
+						k.keycode = key
+						k.ctrl_pressed = key == KEY_A
+						k.pressed = pressed
+						Input.parse_input_event(k)
+						await get_tree().process_frame
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(arg)
+				Platform.perf_log("UI shot %s" % arg)
+
+
+func _find_button(node: Node, label: String) -> Button:
+	if node is Button and (node as Button).is_visible_in_tree() \
+			and ((node as Button).text == label or tr((node as Button).text) == label):
+		return node
+	for child in node.get_children():
+		var found := _find_button(child, label)
+		if found != null:
+			return found
+	return null

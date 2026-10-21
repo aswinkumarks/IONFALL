@@ -66,5 +66,17 @@ Intel Xe laptop, 2026-10-22:
 
 `--eos-log` prints the EOS SDK's own log (Info level) for debugging.
 
+**Through the menu UI** (`--ui` sends real mouse and key events; see
+`core/diagnostics.gd`): host clicks *Host Online*; the joiner clicks *Join
+Game*, clears the field, types the code as `hzf-hve` and clicks *Connect*:
+
+```sh
+HOME=/tmp/eos-a XDG_DATA_HOME=/tmp/eos-a/data godot --path . -- --ui "wait:6,click:MENU_HOST_ONLINE,wait:40,shot:/tmp/host.png"
+HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,click:MENU_JOIN,wait:1,clear,type:hzf-hve,click:MENU_CONNECT,wait:40,shot:/tmp/joined.png"
+```
+
+Result (2026-10-22): the host's status line showed the invite code, the
+joiner entered the same match (host `clients=1`), 59.8 fps.
+
 The 49–66 ms RTT on one machine suggests the traffic went through Epic's
 relays rather than directly; that's the worst case for real players.
