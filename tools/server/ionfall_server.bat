@@ -5,4 +5,5 @@ rem To stop it gracefully (players are told), run stop_server.bat or create
 rem the file ionfall_server.stop next to this script.
 cd /d "%~dp0"
 if exist ionfall_server.stop del ionfall_server.stop
-ionfall_server.exe --headless -- --stop-file "%~dp0ionfall_server.stop" %*
+rem The .console.exe wrapper keeps the server log in this window.
+ionfall_server.console.exe --headless -- --stop-file "%~dp0ionfall_server.stop" %*
