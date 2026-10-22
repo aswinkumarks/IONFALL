@@ -61,6 +61,9 @@ var bots: Dictionary = {}  ## net id -> BotBrain (or TargetDummyDriver without n
 var bot_nav: BotNavigation
 ## Listen host / offline: the local player's id and this tick's command.
 var local_player_id: int = 0
+## The host watches without playing (spectator mode): it keeps the match
+## running like a human would but takes no combatant slot.
+var local_spectating: bool = false
 var local_command: PlayerCommand
 var anomalies: int = 0
 var networked: bool = false
@@ -166,6 +169,13 @@ func add_local_player(player_name: String, character: int = 0, color: int = 0, p
 	update_bot_fill()
 	_on_humans_changed()
 	return p
+
+
+## Watch the match instead of playing (see local_spectating).
+func add_local_spectator() -> void:
+	local_spectating = true
+	update_bot_fill()
+	_on_humans_changed()
 
 
 const BOT_NAMES := ["Kestrel", "Vanta", "Ordo", "Lumen", "Rook", "Sable", "Quill", "Echo", "Halcyon", "Tarsus",
@@ -467,10 +477,15 @@ func _humans() -> int:
 	return n
 
 
+## Humans the match runs for: players plus spectators.
+func _audience() -> int:
+	return _humans() + (1 if local_spectating else 0)
+
+
 func _on_humans_changed() -> void:
-	if phase == MatchPhase.WAITING and _humans() > 0:
+	if phase == MatchPhase.WAITING and _audience() > 0:
 		_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
-	elif _humans() == 0 and phase != MatchPhase.WAITING:
+	elif _audience() == 0 and phase != MatchPhase.WAITING:
 		_set_phase(MatchPhase.WAITING, 0)
 
 

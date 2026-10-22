@@ -113,7 +113,7 @@ Post-v1.0: **CTF** (map 2 is built symmetric and CTF-ready) and **Co-op Waves**.
 - **Respawn countdown**, loadout change during the countdown
 - **Hit markers**: shown optimistically on the client, then confirmed by the server (unconfirmed markers fade differently); a distinct kill marker
 - **Scoreboard**, end-of-match results (stats, XP gained)
-- **Spectator mode**: deferred to post-v1.0 (needs slot rules, team restrictions and replication permissions; designed then)
+- **Spectator mode**: single player can **Watch** a bots-only match from any combatant's eyes (click/tap/Space for the next player). Spectating a network match (join as spectator: slot rules, team restrictions, replication permissions) is still to come
 
 ### 2.7 Bots
 - Run **only on the server**. Each bot is a normal player entity driven by a `BotBrain` that **outputs the same `PlayerCommand` stream** a human produces (§3.2), so bots use the same movement, validation and replication code

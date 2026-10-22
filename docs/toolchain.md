@@ -84,6 +84,7 @@ tools/check_16kb.sh build/android/ionfall.aab
 - **First import on a fresh checkout** logs `Cannot open file 'res://locale/strings.en.translation'`. `project.godot` references the translation that the CSV import generates (it's gitignored as a build artifact), so the very first project load can't find it yet. It's harmless: the import creates it, and every later load is clean.
 - **ENet server bandwidth bug:** `ENetMultiplayerPeer.create_server(port, peers, channels)` passes `channels` as the incoming bandwidth limit, so clients throttle their unreliable packets. `Transport.host()` calls `peer.host.bandwidth_limit(0, 0)` right after creating the server. See decision 0002.
 - **New `class_name` scripts** aren't visible to command-line runs until the global class cache is refreshed: run `godot --headless --import` after adding one.
+- **Automated runs over VNC with a free cursor** (spectator mode, menus): when the Godot window doesn't hold the pointer, Vulkan's vsync present can block for good and the game stops at 0% CPU. Pass `--disable-vsync` for such `--ui`/`--shot` runs; captured-mouse gameplay runs aren't affected. Also, stdout is block-buffered when redirected and lost when `timeout` kills Godot: print debug lines with `printerr`.
 - **Android launch arguments:** exported activities drop intent command-line extras, so device-only checks are started from the diagnostics overlay (F3 / three-finger tap), e.g. the replay check. Results go to `adb logcat -s godot`.
 
 ## Multiplayer testing

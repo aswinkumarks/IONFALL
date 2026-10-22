@@ -293,6 +293,12 @@ func _build_solo() -> void:
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(hint)
+	# Spectator mode: the same match with bots only, watched from their eyes.
+	var watch := UiStyle.menu_button("MENU_WATCH", &"GhostButton")
+	watch.custom_minimum_size = Vector2(220, 64)
+	watch.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	watch.pressed.connect(_start_solo.bind(true))
+	bottom.add_child(watch)
 	var start := UiStyle.menu_button("MENU_START", &"PrimaryButton")
 	start.custom_minimum_size = Vector2(320, 64)
 	start.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -689,8 +695,11 @@ func _join_manual() -> void:
 
 # --- Starting ---
 
-func _start_solo() -> void:
-	_go(MATCH, _config(MatchConfig.Mode.OFFLINE, OFFLINE_DUMMIES))
+## `watch`: spectator mode, bots only (a bot fills our place).
+func _start_solo(watch: bool = false) -> void:
+	var config := _config(MatchConfig.Mode.OFFLINE, OFFLINE_DUMMIES)
+	config.spectate = watch or Platform.user_args.has("--spectate")
+	_go(MATCH, config)
 
 
 func _host_lobby(online: bool) -> void:

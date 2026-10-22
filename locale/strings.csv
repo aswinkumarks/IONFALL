@@ -217,6 +217,10 @@ PAUSE_INVITE_CODE,Invite code
 NET_ONLINE_VERSION,That game runs a different version of IONFALL
 MENU_SINGLE_PLAYER,Single Player
 MENU_START,Start
+MENU_WATCH,Watch
+SPECTATE_WATCHING,Watching %s
+SPECTATE_HINT,"Click or Space: next player · Right click: previous · Esc: menu"
+SPECTATE_HINT_TOUCH,Tap to watch the next player
 MENU_HOST_LAN,Local network
 MENU_TAG_LAN,LAN
 MENU_TAG_ONLINE,Online
