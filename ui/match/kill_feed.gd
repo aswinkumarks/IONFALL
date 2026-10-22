@@ -9,7 +9,7 @@ const ROW_SECONDS := 6.0
 ## Short weapon tags (translation keys) for the feed, HUD slots and timers.
 const WEAPON_TAGS := {&"pulse_rifle": "TAG_PULSE", &"mag_pistol": "TAG_PISTOL", &"arc_launcher": "TAG_ARC",
 		&"burst_rifle": "TAG_BURST", &"rail_sniper": "TAG_RAIL", &"scatter_gun": "TAG_SCATTER", &"frag_grenade": "TAG_FRAG",
-		&"melee": "TAG_MELEE", &"": "TAG_FALL"}
+		&"melee": "TAG_MELEE", &"flux_smg": "TAG_SMG", &"": "TAG_FALL"}
 
 
 ## The translated short tag of weapon `id` (its id in capitals if unknown).
