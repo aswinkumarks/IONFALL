@@ -113,7 +113,7 @@ Post-v1.0: **CTF** (map 2 is built symmetric and CTF-ready) and **Co-op Waves**.
 - **Respawn countdown**, loadout change during the countdown
 - **Hit markers**: shown optimistically on the client, then confirmed by the server (unconfirmed markers fade differently); a distinct kill marker
 - **Scoreboard**, end-of-match results (stats, XP gained)
-- **Spectator mode**: single player can **Watch** a bots-only match from any combatant's eyes (click/tap/Space for the next player). Spectating a network match (join as spectator: slot rules, team restrictions, replication permissions) is still to come
+- **Spectator mode**: single player can **Watch** a bots-only match from any combatant's eyes (click/tap/Space for the next player). Network matches already playing can be joined as a spectator (Join Game → "Watch games already playing", or `--join ADDR --spectate`): the HELLO carries a spectate flag; the server gives the spectator an id but no player, ignores its commands, and sends it the usual snapshots, in which every combatant is a remote entity. Spectators don't take combatant slots (up to 4 on top, `MAX_SPECTATORS`) and don't start a match on their own; lobby members always play. Snapshots don't carry ammo, so a watched player's magazine shows full and the respawn timer counts from when the death was seen
 
 ### 2.7 Bots
 - Run **only on the server**. Each bot is a normal player entity driven by a `BotBrain` that **outputs the same `PlayerCommand` stream** a human produces (§3.2), so bots use the same movement, validation and replication code

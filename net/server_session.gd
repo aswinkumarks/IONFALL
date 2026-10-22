@@ -40,6 +40,8 @@ const LOCAL_PLAYER_ID := 1
 ## A client that drops can come back with its reconnect token within this
 ## time and gets its player id and score back (PLAN §3.4).
 const RECONNECT_WINDOW_MS := 60000
+## Remote spectators allowed on top of the combatants.
+const MAX_SPECTATORS := 4
 
 var transport := Transport.new()
 var world: SimWorld
@@ -124,6 +126,8 @@ class Client:
 	var restored_score: int = 0
 	var restored_team: int = -1  ## TDM: the team to rejoin after a reconnect
 	var primary: int = 0  ## Loadouts.PRIMARIES index
+	## Watches without playing: gets snapshots and events, has no player.
+	var spectator: bool = false
 
 
 ## `port` < 0 runs without networking (offline play) unless `peer` is given:
@@ -472,7 +476,7 @@ func _set_phase(p: int, ends: int) -> void:
 func _humans() -> int:
 	var n := 1 if local_player_id != 0 else 0
 	for c: Client in clients.values():
-		if c.loaded:
+		if c.loaded and not c.spectator:
 			n += 1
 	return n
 
@@ -586,11 +590,19 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 				_on_peer_left(old.id)
 				transport.kick(old.id)
 				break
-	# Bots give way to humans, so only humans count against the limit.
-	if clients.size() + (1 if local_player_id != 0 else 0) >= max_combatants:
+	# Bots give way to humans, so only humans count against the limit;
+	# spectators have their own.
+	var watching := 0
+	for other: Client in clients.values():
+		watching += 1 if other.spectator else 0
+	if hello.spectate:
+		if watching >= MAX_SPECTATORS:
+			return "server full"
+	elif clients.size() - watching + (1 if local_player_id != 0 else 0) >= max_combatants:
 		return "server full"
 	var c := Client.new()
 	c.id = id
+	c.spectator = hello.spectate
 	c.name = sanitize_name(hello.name)
 	c.uuid = hello.uuid
 	c.character = hello.character
@@ -666,7 +678,7 @@ func _on_peer_joined(id: int) -> void:
 func _on_peer_left(id: int) -> void:
 	var c: Client = clients.get(id)
 	clients.erase(id)
-	if c != null:
+	if c != null and not c.spectator:
 		if c.loaded:
 			var gone: SimPlayer = world.players.get(c.player_id)
 			_departed[c.token] = {"player_id": c.player_id, "score": world.scores.get(c.player_id, 0),
@@ -683,6 +695,8 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 	if c == null or not type in Protocol.CLIENT_MESSAGES:
 		anomalies += 1
 		return
+	if c.spectator and type == Protocol.Msg.CMD:
+		return  # spectators have no player to command
 	match type:
 		Protocol.Msg.CMD:
 			_on_commands(c, data)
@@ -699,7 +713,7 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 					c.rtt_ms = lerpf(c.rtt_ms, rtt, 0.3)
 		Protocol.Msg.LOADOUT:
 			var primary := Protocol.decode_loadout(data)
-			if primary < 0:
+			if primary < 0 or c.spectator:
 				anomalies += 1
 			else:
 				c.primary = primary
@@ -708,6 +722,8 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			var loaded := Protocol.decode_loaded(data)
 			if loaded.is_empty():
 				anomalies += 1
+			elif not c.loaded and c.spectator:
+				c.loaded = true  # snapshots and events from now on; no player
 			elif not c.loaded:
 				c.loaded = true
 				var joined := world.add_player(c.player_id, _loadout_for(c.primary), c.name, false)

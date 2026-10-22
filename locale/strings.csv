@@ -221,6 +221,7 @@ MENU_WATCH,Watch
 SPECTATE_WATCHING,Watching %s
 SPECTATE_HINT,"Click or Space: next player · Right click: previous · Esc: menu"
 SPECTATE_HINT_TOUCH,Tap to watch the next player
+MENU_JOIN_WATCH,Watch games already playing (spectate)
 MENU_HOST_LAN,Local network
 MENU_TAG_LAN,LAN
 MENU_TAG_ONLINE,Online

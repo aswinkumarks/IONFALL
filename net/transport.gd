@@ -30,6 +30,7 @@ var ingress_drops: int = 0
 var _hello := PackedByteArray()
 var _limits: Dictionary = {}  ## id -> [window_start_ms, packets, bytes, violation_seconds]
 var _reject_reason: String = ""
+var _authenticating: Dictionary = {}  ## peer id -> true while its handshake runs
 
 
 func _enter_tree() -> void:
@@ -40,6 +41,7 @@ func _enter_tree() -> void:
 	api.peer_authenticating.connect(_on_peer_authenticating)
 	api.peer_connected.connect(_on_peer_connected)
 	api.peer_disconnected.connect(_on_peer_disconnected)
+	api.peer_authentication_failed.connect(func(id: int) -> void: _authenticating.erase(id))
 	api.peer_packet.connect(_on_peer_packet)
 	api.connected_to_server.connect(func() -> void: connected.emit())
 	api.connection_failed.connect(func() -> void: connection_failed.emit("connection failed"))
@@ -100,8 +102,9 @@ func local_id() -> int:
 	return api.get_unique_id() if api.multiplayer_peer != null else 0
 
 
+## A peer that already left (a rejected client closes on its own) is ignored.
 func kick(id: int) -> void:
-	if api.multiplayer_peer != null:
+	if api.multiplayer_peer != null and (api.get_peers().has(id) or _authenticating.has(id)):
 		api.disconnect_peer(id)
 
 
@@ -134,6 +137,7 @@ func _process(_delta: float) -> void:
 # --- Handshake ---
 
 func _on_peer_authenticating(id: int) -> void:
+	_authenticating[id] = true
 	_configure_peer(id)
 	if not is_server:
 		api.send_auth(id, _hello)
@@ -178,6 +182,7 @@ func _on_auth(id: int, data: PackedByteArray) -> void:
 
 
 func _on_peer_connected(id: int) -> void:
+	_authenticating.erase(id)
 	_configure_peer(id)
 	if is_server:
 		_limits[id] = [Time.get_ticks_msec(), 0, 0, 0]
