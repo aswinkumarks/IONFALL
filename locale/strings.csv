@@ -135,6 +135,7 @@ CAPTION_SHIELD_RECHARGING,Shield recharging
 NET_MAP_MISMATCH,"The host is on a different map (%s); update both devices to the same build"
 MAP_STATION,Meridian Station
 MAP_SPIRE,Halcyon Spire
+MAP_FOUNDRY,Vesper Foundry
 MENU_MAP,"Map: %s  ›"
 MAP_TEST_ARENA,Test Arena
 MENU_TAGLINE,Arena combat · LAN & online · Cross-play
@@ -236,6 +237,7 @@ LOBBY_WAITING_FOR_HOST,Waiting for the host to start…
 LOBBY_HOST_LEFT,The host closed the lobby
 MAP_STATION_BLURB,Compact station deck · close quarters
 MAP_SPIRE_BLURB,Open moon platform · long sightlines
+MAP_FOUNDRY_BLURB,Refinery yard · catwalks and close quarters
 MENU_SINGLE_PLAYER_SUB,Practice against bots on any map
 MENU_HOST_SUB,Open a LAN or online lobby
 MENU_HOST_LAN_SUB,Players on the same Wi-Fi join you

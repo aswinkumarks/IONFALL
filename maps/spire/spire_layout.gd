@@ -224,13 +224,14 @@ static func _ramp(out: Array, top: Vector3, downhill: Vector3, width: float) -> 
 
 ## Panels on the faces of a wall box: the 3 m panel plus a band above it to
 ## the wall's height, in segments of up to 4 m. Hull walls are only seen
-## from inside and get the deep Astra panels and cable tops.
-static func _clad(out: Array, centre: Vector3, size: Vector3) -> void:
+## from inside and get the deep Astra panels and cable tops; walls beyond
+## `hull_x` or `hull_z` from the centre are hull walls.
+static func _clad(out: Array, centre: Vector3, size: Vector3, hull_x := 35.0, hull_z := 27.0) -> void:
 	var along_x := size.x > size.z
 	var length := size.x if along_x else size.z
 	var t := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
 	var n0 := Vector3(0, 0, 1) if along_x else Vector3(1, 0, 0)
-	var hull := absf(centre.x) > 35.0 or absf(centre.z) > 27.0
+	var hull := absf(centre.x) > hull_x or absf(centre.z) > hull_z
 	var top := centre.y + size.y * 0.5
 	var count := ceili(length / 4.0 - 0.001)
 	var seg := length / count

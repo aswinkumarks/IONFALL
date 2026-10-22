@@ -18,8 +18,23 @@ func _enter_tree() -> void:
 func _bake() -> void:
 	await get_tree().create_timer(2.0).timeout
 	EditorInterface.open_scene_from_path(_scene)
-	await get_tree().create_timer(1.0).timeout
+	# The editor restores the last session's scenes too, and may switch to
+	# one of them after ours opens: wait until ours has stayed current.
 	var root := EditorInterface.get_edited_scene_root()
+	var stable := 0
+	for i in 60:
+		await get_tree().create_timer(1.0).timeout
+		root = EditorInterface.get_edited_scene_root()
+		if root != null and root.scene_file_path == _scene:
+			stable += 1
+			if stable >= 5:
+				break
+		else:
+			stable = 0
+			EditorInterface.open_scene_from_path(_scene)
+	if stable < 5:
+		_finish("could not open %s" % _scene, 1)
+		return
 	var lightmaps := root.find_children("*", "LightmapGI", true, false)
 	if lightmaps.is_empty():
 		_finish("no LightmapGI in %s" % _scene, 1)
@@ -33,7 +48,14 @@ func _bake() -> void:
 	var lm: LightmapGI = lightmaps[0]
 	# A rebake updates the existing data in place: watch its file instead.
 	var data_path := _scene.get_basename() + ".lmbake"
+	if lm.light_data == null:
+		# A first bake would ask where to save the data: give it a file.
+		ResourceSaver.save(LightmapGIData.new(), data_path)
+		lm.light_data = load(data_path)
 	var before := FileAccess.get_modified_time(data_path) if FileAccess.file_exists(data_path) else 0
+	if EditorInterface.get_edited_scene_root() != root:
+		_finish("%s is no longer the edited scene" % _scene, 1)
+		return
 	button.pressed.emit()
 	var waited := 0.0
 	while FileAccess.get_modified_time(data_path) == before and waited < 900.0:

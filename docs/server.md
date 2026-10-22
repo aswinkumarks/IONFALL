@@ -24,7 +24,7 @@ ionfall_server.bat --name "Office LAN" --map spire --mode tdm --bots 6
 |---|---|---|
 | `--name NAME` | shown in players' game lists | `IONFALL server` |
 | `--port N` | UDP game port (also allow UDP 47701 for LAN discovery) | `47710` |
-| `--map ID` | `station` (Meridian Station) or `spire` (Halcyon Spire) | `station` |
+| `--map ID` | `station` (Meridian Station), `spire` (Halcyon Spire) or `foundry` (Vesper Foundry) | `station` |
 | `--mode ID` | `ffa` or `tdm` | `ffa` |
 | `--bots N` | bots fill the match up to N combatants and leave as players join | `0` |
 | `--bot-difficulty D` | `easy`, `normal`, `hard`, `insane` | `normal` |

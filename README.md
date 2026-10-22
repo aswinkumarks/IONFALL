@@ -48,8 +48,9 @@ single player only. Browser multiplayer is planned after v1.0.
 ## The game
 
 - **Modes:** Free-for-all and Team Deathmatch, 5–20 minute matches.
-- **Maps:** *Meridian Station*, a compact station deck with close quarters, and *Halcyon Spire*,
-  an open moon platform with long sightlines.
+- **Maps:** *Meridian Station*, a compact station deck with close quarters; *Halcyon Spire*,
+  an open moon platform with long sightlines; and *Vesper Foundry*, a refinery yard of catwalks
+  and loading bays round a molten crucible.
 - **Weapons:** pick the Pulse Rifle, Burst Rifle or Scatter Gun as your primary, with the Mag Pistol
   as sidearm; the Rail Sniper and Arc Launcher are power weapons picked up on the map. Plus frag
   grenades and melee. Scope in on any gun for a tighter spread.
