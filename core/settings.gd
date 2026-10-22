@@ -13,6 +13,7 @@ const DEFAULTS := {
 		"primary": 0,  ## Loadouts.PRIMARIES index
 		"map": "station",  ## Maps.PLAYABLE, for Play and Host
 		"mode": "ffa",  ## GameMode.IDS, for Play and Host
+		"minutes": 10,  ## match length (LobbySession.DURATIONS), for single player and lobbies
 		"friendly_fire": false,  ## TDM, when hosting (PLAN §2.3)
 		"bot_difficulty": "normal",  ## BotBrain.DIFFICULTY_IDS
 	},

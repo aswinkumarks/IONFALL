@@ -11,6 +11,9 @@ const ATTR_CODE := "code"
 const ATTR_COMPAT := "compat"
 const BUCKET := "ionfall"  ## all builds; joins check ATTR_COMPAT
 const SEARCH_ATTEMPTS := 5
+const LIST_MAX := 50
+## Lobby attributes the server browser shows (`info` in host_async/update_async).
+const INFO_KEYS := ["name", "map", "mode", "players", "max", "state"]
 const SEARCH_RETRY_SECONDS := 2.0
 
 var product_user_id: String = ""
@@ -86,13 +89,13 @@ func sign_in_async(display_name: String) -> String:
 	return ""
 
 
-## Hosting: a listening P2P peer plus a lobby advertising its invite code.
-## Returns {peer, code} or {error}.
-func host_async(max_members: int) -> Dictionary:
-	var peer := EOSGMultiplayerPeer.new()
-	var err: int = peer.create_server(SOCKET)
-	if err != OK:
-		return {"error": "P2P server: %s" % error_string(err)}
+## Hosting: a listening P2P peer plus a lobby advertising its invite code
+## and `info` (INFO_KEYS) to the server browser. Returns {peer, code} or {error}.
+func host_async(max_members: int, info: Dictionary = {}) -> Dictionary:
+	var served := serve()
+	if served.has("error"):
+		return served
+	var peer: EOSGMultiplayerPeer = served.peer
 	var opts := EOS.Lobby.CreateLobbyOptions.new()
 	opts.local_user_id = product_user_id
 	opts.bucket_id = BUCKET
@@ -120,6 +123,7 @@ func host_async(max_members: int) -> Dictionary:
 	var mod: EOSGLobbyModification = mod_ret.lobby_modification
 	mod.add_attribute(ATTR_CODE, code, EOS.Lobby.LobbyAttributeVisibility.Public)
 	mod.add_attribute(ATTR_COMPAT, BuildInfo.compat_hash, EOS.Lobby.LobbyAttributeVisibility.Public)
+	_add_info(mod, info)
 	var update := EOS.Lobby.UpdateLobbyOptions.new()
 	update.lobby_modification = mod
 	EOS.Lobby.LobbyInterface.update_lobby(update)
@@ -131,8 +135,88 @@ func host_async(max_members: int) -> Dictionary:
 	return {"peer": peer, "code": code}
 
 
+## A listening P2P peer on our socket: the lobby's, then the match's (the
+## lobby peer is closed first). Returns {peer} or {error}.
+func serve() -> Dictionary:
+	var peer := EOSGMultiplayerPeer.new()
+	var err: int = peer.create_server(SOCKET)
+	if err != OK:
+		return {"error": "P2P server: %s" % error_string(err)}
+	return {"peer": peer}
+
+
+## Host: replaces the browser info of our lobby. Returns "" or an error.
+func update_async(info: Dictionary) -> String:
+	if _lobby_id.is_empty():
+		return "no lobby"
+	var mod_opts := EOS.Lobby.UpdateLobbyModificationOptions.new()
+	mod_opts.local_user_id = product_user_id
+	mod_opts.lobby_id = _lobby_id
+	var mod_ret: Dictionary = EOS.Lobby.LobbyInterface.update_lobby_modification(mod_opts)
+	if mod_ret.result_code != EOS.Result.Success:
+		return "lobby update: %s" % EOS.result_str(mod_ret)
+	_add_info(mod_ret.lobby_modification, info)
+	var update := EOS.Lobby.UpdateLobbyOptions.new()
+	update.lobby_modification = mod_ret.lobby_modification
+	EOS.Lobby.LobbyInterface.update_lobby(update)
+	var updated: Dictionary = await IEOS.lobby_interface_update_lobby_callback
+	return "" if updated.result_code == EOS.Result.Success else "lobby update: %s" % EOS.result_str(updated)
+
+
+func _add_info(mod: EOSGLobbyModification, info: Dictionary) -> void:
+	for key in INFO_KEYS:
+		if info.has(key):
+			mod.add_attribute(key, info[key], EOS.Lobby.LobbyAttributeVisibility.Public)
+
+
+## Every joinable game of this build: Array of {code, host_id} plus INFO_KEYS,
+## or {error}.
+func list_async() -> Variant:
+	var search_opts := EOS.Lobby.CreateLobbySearchOptions.new()
+	search_opts.max_results = LIST_MAX
+	var search_ret: Dictionary = EOS.Lobby.LobbyInterface.create_lobby_search(search_opts)
+	if search_ret.result_code != EOS.Result.Success:
+		return {"error": "search: %s" % EOS.result_str(search_ret)}
+	var search: EOSGLobbySearch = search_ret.lobby_search
+	search.set_parameter(EOS.Lobby.SEARCH_BUCKET_ID, BUCKET, EOS.ComparisonOp.Equal)
+	search.set_parameter(ATTR_COMPAT, BuildInfo.compat_hash, EOS.ComparisonOp.Equal)
+	search.find(product_user_id)
+	var found: Dictionary = await IEOS.lobby_search_find_callback
+	if found.result_code == EOS.Result.NotFound:
+		return []
+	if found.result_code != EOS.Result.Success:
+		return {"error": "search: %s" % EOS.result_str(found)}
+	var games: Array = []
+	for i in search.get_search_result_count():
+		var copied: Dictionary = search.copy_search_result_by_index(i)
+		if copied.result_code != EOS.Result.Success:
+			continue
+		var details: EOSGLobbyDetails = copied.lobby_details
+		var info: Dictionary = details.copy_info()
+		if info.result_code != EOS.Result.Success:
+			continue
+		var game := {"host_id": info.lobby_details.lobby_owner_user_id}
+		for key in [ATTR_CODE] + INFO_KEYS:
+			var attr: Dictionary = details.copy_attribute_by_key(key)
+			if attr.result_code == EOS.Result.Success:
+				game[key] = attr.attribute.data.value
+		if game.has(ATTR_CODE) and game.host_id != product_user_id:
+			games.append(game)
+	return games
+
+
+## A P2P client peer to the host with product user ID `host_id`.
+## Returns {peer} or {error}.
+func connect_async(host_id: String) -> Dictionary:
+	var peer := EOSGMultiplayerPeer.new()
+	var err: int = peer.create_client(SOCKET, host_id)
+	if err != OK:
+		return {"error": "P2P client: %s" % error_string(err)}
+	return {"peer": peer, "host_id": host_id}
+
+
 ## Joining: finds the lobby with `code` and connects to its owner.
-## Returns {peer} or {error} (error "not_found" when no such game).
+## Returns {peer, host_id} or {error} (error "not_found" when no such game).
 func join_async(code: String) -> Dictionary:
 	# A new lobby takes a few seconds to become searchable (seen on the
 	# laptop test: a joiner starting 3 s after the host found nothing), so an
@@ -168,12 +252,7 @@ func join_async(code: String) -> Dictionary:
 	var info: Dictionary = details.copy_info()
 	if info.result_code != EOS.Result.Success:
 		return {"error": "lobby info: %s" % EOS.result_str(info)}
-	var host_id: String = info.lobby_details.lobby_owner_user_id
-	var peer := EOSGMultiplayerPeer.new()
-	var err: int = peer.create_client(SOCKET, host_id)
-	if err != OK:
-		return {"error": "P2P client: %s" % error_string(err)}
-	return {"peer": peer}
+	return await connect_async(info.lobby_details.lobby_owner_user_id)
 
 
 ## Host: closes the lobby so its code stops working.
@@ -186,6 +265,3 @@ func leave_async() -> void:
 	_lobby_id = ""
 	EOS.Lobby.LobbyInterface.destroy_lobby(opts)
 	await IEOS.lobby_interface_destroy_lobby_callback
-
-
-

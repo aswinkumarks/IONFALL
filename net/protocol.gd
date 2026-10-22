@@ -9,7 +9,7 @@ const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
 
-enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27 }
+enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27, LOBBY = 28, START = 29 }
 ## NOTICE codes: host lifecycle hints (PLAN §3.5.1, best effort).
 enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2 }
 const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED, Msg.LOADOUT]
@@ -395,6 +395,41 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 					"yaw": r.u16() * TAU / 65536.0}
 	r.ok = false
 	return {}
+
+
+# --- Pre-match lobby (LobbySession; server -> client, reliable) ---
+
+## The host's settings and who is in the lobby. `members`: Array of
+## {name, host} in join order.
+static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: int, members: Array) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.LOBBY).str8(map_id).u8(mode).u8(minutes).u8(max_players).u8(members.size())
+	for m in members:
+		w.u8(1 if m.host else 0).str8(m.name)
+	return w.data()
+
+
+static func decode_lobby(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8(), "max": r.u8(), "members": []}
+	var n := r.u8()
+	if n > MAX_PEERS:
+		return {}
+	for i in n:
+		out.members.append({"host": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES)})
+	return out if r.ok and r.remaining() == 0 and out.mode <= GameMode.TDM else {}
+
+
+## The host started the match: everyone loads `map_id` and joins it.
+static func encode_start(map_id: String, mode: int, minutes: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.START).str8(map_id).u8(mode).u8(minutes).data()
+
+
+static func decode_start(data: PackedByteArray) -> Dictionary:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8()}
+	return out if r.ok and r.remaining() == 0 and out.mode <= GameMode.TDM else {}
 
 
 static func message_type(data: PackedByteArray) -> int:

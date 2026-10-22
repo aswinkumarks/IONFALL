@@ -110,8 +110,8 @@ func toggle_overlay() -> void:
 
 ## Automated UI checks through real input events (dev): `-- --ui
 ## "wait:3,click:MENU_JOIN,type:KFS7WQ,click:MENU_CONNECT,shot:/tmp/a.png"`.
-## `click` presses the visible button whose label (or its key) matches, at
-## its on-screen centre; `type` sends key events to the focused control;
+## `click` presses the visible, enabled button whose label (or its key)
+## matches, at its on-screen centre (`click:~text`: label contains text); `type` sends key events to the focused control;
 ## `shot` saves the screen. Every step is logged ("UI ...").
 func _run_ui_steps(spec: String) -> void:
 	for step in spec.split(",", false):
@@ -162,9 +162,11 @@ func _run_ui_steps(spec: String) -> void:
 
 
 func _find_button(node: Node, label: String) -> Button:
-	if node is Button and (node as Button).is_visible_in_tree() \
-			and ((node as Button).text == label or tr((node as Button).text) == label):
-		return node
+	var b := node as Button
+	if b != null and b.is_visible_in_tree() and not b.disabled:
+		if label.begins_with("~") and tr(b.text).contains(label.substr(1)) \
+				or b.text == label or tr(b.text) == label:
+			return b
 	for child in node.get_children():
 		var found := _find_button(child, label)
 		if found != null:

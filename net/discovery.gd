@@ -13,6 +13,7 @@ const EXPIRY_MS := 3500
 const FLAG_DEDICATED := 1
 const FLAG_MANAGER := 2
 const FLAG_PASSWORD := 4
+const FLAG_LOBBY := 8  ## a pre-match lobby (LobbySession), not a running match
 
 
 ## Everything a server browser row needs. `address` is filled in by the
@@ -82,6 +83,22 @@ static func broadcast_addresses() -> PackedStringArray:
 		if not out.has(directed):
 			out.append(directed)
 	return out
+
+
+## Private IPv4 addresses other devices on the LAN can join (PLAN §3.6).
+static func lan_addresses() -> PackedStringArray:
+	var out := PackedStringArray()
+	for a in IP.get_local_addresses():
+		if a.begins_with("192.168.") or a.begins_with("10.") or a.match("172.1[6-9].*") \
+				or a.match("172.2?.*") or a.match("172.3[01].*"):
+			out.append(a)
+	if out.is_empty():
+		out.append("127.0.0.1")
+	# Home routers and hotspots first; 172.16-31 is often a VM/container bridge.
+	var rank := func(a: String) -> int: return 0 if a.begins_with("192.168.") else 1 if a.begins_with("10.") else 2
+	var sorted := Array(out)
+	sorted.sort_custom(func(a: String, b: String) -> bool: return rank.call(a) < rank.call(b))
+	return PackedStringArray(sorted)
 
 
 ## Host side: sends the beacon once per second while hosting.

@@ -30,6 +30,13 @@ var reconnect_token: int = 0  ## JOIN: rejoin a match we dropped out of
 ## JOIN connects to the game with `online_code` instead of `address`.
 var online: bool = false
 var online_code: String = ""
+## JOIN online: the host's product user ID when already known (server
+## browser, or the lobby before its match); otherwise found by `online_code`.
+var online_host: String = ""
+var minutes: int = 0  ## match length; 0: the mode's default
+## Started from a lobby (LobbySession): the host serves the lobby's online
+## game again; clients give the host a moment to open the match.
+var from_lobby: bool = false
 
 
 ## The rejoin offer if it is still open, else {}.
@@ -59,6 +66,8 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	var mode: Variant = Settings.get_value("profile", "mode")
 	c.game_mode = GameMode.from_id(Platform.get_user_arg("--mode", mode if mode is String else "ffa"))
 	c.friendly_fire = Settings.get_value("profile", "friendly_fire") == true
+	var minutes: Variant = Settings.get_value("profile", "minutes")
+	c.minutes = minutes if minutes is int and LobbySession.DURATIONS.has(minutes) else LobbySession.DEFAULT_MINUTES
 	var level: Variant = Settings.get_value("profile", "bot_difficulty")
 	c.bot_difficulty = maxi(BotBrain.DIFFICULTY_IDS.find(Platform.get_user_arg("--bot-difficulty",
 			level if level is String else "normal")), 0)

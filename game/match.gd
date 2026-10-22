@@ -12,6 +12,8 @@ const MAIN_MENU := "res://ui/main_menu/main_menu.tscn"
 ## connection (the server times it out after 10 s).
 const RECONNECT_AFTER_MS := 5000
 const DEATH_CAM_SECONDS := 3.0
+## Clients from a lobby wait this long for the host's match to listen.
+const LOBBY_HANDOVER_SECONDS := 1.5
 
 var config: MatchConfig
 var server: ServerSession  ## offline and host
@@ -130,6 +132,8 @@ func _ready() -> void:
 		server.map_id = config.map
 		if Platform.get_user_arg("--time-limit").is_valid_int():  # dev: short matches
 			server.time_limit_ticks = Platform.get_user_arg("--time-limit").to_int() * Sim.TICK_RATE
+		elif config.minutes > 0:
+			server.time_limit_ticks = config.minutes * 60 * Sim.TICK_RATE
 		server.use_primaries = true
 		server.game_mode = config.game_mode
 		server.friendly_fire = config.friendly_fire
@@ -139,12 +143,18 @@ func _ready() -> void:
 		var online_peer: MultiplayerPeer = null
 		if config.online:
 			_info.text = tr("NET_ONLINE_SIGNING_IN")
-			var hosted: Dictionary = await Online.host(config.player_name, config.max_combatants())
+			var info := {"name": tr("NET_GAME_OF") % config.player_name, "map": config.map,
+					"mode": GameMode.IDS[config.game_mode], "max": config.max_combatants(), "state": "playing"}
+			# From a lobby the game (and its code) already exists; its peer
+			# was closed and the match listens on a new one.
+			var hosted: Dictionary = Online.serve() if config.from_lobby \
+					else await Online.host(config.player_name, config.max_combatants(), info)
 			if hosted.has("error"):
 				_fail(tr("NET_ONLINE_ERROR") % hosted.error)
 				return
 			online_peer = hosted.peer
-			_online_code = hosted.code
+			_online_code = Online.hosting_code
+			Online.update_info(info)
 		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots(), online_peer)
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
@@ -162,7 +172,7 @@ func _ready() -> void:
 			_info.text = tr("NET_ONLINE_HOSTING") % _online_code
 			Platform.perf_log("ONLINE hosting with invite code %s" % _online_code)
 		elif config.mode == MatchConfig.Mode.HOST:
-			_info.text = tr("NET_HOSTING") % [", ".join(lan_addresses()), config.port]
+			_info.text = tr("NET_HOSTING") % [", ".join(Discovery.lan_addresses()), config.port]
 			var advertiser := Discovery.Advertiser.new()
 			advertiser.beacon_source = server.beacon.bind(tr("NET_GAME_OF") % config.player_name, false, config.port)
 			add_child(advertiser)
@@ -214,9 +224,13 @@ func _start_client(token: int) -> bool:
 				_fail(tr("NET_MAP_MISMATCH") % client.map_id))
 	client.failed.connect(_on_client_lost)
 	client.left.connect(_on_client_lost)
+	if config.from_lobby and token == 0:
+		# The host leaves the lobby and opens the match at the same moment.
+		await get_tree().create_timer(LOBBY_HANDOVER_SECONDS).timeout
 	var online_peer: MultiplayerPeer = null
 	if config.online:
-		var joined: Dictionary = await Online.join(config.player_name, config.online_code)
+		var joined: Dictionary = await Online.connect_to(config.player_name, config.online_host) \
+				if not config.online_host.is_empty() else await Online.join(config.player_name, config.online_code)
 		if joined.has("error"):
 			match joined.error:
 				"not_found": _fail(tr("NET_ONLINE_NOT_FOUND") % config.online_code)
@@ -343,22 +357,6 @@ func _team_scores() -> PackedInt32Array:
 
 func local_id() -> int:
 	return client.local_id if client != null else ServerSession.LOCAL_PLAYER_ID
-
-
-## Private IPv4 addresses other devices on the LAN can join (PLAN §3.6).
-static func lan_addresses() -> PackedStringArray:
-	var out := PackedStringArray()
-	for a in IP.get_local_addresses():
-		if a.begins_with("192.168.") or a.begins_with("10.") or a.match("172.1[6-9].*") \
-				or a.match("172.2?.*") or a.match("172.3[01].*"):
-			out.append(a)
-	if out.is_empty():
-		out.append("127.0.0.1")
-	# Home routers and hotspots first; 172.16-31 is often a VM/container bridge.
-	var rank := func(a: String) -> int: return 0 if a.begins_with("192.168.") else 1 if a.begins_with("10.") else 2
-	var sorted := Array(out)
-	sorted.sort_custom(func(a: String, b: String) -> bool: return rank.call(a) < rank.call(b))
-	return PackedStringArray(sorted)
 
 
 # --- Simulation (host / offline) ---
@@ -1060,7 +1058,7 @@ func _make_pause_panel() -> Control:
 ## Hosts show a QR join code (PLAN §3.6): a phone camera opens the
 ## ionfall://join link, which starts the game and joins.
 func _make_join_code() -> Control:
-	var addresses := lan_addresses()
+	var addresses := Discovery.lan_addresses()
 	var box := VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
 	box.offset_left = -400

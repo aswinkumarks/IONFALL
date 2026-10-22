@@ -6,12 +6,33 @@ web or dedicated servers.
 
 ## Playing
 
-- **Host Online** (main menu) starts a match like *Host Game* and shows an
-  invite code, e.g. `KFS7WQ`, in the status line and the pause menu.
-- Friends open **Join**, type the code in the address field (case, spaces
-  and dashes don't matter) and connect. IP addresses still join LAN games.
+Menu: **Play** → **Single Player** (map, mode, duration, Start) or
+**Multiplayer** → **Host Game** / **Join Game**.
+
+- **Host Game** → *Local network (LAN)* or *Internet (invite code)* opens a
+  **lobby**. The host picks map, mode and duration (5–20 min) and sees
+  everyone who joins; **Start match** sends everybody into the match.
+  Without the EOS backend, Host opens a LAN lobby directly.
+- **Join Game** lists LAN games (beacons) and online games (EOS lobby
+  search, this build only, refreshed every 5 s), each marked *In lobby* or
+  *Playing*. A lobby row joins the lobby (settings read-only); a *Playing*
+  row joins the match. The field takes an IP address or an invite code
+  (case, spaces and dashes don't matter); it goes to the lobby, or straight
+  into the match if the host already started.
 - Host caps are unchanged: 4 combatants on a phone host, 8 on a PC host.
-- The code stops working when the host leaves the match.
+- The code stops working when the host leaves the lobby or the match.
+
+## Lobby
+
+`net/lobby_session.gd` (`LobbySession`) runs on the match's `Transport`
+(same handshake, whitelist and ingress limits). Only the host sends:
+`LOBBY` (settings + members) on every change, `START` once. On Start the
+host closes the lobby connections and opens the match on the same port or
+EOS socket; clients wait 1.5 s, then connect to it (online: straight to the
+host's product user ID, no new search). A client whose lobby connection
+reaches a running match (a `WELCOME`) joins that match instead. Online, the
+EOS lobby's attributes (name, map, mode, players, max, state) feed the
+browser; LAN lobbies set `Discovery.FLAG_LOBBY` in their beacon.
 
 ## How it works
 
@@ -67,16 +88,31 @@ Intel Xe laptop, 2026-10-22:
 `--eos-log` prints the EOS SDK's own log (Info level) for debugging.
 
 **Through the menu UI** (`--ui` sends real mouse and key events; see
-`core/diagnostics.gd`): host clicks *Host Online*; the joiner clicks *Join
-Game*, clears the field, types the code as `hzf-hve` and clicks *Connect*:
+`core/diagnostics.gd`; `click:~text` matches part of a label, for browser
+rows): the host clicks through to an online lobby and starts once the
+joiner, who picked the game from the list, is in:
 
 ```sh
-HOME=/tmp/eos-a XDG_DATA_HOME=/tmp/eos-a/data godot --path . -- --ui "wait:6,click:MENU_HOST_ONLINE,wait:40,shot:/tmp/host.png"
-HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,click:MENU_JOIN,wait:1,clear,type:hzf-hve,click:MENU_CONNECT,wait:40,shot:/tmp/joined.png"
+HOME=/tmp/eos-a XDG_DATA_HOME=/tmp/eos-a/data godot --path . -- --ui "wait:6,click:MENU_PLAY,click:MENU_MULTIPLAYER,click:MENU_HOST,click:MENU_HOST_ONLINE,wait:30,click:LOBBY_START,wait:30,shot:/tmp/host.png"
+HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,click:MENU_PLAY,click:MENU_MULTIPLAYER,click:MENU_JOIN,wait:18,click:~Online,wait:40,shot:/tmp/joined.png"
 ```
 
-Result (2026-10-22): the host's status line showed the invite code, the
-joiner entered the same match (host `clients=1`), 59.8 fps.
+(Before the lobby, the same check ran with the old single-page menu:
+*Host Online*, then a typed code; host `clients=1`, 59.8 fps.)
+
+**Nested menu and lobby** (2026-10-22, same machine, `--ui`):
+
+| Check | Result |
+|---|---|
+| LAN: Host Game → LAN lobby; joiner Join Game → clicks the LAN row | in lobby, sees host's map/mode/duration changes live; Start → both in the match (TDM, Halcyon Spire, 15:00 timer), host `clients=1` |
+| Online: Host Game → Internet; joiner clicks the Online row | lobby over EOS; Start → match reconnect over EOS, RTT 49 ms, host `clients=1` |
+| Online by typed code (`6gn-6sd`), then host leaves the lobby | joined; then "The host closed the lobby", back to the menu |
+| Join a host that already started: LAN by address / online *Playing* row | redirected into the match / joined it directly; host `clients=1` |
+| Single Player: duration 15 min, Start | offline match with a 15:00 timer |
+| Exported Linux release builds: `--lobby --online --autostart 2` and `--join CODE` | lobby → match over EOS, RTT 49 ms |
+
+Dev flags: `--lobby [--online]` opens a hosted lobby, `--autostart N`
+starts it once N players are in; `--host` still goes straight to a match.
 
 The 49–66 ms RTT on one machine suggests the traffic went through Epic's
 relays rather than directly; that's the worst case for real players.

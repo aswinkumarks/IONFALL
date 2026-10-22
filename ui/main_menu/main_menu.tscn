@@ -149,64 +149,57 @@ text = "0 / 500 XP"
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 
-[node name="PlayRow" type="HBoxContainer" parent="Margin/Center"]
+[node name="MainPage" type="VBoxContainer" parent="Margin/Center"]
+unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 9
 
-[node name="PlayButton" type="Button" parent="Margin/Center/PlayRow"]
+[node name="PlayButton" type="Button" parent="Margin/Center/MainPage"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
-size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "MENU_PLAY"
 alignment = 0
 
-[node name="MapButton" type="Button" parent="Margin/Center/PlayRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 62)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 1.2
-text = "MAP"
-alignment = 0
-
-[node name="ModeButton" type="Button" parent="Margin/Center"]
+[node name="ProfileButton" type="Button" parent="Margin/Center/MainPage"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
-text = "MODE"
+text = "MENU_PROFILE"
 alignment = 0
 
-[node name="HostButton" type="Button" parent="Margin/Center"]
+[node name="SettingsButton" type="Button" parent="Margin/Center/MainPage"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
-text = "MENU_HOST"
+text = "MENU_SETTINGS"
 alignment = 0
 
-[node name="JoinButton" type="Button" parent="Margin/Center"]
+[node name="QuitButton" type="Button" parent="Margin/Center/MainPage"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
-text = "MENU_JOIN"
+theme_type_variation = &"GhostButton"
+text = "MENU_QUIT"
 alignment = 0
 
 [node name="JoinPanel" type="PanelContainer" parent="Margin/Center"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+custom_minimum_size = Vector2(620, 0)
 theme_type_variation = &"CardPanel"
 
 [node name="Box" type="VBoxContainer" parent="Margin/Center/JoinPanel"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LanLabel" type="Label" parent="Margin/Center/JoinPanel/Box"]
+[node name="GamesLabel" type="Label" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"DimLabel"
-text = "MENU_LAN_SEARCHING"
+text = "MENU_GAMES_SEARCHING"
 
 [node name="GameList" type="VBoxContainer" parent="Margin/Center/JoinPanel/Box"]
 unique_name_in_owner = true
@@ -232,28 +225,6 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "MENU_BACK"
-
-[node name="ProfileButton" type="Button" parent="Margin/Center"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
-layout_mode = 2
-text = "MENU_PROFILE"
-alignment = 0
-
-[node name="SettingsButton" type="Button" parent="Margin/Center"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
-layout_mode = 2
-text = "MENU_SETTINGS"
-alignment = 0
-
-[node name="QuitButton" type="Button" parent="Margin/Center"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
-layout_mode = 2
-theme_type_variation = &"GhostButton"
-text = "MENU_QUIT"
-alignment = 0
 
 [node name="StatusLabel" type="Label" parent="Margin/Center"]
 unique_name_in_owner = true
