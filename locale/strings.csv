@@ -232,7 +232,7 @@ LOBBY_HOST_LEFT,The host closed the lobby
 MAP_STATION_BLURB,Compact station deck · close quarters
 MAP_SPIRE_BLURB,Open moon platform · long sightlines
 MENU_SINGLE_PLAYER_SUB,Practice against bots on any map
-MENU_HOST_SUB,Open a lobby on your network or online
+MENU_HOST_SUB,Open a LAN or online lobby
 MENU_HOST_LAN_SUB,Players on the same Wi-Fi join you
 MENU_HOST_ONLINE_SUB,Friends anywhere join with an invite code
 MENU_JOIN_SUB,Find games nearby and online

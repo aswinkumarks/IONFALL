@@ -21,6 +21,10 @@ const OFFLINE_DUMMIES := 3
 const HOST_DUMMIES := 2
 const ONLINE_LIST_INTERVAL_S := 5.0
 const MARGIN := Vector2(56, 40)
+## Card sizes: full-width rows for thumbs on phones; fixed, smaller cards
+## with a mouse on a desktop screen.
+const CARD_DESKTOP := Vector2(300, 150)
+const HOST_CARD_DESKTOP := Vector2(380, 190)
 
 enum Page { HOME, SOLO, HOST, JOIN }
 
@@ -183,7 +187,7 @@ func _build_home() -> void:
 	var cards := HBoxContainer.new()
 	cards.name = "Cards"
 	cards.add_theme_constant_override("separation", 18)
-	cards.custom_minimum_size.y = 220
+	cards.custom_minimum_size.y = 220 if Platform.is_mobile() else CARD_DESKTOP.y
 	column.add_child(cards)
 	var solo := _card(cards, "MENU_SINGLE_PLAYER", "MENU_SINGLE_PLAYER_SUB", "solo", _show.bind(Page.SOLO))
 	_opener[Page.SOLO] = solo
@@ -203,7 +207,10 @@ func _build_home() -> void:
 
 func _card(row: HBoxContainer, title: String, subtitle: String, icon: String, action: Callable) -> MenuTile:
 	var tile := MenuTile.make(title, subtitle, icon)
-	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if Platform.is_mobile():
+		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	else:
+		tile.custom_minimum_size = CARD_DESKTOP
 	tile.pressed.connect(action)
 	row.add_child(tile)
 	return tile
@@ -310,11 +317,15 @@ func _build_host() -> void:
 	column.add_child(spacer)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 18)
-	row.custom_minimum_size.y = 300
+	row.custom_minimum_size.y = 300 if Platform.is_mobile() else HOST_CARD_DESKTOP.y
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_child(row)
 	var lan := _card(row, "MENU_HOST_LAN", "MENU_HOST_LAN_SUB", "lan", _host_lobby.bind(false))
 	lan.accent = UiStyle.GOOD
-	_card(row, "MENU_HOST_ONLINE", "MENU_HOST_ONLINE_SUB", "online", _host_lobby.bind(true))
+	var online := _card(row, "MENU_HOST_ONLINE", "MENU_HOST_ONLINE_SUB", "online", _host_lobby.bind(true))
+	if not Platform.is_mobile():
+		lan.custom_minimum_size = HOST_CARD_DESKTOP
+		online.custom_minimum_size = HOST_CARD_DESKTOP
 	_first[Page.HOST] = lan
 	var after := Control.new()
 	after.size_flags_vertical = Control.SIZE_EXPAND_FILL

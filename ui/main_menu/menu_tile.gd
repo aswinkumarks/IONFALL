@@ -80,9 +80,9 @@ func _draw() -> void:
 	draw_rect(Rect2(0, size.y - 4, size.x * (0.18 + 0.82 * lit), 4), Color(accent, (0.6 + 0.4 * lit) * dim))
 	if selected:
 		MenuKit.draw_icon(self, "check", Vector2(size.x - 26, 26), 26, accent)
-	var big := size.y > 150
+	var big := size.y > 120
 	# Text-only cards get their icon again, large and faint, on the right.
-	if image == null and big and not icon_kind.is_empty():
+	if image == null and size.y >= 200 and not icon_kind.is_empty():
 		MenuKit.draw_icon(self, icon_kind, Vector2(size.x - size.y * 0.42, size.y * 0.42), size.y * 0.62,
 				Color(accent, (0.07 + 0.1 * lit) * dim))
 	var pad := 22.0 if big else 16.0
@@ -95,7 +95,7 @@ func _draw() -> void:
 		draw_string(UiStyle.font_body, Vector2(text_x, y), tr(subtitle), HORIZONTAL_ALIGNMENT_LEFT,
 				size.x - text_x - pad, sub_size, Color(UiStyle.TEXT_DIM.lerp(UiStyle.TEXT, lit * 0.5), dim))
 		y -= sub_size + 10
-	var title_size := 34 if big else 26
+	var title_size := (34 if size.y >= 200 else 30) if big else 26
 	draw_string(UiStyle.font_display_bold, Vector2(text_x, y), tr(title), HORIZONTAL_ALIGNMENT_LEFT,
 			size.x - text_x - pad, title_size, Color(UiStyle.TEXT, dim))
 	if not icon_kind.is_empty():
