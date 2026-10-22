@@ -33,3 +33,11 @@ Open the project only with Godot **4.7.2-stable**.
 | `tools/` | Build info, layer check, 16 KB check |
 
 `sim/`, `net/`, `modes/` and `bots/` must never reference presentation code; `tools/check_layers.py` enforces this in CI.
+
+## License
+
+IONFALL's code is under the [MIT License](LICENSE). Third-party assets keep
+their own licenses: art in `art/ASSETS.csv`, audio in `audio/ASSETS.csv`,
+code and tools in `licenses/THIRD_PARTY.md`, with license texts in
+`licenses/`. Most are CC0; the fonts are SIL OFL 1.1, and some touch icons
+are CC BY 3.0 (game-icons.net), which requires credit.
