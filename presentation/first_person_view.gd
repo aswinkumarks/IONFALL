@@ -33,6 +33,7 @@ const SUPPORT_DROP := 0.035
 ## Melee bash and grenade throw motions (seconds).
 ## Seconds to scope fully in or out.
 const SCOPE_TIME := 0.14
+const WALL_LEAN := 0.14  ## radians of camera roll while wall-running
 const MELEE_TIME := 0.32
 const THROW_TIME := 0.45
 
@@ -65,6 +66,7 @@ var _melee_t: float = 0.0  ## time left in the melee bash
 var _throw_t: float = 0.0  ## time left in the throw dip
 ## 0 = hip, 1 = fully scoped; eases with SCOPE_TIME.
 var scope_amount: float = 0.0
+var _wall_lean: float = 0.0
 var _scope_target: bool = false
 var _scope_zoom: float = 1.0
 var _scope_overlay: bool = false
@@ -211,7 +213,12 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	_bob_amount = lerpf(_bob_amount, bob_target, minf(1.0, delta * 8.0))
 	_bob_phase += delta * (6.0 + speed * 0.9)
 	var bob := Vector2(sin(_bob_phase) * 0.012, -absf(cos(_bob_phase)) * 0.014) * _bob_amount
-	camera.rotation = Vector3(pitch + _cam_dip, yaw, sin(_bob_phase) * 0.004 * _bob_amount * shake)
+	# Wall-run: the head leans away from the wall.
+	var lean := 0.0
+	if s.move_state == PlayerSimState.Move.WALLRUN:
+		lean = -Vector3(cos(yaw), 0.0, -sin(yaw)).dot(s.wall_normal) * WALL_LEAN * shake
+	_wall_lean = lerpf(_wall_lean, lean, minf(1.0, delta * 8.0))
+	camera.rotation = Vector3(pitch + _cam_dip, yaw, sin(_bob_phase) * 0.004 * _bob_amount * shake + _wall_lean)
 	camera.position.y = bob.y * 0.5 * shake
 
 	# FOV kicks

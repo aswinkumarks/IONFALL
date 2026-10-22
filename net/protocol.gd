@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 5
+const VERSION := 6
 const MAGIC := 0x464E4F49  ## "IONF"
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16

@@ -53,7 +53,7 @@ single player only. Browser multiplayer is planned after v1.0.
 - **Weapons:** pick the Pulse Rifle, Burst Rifle or Scatter Gun as your primary, with the Mag Pistol
   as sidearm; the Rail Sniper and Arc Launcher are power weapons picked up on the map. Plus frag
   grenades and melee. Scope in on any gun for a tighter spread.
-- **Movement:** sprint, slide, double jump and mantle.
+- **Movement:** sprint, slide, double jump, mantle and wall-run (jump along a wall while sprinting; jump again to kick off).
 - **Bots:** four difficulties from Easy to Insane. Bots fill empty places in multiplayer too.
 - **Progress:** a local profile with stats, XP, levels and cosmetic unlocks.
 - **Accessibility:** remappable keys, hold or toggle for crouch, sprint and aim, separate

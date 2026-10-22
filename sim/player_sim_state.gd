@@ -4,7 +4,7 @@ extends RefCounted
 ## Restoring this state and re-running the same commands must reproduce the
 ## same results bit for bit on the same build.
 
-enum Move { GROUND, AIR, SLIDE, MANTLE, DEAD }
+enum Move { GROUND, AIR, SLIDE, MANTLE, DEAD, WALLRUN }
 enum Stance { STAND, CROUCH, SLIDE }
 
 # Movement
@@ -23,6 +23,10 @@ var slide_ticks: int = 0
 var mantle_tick: int = 0
 var mantle_start := Vector3.ZERO
 var mantle_target := Vector3.ZERO
+## Wall-run (PLAN §2.1): the wall being run on, or the last one until the
+## floor is touched again (no second run on the same wall); ticks left.
+var wall_normal := Vector3.ZERO
+var wallrun_ticks: int = 0
 
 # Health (PLAN §2.2)
 var shield: float = 100.0

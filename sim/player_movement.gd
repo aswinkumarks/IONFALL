@@ -36,6 +36,13 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int) -> void:
 	elif s.jump_buffer_ticks > 0:
 		s.jump_buffer_ticks -= 1
 
+	if s.move_state == Move.AIR and _try_start_wallrun(p, mv):
+		pass  # runs below, this tick
+	if s.move_state == Move.WALLRUN:
+		_step_wallrun(p, mv, jump_pressed, crouch_held)
+		_move_and_collide(p)
+		return
+
 	if s.is_on_floor():
 		s.sprinting = cmd.is_held(Held.SPRINT) and mv.y > 0.5 and not crouch_held and not scoped
 	elif mv.y <= 0.5:
@@ -174,8 +181,10 @@ static func _move_and_collide(p: SimPlayer) -> void:
 			p.global_position += col.get_travel()
 
 	if grounded:
-		if s.move_state == Move.AIR:
+		if s.move_state == Move.AIR or s.move_state == Move.WALLRUN:
 			s.move_state = Move.GROUND
+		s.wall_normal = Vector3.ZERO
+		s.wallrun_ticks = 0
 		s.velocity.y = 0.0
 		s.ticks_since_floor = 0
 		s.air_jumps_left = 1
@@ -252,6 +261,75 @@ static func _step_mantle(p: SimPlayer) -> void:
 		s.velocity = Vector3(-sin(s.yaw), 0.0, -cos(s.yaw)) * cfg.mantle_exit_speed
 		s.ticks_since_floor = 0
 		s.air_jumps_left = 1
+
+
+## Wall-run entry (PLAN §2.1): airborne a moment, pushing forward fast
+## enough, moving along a near-vertical wall at our side that isn't the one
+## we just left.
+static func _try_start_wallrun(p: SimPlayer, mv: Vector2) -> bool:
+	var s := p.state
+	var cfg := p.config
+	var h := Vector3(s.velocity.x, 0.0, s.velocity.z)
+	if s.ticks_since_floor < cfg.wallrun_min_air_ticks or mv.y <= 0.5 or h.length() < cfg.wallrun_min_speed \
+			or s.velocity.y < -cfg.jump_velocity:
+		return false
+	var dir := h.normalized()
+	var side := Vector3.UP.cross(dir)
+	var space := p.get_world_3d().direct_space_state
+	var chest := p.global_position + Vector3(0.0, 1.0, 0.0)
+	var reach := cfg.capsule_radius + cfg.wallrun_reach
+	for sign: float in [1.0, -1.0]:
+		var hit := _ray(space, chest, chest + side * sign * reach)
+		if hit.is_empty():
+			continue
+		var n: Vector3 = hit.normal
+		if absf(n.y) > 0.25 or absf(dir.dot(n)) > 0.6:
+			continue  # floor-like, or running into it rather than along it
+		if s.wall_normal != Vector3.ZERO and n.dot(s.wall_normal) > 0.7:
+			continue  # the wall we just ran on
+		s.move_state = Move.WALLRUN
+		s.wall_normal = Vector3(n.x, 0.0, n.z).normalized()
+		s.wallrun_ticks = cfg.wallrun_ticks
+		s.velocity.y = clampf(s.velocity.y, -1.0, 3.0)
+		s.sprinting = false
+		return true
+	return false
+
+
+## One tick on the wall: along it at wall-run speed with low gravity; jump
+## kicks off it (and restores the double jump); letting go of forward,
+## crouching, running out of time or losing the wall drops off.
+static func _step_wallrun(p: SimPlayer, mv: Vector2, jump_pressed: bool, crouch_held: bool) -> void:
+	var s := p.state
+	var cfg := p.config
+	var dt := Sim.TICK_DT
+	var n := s.wall_normal
+	var h := Vector3(s.velocity.x, 0.0, s.velocity.z)
+	var along := h - n * h.dot(n)
+	var speed := along.length()
+	s.wallrun_ticks -= 1
+	if jump_pressed or s.jump_buffer_ticks > 0:
+		s.velocity = along + n * cfg.wall_jump_push
+		s.velocity.y = cfg.wall_jump_velocity
+		s.jump_buffer_ticks = 0
+		s.air_jumps_left = 1
+		s.ticks_since_floor = cfg.coyote_ticks + 1
+		s.move_state = Move.AIR
+		return
+	var wall := _ray(p.get_world_3d().direct_space_state, p.global_position + Vector3(0.0, 1.0, 0.0),
+			p.global_position + Vector3(0.0, 1.0, 0.0) - n * (cfg.capsule_radius + cfg.wallrun_reach))
+	var held := not wall.is_empty() and (wall.normal as Vector3).dot(n) > 0.8
+	if s.wallrun_ticks <= 0 or mv.y <= 0.3 or crouch_held or not held or speed < cfg.wallrun_min_speed * 0.6:
+		s.move_state = Move.AIR
+		s.velocity.y -= cfg.gravity * dt
+		return
+	s.wall_normal = Vector3(wall.normal.x, 0.0, wall.normal.z).normalized()
+	n = s.wall_normal
+	along = h - n * h.dot(n)
+	speed = minf(maxf(speed, cfg.wallrun_min_speed) + cfg.air_accel * 0.1 * dt, maxf(speed, cfg.wallrun_speed))
+	var vy := s.velocity.y - cfg.gravity * cfg.wallrun_gravity_scale * dt
+	s.velocity = along.normalized() * speed - n * 1.0  # a little push keeps us on the wall
+	s.velocity.y = vy
 
 
 ## True if a standing/crouched capsule of `height` fits with its feet at `feet`.

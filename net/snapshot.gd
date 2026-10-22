@@ -117,6 +117,7 @@ static func write_owner(w: Wire.Writer, s: PlayerSimState) -> void:
 	w.u8(s.mantle_tick)
 	if s.move_state == PlayerSimState.Move.MANTLE:
 		w.vec_f32(s.mantle_start).vec_f32(s.mantle_target)
+	w.u8(s.wallrun_ticks).vec_f32(s.wall_normal)
 	w.u32(s.action_seq).u8(s.weapon_slot).u8(s.switch_ticks).u8(s.mag.size())
 	for i in s.mag.size():
 		w.u8(s.weapons[i]).u16(s.mag[i]).u16(s.reserve[i]).u8(s.cooldown[i]).u8(s.reload[i]).u8(s.burst_left[i]).u8(s.burst_timer[i])
@@ -144,11 +145,13 @@ static func read_owner(r: Wire.Reader) -> PlayerSimState:
 	if s.move_state == PlayerSimState.Move.MANTLE:
 		s.mantle_start = r.vec_f32()
 		s.mantle_target = r.vec_f32()
+	s.wallrun_ticks = r.u8()
+	s.wall_normal = r.vec_f32()
 	s.action_seq = r.u32()
 	s.weapon_slot = r.u8()
 	s.switch_ticks = r.u8()
 	var n := r.u8()
-	if n > 8 or s.move_state > PlayerSimState.Move.DEAD or s.stance > PlayerSimState.Stance.SLIDE:
+	if n > 8 or s.move_state > PlayerSimState.Move.WALLRUN or s.stance > PlayerSimState.Stance.SLIDE:
 		r.ok = false
 		return s
 	# Packed arrays are value types: resize each field directly.

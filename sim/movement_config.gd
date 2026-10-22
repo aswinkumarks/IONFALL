@@ -39,6 +39,19 @@ extends Resource
 @export var mantle_ticks: int = 18
 @export var mantle_exit_speed: float = 3.0
 
+@export_group("Wall-run")
+## Entry: airborne for this many ticks, pushing forward at least this fast,
+## with a near-vertical wall beside us within capsule radius + reach.
+@export var wallrun_min_air_ticks: int = 6
+@export var wallrun_min_speed: float = 6.0
+@export var wallrun_reach: float = 0.35
+@export var wallrun_speed: float = 8.5
+@export var wallrun_ticks: int = 90
+## Gravity while running on a wall, as a fraction of normal gravity.
+@export_range(0.0, 1.0) var wallrun_gravity_scale: float = 0.2
+@export var wall_jump_velocity: float = 6.0
+@export var wall_jump_push: float = 5.0
+
 @export_group("Body")
 @export var capsule_radius: float = 0.4
 @export var stand_height: float = 1.8

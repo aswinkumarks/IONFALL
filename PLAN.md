@@ -42,7 +42,8 @@ Quake/Titanfall-inspired acceleration model. All values live in a `MovementConfi
 - **Mantle**: automatically climbs ledges up to ~1.8 m when holding forward + jump. Runs as a fixed-duration, tick-counted state with a server-validated target
 - Limited air control, coyote time 6 ticks (100 ms), jump buffer 6 ticks
 - Players don't collide with each other. The spawn system (§2.5) prevents stacking at spawn
-- Post-v1.0: wall-run, maybe grapple
+- **Wall-run**: jumping while sprinting along a near-vertical wall at your side runs along it for up to 90 ticks (1.5 s) with 20% gravity; jump kicks off (and restores the double jump); letting go of forward, crouching or losing the wall drops off; no second run on the same wall before landing. A tick-counted state (`Move.WALLRUN`) carried in the owner snapshot
+- Post-v1.0: maybe grapple
 
 ### 2.2 Health / shield
 | Stat | Value *(provisional)* |

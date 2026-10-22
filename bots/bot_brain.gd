@@ -367,7 +367,7 @@ func _traversal_inputs(p: SimPlayer, move: Vector3) -> int:
 	if _traversal == T.NONE or _traversal == T.DROP or move.length_squared() < 0.01:
 		return 0
 	var s := p.state
-	var on_floor := s.move_state != PlayerSimState.Move.AIR and s.move_state != PlayerSimState.Move.MANTLE
+	var on_floor := s.is_on_floor()
 	if on_floor and _traversal_jumps == 0:
 		_press(Action.JUMP)
 		_traversal_jumps = 1
