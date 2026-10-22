@@ -29,3 +29,5 @@
 
 # README screenshots: small JPEGs kept in plain git (no LFS bandwidth per view)
 docs/media/*.jpg -filter -diff -merge -text
+# Landing page assets: plain git so the Pages build needs no LFS
+site/*.png -filter -diff -merge -text

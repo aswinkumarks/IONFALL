@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IONFALL: free sci-fi arena FPS for browser, Android, Windows and Linux</title>
+<meta name="description" content="IONFALL is a free, open-source sci-fi arena shooter made with Godot 4. Play single player in your browser, or download it for Android, Windows and Linux with LAN and online multiplayer, bots and cross-play.">
+<link rel="canonical" href="https://aswinkumarks.github.io/IONFALL/">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="theme-color" content="#0b1118">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="IONFALL">
+<meta property="og:title" content="IONFALL: free sci-fi arena FPS">
+<meta property="og:description" content="Fast arena shooter: play in your browser, or on Android, Windows and Linux with LAN and online multiplayer.">
+<meta property="og:url" content="https://aswinkumarks.github.io/IONFALL/">
+<meta property="og:image" content="https://aswinkumarks.github.io/IONFALL/media/match.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "IONFALL",
+  "url": "https://aswinkumarks.github.io/IONFALL/",
+  "description": "A free, open-source sci-fi arena first-person shooter with bots, LAN and online multiplayer and cross-play between phones and PCs.",
+  "image": "https://aswinkumarks.github.io/IONFALL/media/match.jpg",
+  "genre": ["First-person shooter", "Arena shooter", "Action"],
+  "gamePlatform": ["Web browser", "Android", "Windows", "Linux"],
+  "operatingSystem": "Android 10+, Windows 10/11, Linux",
+  "applicationCategory": "Game",
+  "playMode": ["SinglePlayer", "MultiPlayer"],
+  "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 1, "maxValue": 16},
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "author": {"@type": "Person", "name": "aswinkumarks", "url": "https://github.com/aswinkumarks"},
+  "codeRepository": "https://github.com/aswinkumarks/IONFALL",
+  "license": "https://opensource.org/licenses/MIT"
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b1118;
+    --panel: #121b25;
+    --line: #22313f;
+    --text: #e7eef5;
+    --dim: #93a4b5;
+    --accent: #3fd2ea;
+    --warn: #f39a3c;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.6 "Exo 2", system-ui, sans-serif;
+  }
+  a { color: var(--accent); }
+  img { max-width: 100%; height: auto; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  h1, h2, h3 { font-family: Rajdhani, "Exo 2", sans-serif; line-height: 1.1; margin: 0 0 12px; }
+  h2 { font-size: 34px; margin-top: 8px; }
+  h3 { font-size: 22px; }
+
+  .hero {
+    position: relative; min-height: min(78vh, 720px); display: flex; align-items: flex-end;
+    background: linear-gradient(90deg, rgba(11,17,24,.95) 0%, rgba(11,17,24,.7) 45%, rgba(11,17,24,.1) 80%),
+                linear-gradient(0deg, var(--bg) 0%, transparent 35%),
+                url("media/match.jpg") center 65% / cover no-repeat;
+  }
+  .hero .wrap { padding-bottom: 56px; width: 100%; }
+  .hero h1 { font-size: clamp(56px, 11vw, 120px); letter-spacing: 2px; margin: 0; }
+  .bar { width: 96px; height: 4px; background: var(--accent); margin: 10px 0 18px; }
+  .tagline { font-size: 21px; color: var(--dim); max-width: 560px; margin: 0 0 26px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-block; padding: 14px 26px; font: 700 20px Rajdhani, sans-serif; letter-spacing: .5px;
+    text-decoration: none; border: 1px solid var(--accent); color: var(--text); background: rgba(18,27,37,.8);
+  }
+  .btn.primary { background: var(--accent); color: #061017; }
+  .btn:hover { filter: brightness(1.15); }
+  .note { color: var(--dim); font-size: 14px; margin-top: 12px; }
+
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); padding: 20px; }
+  .card p { margin: 0; color: var(--dim); }
+  .shots { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); }
+  figcaption { padding: 8px 12px; color: var(--dim); font-size: 14px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: Rajdhani, sans-serif; font-size: 18px; color: var(--dim); }
+  .yes { color: var(--accent); }
+  .no { color: var(--dim); }
+  .scroll { overflow-x: auto; }
+
+  footer { padding: 32px 0 48px; color: var(--dim); font-size: 14px; border-top: 1px solid var(--line); }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .hero {
+      min-height: min(70vh, 560px);
+      background: linear-gradient(0deg, var(--bg) 8%, rgba(11,17,24,.82) 55%, rgba(11,17,24,.6) 100%),
+                  url("media/match.jpg") center 65% / cover no-repeat;
+    }
+    .hero .wrap { padding-top: 140px; padding-bottom: 40px; }
+    .btn { flex: 1 1 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>IONFALL</h1>
+    <div class="bar"></div>
+    <p class="tagline">A fast sci-fi arena shooter. Fight bots on your own, or play with friends over your
+      local network or the internet. Phones and PCs play in the same match.</p>
+    <div class="buttons">
+      <a class="btn primary" href="play/">▶ Play in your browser</a>
+      <a class="btn" href="#download">Download for Android, Windows, Linux</a>
+      <a class="btn" href="https://github.com/aswinkumarks/IONFALL">Source on GitHub</a>
+    </div>
+    <p class="note">Free and open source (MIT). The browser version is single player against bots;
+      a desktop browser with a mouse works best.</p>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="wrap">
+      <h2>What is IONFALL?</h2>
+      <p>IONFALL is a free first-person arena shooter set on a space station and a moon platform,
+        made with the open-source Godot 4 engine. Matches are quick, from 5 to 20 minutes, in
+        Free-for-all or Team Deathmatch. Bots fill the empty places, so there is always a game,
+        whether you are on your own, on a home network with friends, or playing with someone on
+        the other side of the world.</p>
+      <div class="grid" style="margin-top:24px">
+        <div class="card"><h3>Two arenas</h3><p><em>Meridian Station</em>, a compact station deck with close quarters, and <em>Halcyon Spire</em>, an open moon platform with long sightlines.</p></div>
+        <div class="card"><h3>Six weapons</h3><p>Pulse Rifle, Burst Rifle or Scatter Gun as your primary and the Mag Pistol as sidearm; fight for the Rail Sniper and Arc Launcher power weapons. Grenades and melee too.</p></div>
+        <div class="card"><h3>Fluid movement</h3><p>Sprint, slide, double jump and mantle over ledges. Scope in on any gun for a tighter spread.</p></div>
+        <div class="card"><h3>Bots that fight back</h3><p>Four difficulties from Easy to Insane, for practice on your own or to fill multiplayer matches.</p></div>
+        <div class="card"><h3>LAN and online play</h3><p>Host a game on your network, or share a 6-letter invite code to play over the internet with no port forwarding. Up to 16 players on a dedicated server.</p></div>
+        <div class="card"><h3>Made for phones and PCs</h3><p>Touch controls with a movable layout and aim assist on Android; remappable keyboard and mouse on PC; full accessibility options.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Screenshots</h2>
+      <div class="shots">
+        <figure><img src="media/android-touch.jpg" alt="IONFALL on an Android phone with touch controls" width="1280" height="576" loading="lazy"><figcaption>Android touch controls</figcaption></figure>
+        <figure><img src="media/sniper-scope.jpg" alt="Looking through the Rail Sniper scope" width="1280" height="665" loading="lazy"><figcaption>Rail Sniper scope</figcaption></figure>
+        <figure><img src="media/lobby.jpg" alt="Multiplayer lobby with map, mode and match length" width="1280" height="720" loading="lazy"><figcaption>Multiplayer lobby</figcaption></figure>
+        <figure><img src="media/single-player.jpg" alt="Single player map selection: Meridian Station and Halcyon Spire" width="1280" height="720" loading="lazy"><figcaption>Single player against bots</figcaption></figure>
+        <figure><img src="media/home.jpg" alt="IONFALL home screen" width="1280" height="720" loading="lazy"><figcaption>Home screen</figcaption></figure>
+        <figure><img src="media/pause-scoreboard.jpg" alt="Pause menu with the live scoreboard" width="1280" height="576" loading="lazy"><figcaption>Pause menu with the scoreboard</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <h2>Download</h2>
+      <p>Version 0.9, a public preview. Everyone in a multiplayer match needs the same version.
+        All files are on the <a href="https://github.com/aswinkumarks/IONFALL/releases/tag/v0.9">release page</a>.</p>
+      <div class="scroll">
+      <table>
+        <tr><th>Platform</th><th>Download</th><th>How to start</th></tr>
+        <tr><td>Web browser</td><td><a href="play/">Play now</a></td><td>Single Player → Start, then click into the game to aim.</td></tr>
+        <tr><td>Android 10+</td><td><a href="https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-android-arm64.apk">APK (64-bit)</a></td><td>Open it on the phone and allow installs from your browser. A Google Play release comes with v1.0.</td></tr>
+        <tr><td>Windows 10/11</td><td><a href="https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-windows.zip">ZIP (64-bit)</a></td><td>Unzip and run IONFALL.exe. If SmartScreen warns: More info → Run anyway.</td></tr>
+        <tr><td>Linux</td><td><a href="https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-linux.zip">ZIP (x86_64)</a></td><td>Unzip and run ./ionfall.x86_64.</td></tr>
+        <tr><td>Dedicated server</td><td><a href="https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-server-linux.zip">Linux</a> · <a href="https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-server-windows.zip">Windows</a></td><td>LAN matches for up to 16 players.</td></tr>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>What works where</h2>
+      <div class="scroll">
+      <table>
+        <tr><th></th><th>Windows</th><th>Linux</th><th>Android</th><th>Browser</th></tr>
+        <tr><td>Single player against bots</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+        <tr><td>LAN multiplayer</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">No</td></tr>
+        <tr><td>Online multiplayer (invite codes)</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">No</td></tr>
+        <tr><td>Controls</td><td>Keyboard &amp; mouse</td><td>Keyboard &amp; mouse</td><td>Touch</td><td>Keyboard &amp; mouse</td></tr>
+      </table>
+      </div>
+      <p class="note">Browsers can't open the network connections LAN and online play use, so the browser
+        version is single player. Browser multiplayer is planned after v1.0.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Open source</h2>
+      <p>IONFALL's code is under the MIT License and lives on
+        <a href="https://github.com/aswinkumarks/IONFALL">GitHub</a>, with the design plan, roadmap
+        and issues. Bug reports and ideas are welcome in the
+        <a href="https://github.com/aswinkumarks/IONFALL/issues">issue tracker</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    IONFALL · made with <a href="https://godotengine.org">Godot Engine</a> · code under the MIT License ·
+    touch icons by Delapouite and Lorc from <a href="https://game-icons.net">game-icons.net</a> (CC BY 3.0) ·
+    other assets credited in the <a href="https://github.com/aswinkumarks/IONFALL/blob/main/art/ASSETS.csv">asset list</a>.
+  </div>
+</footer>
+
+</body>
+</html>
