@@ -3,7 +3,8 @@
 A fast sci-fi arena shooter for **Android, Windows, Linux and the web**. Fight bots on your own,
 or play with friends over the local network or the internet. Phones and PCs play in the same match.
 
-**▶ [Play in your browser](https://aswinkumarks.github.io/IONFALL/)** (single player, no install) ·
+**▶ [Play in your browser](https://aswinkumarks.github.io/IONFALL/play/)** (single player, no install) ·
+[Website](https://aswinkumarks.github.io/IONFALL/) ·
 **[Download v0.9](https://github.com/aswinkumarks/IONFALL/releases/tag/v0.9)** ·
 [Roadmap](https://github.com/users/aswinkumarks/projects/5)
 
@@ -22,7 +23,7 @@ or play with friends over the local network or the internet. Phones and PCs play
 
 | Platform | How |
 |---|---|
-| **Web browser** | Open **https://aswinkumarks.github.io/IONFALL/**, click **Single Player → Start**, then click into the game to aim with the mouse. Desktop Chrome, Edge or Firefox recommended. |
+| **Web browser** | Open **https://aswinkumarks.github.io/IONFALL/play/**, click **Single Player → Start**, then click into the game to aim with the mouse. Desktop Chrome, Edge or Firefox recommended. |
 | **Windows 10/11** (64-bit) | Download [`ionfall-0.9.0-windows.zip`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-windows.zip), unzip, run `IONFALL.exe`. The build isn't code-signed, so SmartScreen may warn: **More info → Run anyway**. |
 | **Linux** (x86_64) | Download [`ionfall-0.9.0-linux.zip`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-linux.zip), unzip, run `./ionfall.x86_64`. |
 | **Android 10+** (64-bit) | Download [`ionfall-0.9.0-android-arm64.apk`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9/ionfall-0.9.0-android-arm64.apk) on the phone and open it (allow installs from your browser or file manager). A Google Play release is coming with v1.0. |

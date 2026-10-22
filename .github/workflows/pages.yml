@@ -1,15 +1,19 @@
-# Serves the web build of a release on GitHub Pages: the release's
-# ionfall-<version>-web.zip, unpacked (single player only in browsers).
+# GitHub Pages: the landing page (site/, screenshots from docs/media) at the
+# root and a release's web build (ionfall-<version>-web.zip, single player
+# only in browsers) under play/.
 name: Web build on Pages
 
 on:
   release:
     types: [published]
+  push:
+    branches: [main]
+    paths: [site/**, docs/media/**, .github/workflows/pages.yml]
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag whose web build to serve (e.g. v0.9)
-        required: true
+        description: Release tag whose web build to serve (default the latest release)
+        required: false
 
 permissions:
   contents: read
@@ -27,18 +31,25 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Fetch the release's web build
+      - uses: actions/checkout@v4
+      - name: Landing page and the release's web build
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          fi
+          echo "Serving the web build of $TAG"
+          mkdir -p out/media out/play
+          cp -r site/. out/
+          cp docs/media/*.jpg out/media/
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-web.zip' --dir dl
-          mkdir site
-          unzip -q dl/*-web.zip -d site
-          test -f site/index.html
+          unzip -q dl/*-web.zip -d out/play
+          test -f out/index.html && test -f out/play/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: out
       - id: deployment
         uses: actions/deploy-pages@v4
