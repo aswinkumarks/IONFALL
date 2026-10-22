@@ -2,7 +2,7 @@
 
 **Premise:** in orbit above a ruined Earth, the Ion Trials pit soldiers against each other in hard-light arenas aboard a research station. Combatants "fall" into each round as ion-charged teleports, which is also the in-game respawn effect.
 
-**Plan status:** revision 3. Addresses both Codex reviews: the original findings (C1–C2, H1–H19, M1–M17, L1–L3) and the re-review findings (NH1–NH14, NM1–NM10, NL1–NL2). Numbers marked *(provisional)* are starting points that get measured and fixed during the vertical slice (M1). Milestones have no time estimates until M1 is finished (§6).
+**Plan status:** revision 4 (2026-10-22): M0–M4 done; internet play (player-hosted over Epic Online Services), the multiplayer lobby and the menu and touch-control redesigns were added after M4 (§6 "Post-M4"); M5 slimmed to what v1.0 needs (§3.5.2, §6). Revision 3 addressed both Codex reviews: the original findings (C1–C2, H1–H19, M1–M17, L1–L3) and the re-review findings (NH1–NH14, NM1–NM10, NL1–NL2). Numbers marked *(provisional)* are starting points that get measured and fixed during the vertical slice (M1). Milestones have no time estimates until M1 is finished (§6).
 
 **Conventions:** all gameplay timings are defined in **integer ticks at 60 Hz**. Seconds shown next to them are derived for readability. Network conditions are always given as **RTT** (round-trip time).
 
@@ -298,6 +298,8 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 - **No host migration**
 
 #### 3.5.2 Dedicated server
+**v1.0 scope (revision 4):** players host their own matches on LAN and over the internet (§3.8), so the dedicated server ships in v1.0 as the **exported command-line server that exists today** (`server/server_main.gd`: `--port --name --map --mode --bots --bot-difficulty --friendly-fire --no-discovery`, status lines on stderr, LAN beacons), plus graceful shutdown. Each match restarts on the same map and mode. Everything else in this section (`server.cfg`, rotation, standalone/managed modes, admin console, rotating logs) moves to **M7**, where the Manager needs it.
+
 - **Detection**: server mode starts when the build has the `dedicated_server` feature tag, or when the user argument `--server` is passed after `--`. `--headless` alone does not select server logic
 - **Launch**: `ionfall_server --headless -- --server --config server.cfg [--port N --name X --max-combatants N --map M --mode M]`
 - **Export**: Godot *dedicated server* export presets for Linux x86_64 and Windows (Linux arm64 is a stretch goal). Visual resources use **Strip Visuals** placeholders. Audio and presentation are kept out of the server by the gameplay/presentation scene split (§3.1) rather than relying on automatic stripping. The **exported** server is tested with every map, weapon and mode, not just the editor in headless mode
@@ -364,9 +366,9 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 | **O2 Hosted servers** | **Public dedicated servers only** (no internet player-hosting at first). Managers on VPS nodes register with the backend. Join responses carry the endpoint description (§3.5.3) with hostnames. Documented firewall port ranges; IPv4 + IPv6 |
 | **O3 Trusted progression** | Online stats/XP/unlocks stored on the backend in a separate profile namespace from LAN profiles. Results are accepted **only from registered, trusted servers** and applied idempotently by `match_result_id` |
 | **O4 Matchmaking & operations** | Mode/region queue, reporting, account bans, chat moderation obligations, Play Data Safety update |
-| Later (separately budgeted) | Internet player-hosting via NAT traversal or a relay |
+| ~~Later: internet player-hosting via NAT traversal or a relay~~ | **Done early** with EOS P2P (decision 0005): NAT traversal and Epic relays, lobbies, invite codes |
 
-**DTLS prototype early**: a small DTLS spike runs in M5 (transport spikes), well before O1.
+**DTLS prototype**: a small DTLS spike runs at the start of O1 (moved from M5 in revision 4: EOS P2P is already encrypted, so DTLS is only needed for our own hosted servers).
 
 **Internet-ready rules from day one:** player UUID + per-match result records with `match_result_id`; a join handshake with `protocol_version, build_id, compat_hash, player_uuid, auth_ticket` (ticket empty on LAN); server never trusts the client (§3.7); all networking goes through the `Net` layer; netcode is tested at 50–150 ms RTT with jitter and loss.
 
@@ -534,6 +536,7 @@ The Mi 11X at lower render scale only tests **scalable GPU settings**. It doesn'
   - Privacy policy URL
   - Content rating questionnaire, target audience & content declarations (violence; not designed for children)
   - Store listing art
+  - **Epic Online Services** (internet play, decision 0005): name Epic as a processor in the Data Safety form and the privacy policy (device-ID login, lobby attributes with player-chosen game names, P2P traffic through Epic relays); list the EOS SDK in the SDK inventory; review Epic's developer terms for release requirements; release credentials (client secret) kept out of the repository and injected at build time
   - Later: account deletion (with O1) and chat moderation obligations (O4)
 
 ### 3.19 Project structure
@@ -574,7 +577,7 @@ game/
 
 **Rules enforced from M0:**
 1. **Transport-agnostic networking**: all networking goes through the `Net` layer, which exposes one `MultiplayerPeer` to the game. Gameplay never touches ENet APIs
-2. **Composite peer contract** (implemented in the web milestone; prototyped in M5). The server's peer becomes a `MultiplayerPeerExtension` that wraps one adapter per transport (ENet, WebRTC, WebSocket). Polling the built-in peers and concatenating their packets is **not enough**; the contract is:
+2. **Composite peer contract** (prototyped and implemented in the web milestone; moved from M5 in revision 4). The server's peer becomes a `MultiplayerPeerExtension` that wraps one adapter per transport (ENet, WebRTC, WebSocket). Polling the built-in peers and concatenating their packets is **not enough**; the contract is:
    - **ID allocation**: the server is always ID 1. One composite allocator owns the ID space. For ENet clients, the ID ENet's server already assigned is adopted and reserved. For WebRTC/WebSocket clients, the composite allocates an ID that's unused across all transports, and the adapter makes sure the client's own `get_unique_id()` equals it (WebRTC clients are created with that ID; the WebSocket handshake delivers it). Collisions → the connection is rejected and the client reconnects
    - **Admission**: a connection stays in a pre-admission state, invisible to `SceneMultiplayer`, until the handshake (protocol version, `compat_hash`, and later the auth ticket) succeeds. Only then is `peer_connected` emitted
    - **Packet metadata**: every received packet keeps its sender ID, logical channel and transfer mode
@@ -605,7 +608,7 @@ game/
 **Enforcement (so the rules don't rot):**
 - **M0**: a **web export preset** (Compatibility renderer, single-threaded, no extensions) exists and CI builds it on every commit
 - **From M2, every milestone**: a browser smoke test in Chrome and Firefox that reaches the menu and runs a **local bot match** in the browser: move, fire, take shield/health damage, die and respawn (Compatibility preset). This checks single-threaded performance and renderer readability on real gameplay, not just a menu
-- **M5 transport prototype** (informational, **not a v1.0 release gate**): one dedicated server with the composite peer accepting an ENet client and a **real browser client** in the same match. It covers bidirectional RPCs, disconnect/reconnect, ID collisions, control-channel traffic and the WebSocket queue rules, plus WebRTC if `webrtc-native` works headless. Its findings feed the web milestone estimate
+- **Web-milestone transport prototype** (first step of the web milestone, moved from M5 in revision 4): one dedicated server with the composite peer accepting an ENet client and a **real browser client** in the same match. It covers bidirectional RPCs, disconnect/reconnect, ID collisions, control-channel traffic and the WebSocket queue rules, plus WebRTC if `webrtc-native` works headless. Its findings feed the web milestone estimate
 
 **Web client milestone (post-v1.0, separately budgeted):** composite peer, WebRTC transport (WebSocket fallback), signaling via the dedicated server/Manager, endpoint descriptions with web transports, web UI flow (join by link/address), Compatibility visual preset, web audio and storage fallbacks, a page served by the dedicated server or Manager.
 
@@ -644,14 +647,14 @@ All assets are restyled with shared materials (team color, emissive trims, palet
 | **Bandwidth** | Measured bytes vs the worksheet (§3.3.5), typical and worst case | M1b, per milestone |
 | **Rendered cross-play** | Mixed Android/Linux/Windows **release** builds in one match | M1b, per milestone |
 | **Soak** | Mi 11X client and phone host 20 min (M1c); dedicated server 60 min with 8 test clients (M1b) → 16 test clients (M5) | M1b/M1c |
-| **Dedicated server capacity** | One match process: all-human (test clients), all-bot and mixed; tick percentiles, RAM | M5 |
+| **Dedicated server capacity** | One match process: all-human (test clients), all-bot and mixed; tick percentiles, RAM | M7 (moved from M5) |
 | **Manager capacity benchmark** | Several matches on one machine; headroom-based admission | M7 |
 | **Cold start** | First match after install: shader stutter, load time | Per release |
 | **Human playtests** | Feel (movement, TTK), touch usability, UI clarity, accessibility options | Every milestone |
 | **Pseudolocalization** | Text expansion, missing keys | Per release |
 | **Web build** | Web export builds in CI | M0, every commit |
 | **Web smoke test** | Chrome + Firefox: menu + local bot match (move, fire, damage, death, respawn) on the Compatibility preset | M2, every milestone |
-| **Transport prototype** | Composite peer: ENet client + real browser client in one match, reconnects, ID collisions, WebSocket queue rules | M5 (informational) |
+| **Transport prototype** | Composite peer: ENet client + real browser client in one match, reconnects, ID collisions, WebSocket queue rules | Web milestone (informational) |
 | **16 KB checks** | ELF alignment, ZIP alignment, runtime on a 16 KB environment (§3.18) | M0, every release build |
 
 ---
@@ -669,14 +672,15 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 | **M2** | **Internal MVP** (playable game) | 1 map with first art pass, FFA, Pulse Rifle + Arc Launcher + Mag Pistol, bots (Normal) with traversal + stuck recovery, kill feed, death cam, HUD, results screen, profile/stats/XP with atomic saves + migration tests, settings, basic accessibility items, basic audio (buses, footsteps, occlusion v1); **character approach decided on device**; web smoke test passes; playtested by humans |
 | **M3** | Release content | Remaining weapons per the balance table, grenades, melee, power-weapon pickups + loadouts, **TDM** + teams + balance, **map 2** (symmetric, CTF-ready), 4 bot difficulties, cosmetic unlocks, touch layout editor + aim assist + auto-fire option, reconnect, QR join code |
 | **M4** | Art, audio & performance pass | Full lightmap pipeline on both maps, characters, VFX, audio pass, quality presets; §3.10 targets met on the Mi 11X (8 and 16 combatants; targets revised in M4 after measurement), release builds, 20-min sustained; ADPF/thermal spike; cold-start stutter test; phone host cap finalized (4). *Done: docs/perf/m4.md. The dedicated-GPU PC target moved to M6* |
-| **M5** | Dedicated server complete + transport spikes | `server.cfg`, standalone + managed modes, rotation, bot fill, local admin console, logs, Linux + Windows server exports; **16 real test clients** soak 60 min within tick/bandwidth budgets; single-match capacity measured; fuzz tests green. **Spikes (informational, not release gates):** DTLS on the pinned engine; composite-peer transport prototype with a real browser client (§3.20) |
+| **Post-M4** | **Done, off-plan** (2026-10-22) | **Internet play** over EOS P2P: anonymous device-ID login, invite codes, online game list, Epic relays; Linux, Windows, Android (decision 0005, `docs/online.md`). **Lobby**: host picks map, mode and length (5–20 min) and sees who joined; players read-only; Start sends everyone in; everyone returns to the lobby after each match. **Menus**: full-screen home with Single Player / Host / Join cards, map picture cards, a combined LAN + online game browser. **Touch controls**: one thumb cluster around Fire anchored to the bottom-right corner, picture icons. Verified laptop↔laptop and Mi 11X↔laptop in both directions; not yet on mobile data or Windows (M5) |
+| **M5** | **v1.0 server & online readiness** (slimmed in revision 4) | Exported Linux + Windows dedicated server boots and runs every map and mode (CI smoke test per map/mode); graceful shutdown on SIGTERM/Ctrl+C; **16 real test clients** soak 60 min within tick/bandwidth budgets; fuzz tests green (handshake, LOBBY/START, commands; malformed and oversized packets); **online checks**: a phone on mobile data joins and hosts through Epic relays, Windows build hosts and joins online, lobby → match → lobby cycles hold for 30 min; release builds get EOS credentials from CI secrets instead of a local file. *Moved out: `server.cfg`, rotation, standalone/managed modes, admin console, log rotation, capacity measurement → M7; DTLS spike → O1; composite-peer browser prototype → Web milestone* |
 | **M6** | **v1.0 LAN release** | Polish, full accessibility list, pseudoloc pass; min-spec phone, iGPU laptop and a dedicated-GPU PC tested (or claims removed); desktop release builds (Linux, Windows); Play **closed testing track** started (14-day gate if required); Play checklist (§3.18) including the data-flow review; Android release |
-| **M7** | Central server (LAN), **only if v1.0 is stable** | Manager, match list/create/join UI, port allocator, playlists, lifecycle protocol, restart backoff, admission by headroom; Manager capacity benchmark (§5) published in `docs/perf/` |
-| **Web** | Web browser client (post-v1.0, separately budgeted) | As in §3.20 |
+| **M7** | Central server (LAN), **only if v1.0 is stable** | The deferred dedicated-server features (§3.5.2: `server.cfg`, rotation, standalone/managed modes, local admin console, log rotation, single-match capacity measurement); Manager, match list/create/join UI, port allocator, playlists, lifecycle protocol, restart backoff, admission by headroom; Manager capacity benchmark (§5) published in `docs/perf/` |
+| **Web** | Web browser client (post-v1.0, separately budgeted) | As in §3.20, starting with the composite-peer prototype with a real browser client (moved from M5). Internet play for web players over **WebRTC** (decision 0005); a native host then serves EOS and WebRTC peers at once |
 | **O1–O4** | Internet play | As in §3.8, with O1 (secure identity + transport + account deletion) before any internet exposure |
 | Post-v1.0 | Expansion | CTF, Co-op Waves, wall-run, spectator mode, gamepad, map 3+, Compatibility preset for non-Vulkan Android, systemd/Docker, more weapons/cosmetics |
 
-**Cut lines if the estimate after M1 is too large** (cut in this order): 4 bot difficulties → 2; touch layout editor; QR join code; map 2 (ship TDM on map 1); M7. The internal MVP (M2) is never cut. Browser work never blocks v1.0.
+**Cut lines if the estimate after M1 is too large** (cut in this order): 4 bot difficulties → 2; touch layout editor; QR join code; map 2 (ship TDM on map 1); M7. *(Revision 4: all of these shipped except M7; the remaining cut line is M7, then the Windows dedicated server.)* The internal MVP (M2) is never cut. Browser work never blocks v1.0.
 
 ---
 
@@ -698,9 +702,10 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 | Losing the signing key | Upload key + Play App Signing, two encrypted backups, named owner |
 | Asset license problems | Written license policy, per-asset records, license copies |
 | GDExtension build complexity | Only when profiling demands it or for transport dependencies; full target/variant matrix in CI; GDScript fallbacks for client code |
-| Web client becomes impossible without a rewrite | Rules in §3.20 enforced from M0: web build in CI, gameplay smoke test from M2, transport prototype in M5 |
-| Composite peer or WebRTC proves hard | Prototype in M5 is informational; WebSocket fallback; web client separately budgeted after v1.0 |
-| Internet security later | O1 rule: no exposure before encrypted, ticketed, hardened joins with account deletion; DTLS spike in M5 |
+| Web client becomes impossible without a rewrite | Rules in §3.20 enforced from M0: web build in CI, gameplay smoke test from M2, transport prototype at the start of the web milestone |
+| Composite peer or WebRTC proves hard | Prototype first in the web milestone; WebSocket fallback; web client separately budgeted after v1.0 |
+| Internet security later | Player-hosted internet play runs over EOS P2P (encrypted, reachable only by product user ID, same handshake and ingress limits); fuzz tests in M5. Our own hosted servers still follow the O1 rule: no exposure before encrypted, ticketed, hardened joins with account deletion |
+| Dependence on Epic Online Services | Online play is behind the `Online` autoload and `Transport.host_peer/join_peer`; LAN never needs EOS; WebRTC is the planned second backend; Epic terms reviewed before release (M6) |
 
 ---
 
