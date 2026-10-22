@@ -4,6 +4,8 @@ extends RefCounted
 ## option chips, section labels, icon buttons and the line icons they draw.
 
 const ICON_WIDTH := 2.5
+const CHIP_FONT_SIZE := 21  ## UiStyle "ChipButton"
+const CHIP_MAX_MIN_WIDTH := 170.0
 
 
 ## "‹ Back   Title" across the top of a screen; `right` (optional) sits at
@@ -47,9 +49,13 @@ static func chips(labels: Array, selected: int, on_select: Callable, read_only: 
 		b.button_pressed = i == selected
 		b.custom_minimum_size = Vector2(0, 46)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		# Long (translated) labels shorten with "…" instead of widening the row.
+		# Wide enough for its label, up to a cap; longer (translated) labels
+		# shorten with "…" instead of pushing the layout off screen.
 		b.clip_text = true
 		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		var label_width := UiStyle.font_display.get_string_size(TranslationServer.translate(labels[i]),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, CHIP_FONT_SIZE).x
+		b.custom_minimum_size.x = minf(label_width + 44.0, CHIP_MAX_MIN_WIDTH)
 		if read_only:
 			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			b.focus_mode = Control.FOCUS_NONE

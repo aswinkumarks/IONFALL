@@ -405,7 +405,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 | Mi 11X (client) | Low, 0.6 (adaptive down to 0.5) | **16 combatants** (dedicated server), in combat | p95 ≤ 25 ms (40 fps), p99 ≤ 33.3 ms *(revised in M4)* |
 | Mi 11X (phone host) | Medium, 0.6 | **4 combatants (final, M4)** | p95 ≤ 18.2 ms (55 fps), server tick p99 ≤ 4 ms |
 | Min-spec Android (*deferred, unverified*) | Low, 0.6 | 8 combatants (16 also supported on Low, unverified) | p95 ≤ 33.3 ms (30 fps); stretch 22.2 ms (45 fps) |
-| Intel Iris Xe / AMD Vega 8 laptop (*deferred, unverified*) | Medium, 1080p | 8 combatants (16 on Low) | p95 ≤ 16.7 ms |
+| Intel Iris Xe laptop (*verified in M6*, `docs/perf/m6.md`; AMD Vega 8 unverified) | Medium, 1080p | 8 combatants (16 on Low) | p95 ≤ 16.7 ms: met (also on High) |
 | Dedicated GPU PC (*deferred to M6: none on hand in M4*) | High (Forward+), 1080p–1440p | 16 combatants | p95 ≤ 6.9 ms (144 fps) |
 | Dedicated server (reference: 4-core desktop CPU, recorded in `docs/perf/`) | — | 16 combatants incl. bots | tick p50 ≤ 2 ms, p99 ≤ 6 ms, ≤ 300 MB RSS |
 

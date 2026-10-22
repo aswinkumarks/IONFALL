@@ -244,7 +244,7 @@ func build() -> Theme:
 	t.set_stylebox("pressed", "ChipButton", chip_on)
 	t.set_stylebox("hover_pressed", "ChipButton", chip_on)
 	t.set_stylebox("focus", "ChipButton", box(Color.TRANSPARENT, Color.WHITE, 2, SKEW, 16, 6))
-	t.set_font_size("font_size", "ChipButton", 21)
+	t.set_font_size("font_size", "ChipButton", MenuKit.CHIP_FONT_SIZE)
 	for c in ["font_pressed_color", "font_hover_pressed_color"]:
 		t.set_color(c, "ChipButton", BG)
 	_variation(t, "GhostButton", "Button")

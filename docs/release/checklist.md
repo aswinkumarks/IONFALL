@@ -22,14 +22,14 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 | Item | Status |
 |---|---|
 | Accessibility list (PLAN §3.16) | ✅ remapping, hold/toggle, sensitivities, invert Y, FOV, HUD scale, captions, damage/gunfire indicators, volumes, shake/vignette, **team shapes** (◆ cyan / ▲ orange on nameplates and scores), **reduce flashes** |
-| Pseudolocalization pass (`--pseudoloc`) | ⏳ |
-| Intel Iris Xe laptop (Medium, 1080p, 8 combatants, p95 ≤ 16.7 ms, 20 min) | ⏳ this laptop |
+| Pseudolocalization pass (`--pseudoloc`) | ✅ every screen checked; fixed untranslated HUD labels and weapon tags, card text fitting, lobby overflow |
+| Intel Iris Xe laptop (Medium, 1080p, 8 combatants, p95 ≤ 16.7 ms, 20 min) | ✅ 60 fps, p95 16.7 ms for 21 min on Medium; High also holds 60 fps (`docs/perf/m6.md`) |
 | Min-spec Android phone | 👤 none on hand → no min-spec claims in the store listing (PLAN §3.10) |
 | Dedicated-GPU PC | 👤 none on hand → no high-refresh claims |
 | Version 1.0.0 (versionCode 1000000 + build) | ⏳ at tagging |
 | Desktop release builds (Linux, Windows) | ⏳ CI on the `v1.0.0` tag; 👤 approve publishing a GitHub release |
 | Signed release AAB with all 16 KB checks | ⏳ `tools/android_install.sh` (upload key in `~/.local/share/ionfall-keys/`) |
-| App icon, adaptive icons, feature graphic, screenshots | ⏳ `tools/store_art.tscn`, `docs/release/art/` |
+| App icon, adaptive icons, feature graphic, screenshots | ✅ icon and feature graphic (`tools/store_art.tscn`); ⏳ screenshots |
 | Store listing text, content-rating answers | ✅ draft: `docs/release/store-listing.md` |
 | Data flows review (Data Safety) | ✅ `docs/release/data-safety.md` |
 | Privacy policy | ✅ text: `docs/release/privacy-policy.md`; 👤 publish at a public URL (the repo is private) and fill in publisher/contact |

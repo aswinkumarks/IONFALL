@@ -338,8 +338,10 @@ func _build_ui() -> void:
 		tile.pressed.connect(func() -> void: _apply(id, session.game_mode, session.minutes))
 		maps.add_child(tile)
 		_map_tiles.append(tile)
-	var options := HBoxContainer.new()
-	options.add_theme_constant_override("separation", 28)
+	# One row each: side by side, the chips don't fit the column in longer
+	# languages and would push the players list off screen.
+	var options := VBoxContainer.new()
+	options.add_theme_constant_override("separation", 10)
 	settings.add_child(options)
 	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.NAME_KEYS,
 			func(i: int) -> void: _apply(session.map_id, i, session.minutes))
