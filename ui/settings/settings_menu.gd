@@ -226,7 +226,14 @@ func _build_keys_tab() -> Control:
 
 
 func _input(event: InputEvent) -> void:
-	if _listening_action.is_empty() or not event is InputEventKey or not event.pressed:
+	if _listening_action.is_empty():
+		# Back / Escape closes the screen (the touch layout editor first).
+		if visible and event.is_action_pressed("ui_cancel") \
+				and not (_touch_editor != null and _touch_editor.visible):
+			get_viewport().set_input_as_handled()
+			close()
+		return
+	if not event is InputEventKey or not event.pressed:
 		return
 	get_viewport().set_input_as_handled()
 	if event.keycode != KEY_ESCAPE:

@@ -54,9 +54,18 @@ func _ready() -> void:
 
 ## Android drops immersive fullscreen after calls and some system dialogs:
 ## restore it whenever the app gets focus back.
+## The Android back button (or gesture) arrives only as a go-back request:
+## turn it into ui_cancel, so every screen handles it like Escape (close a
+## panel, go up a page, pause, ask to quit).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_android():
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		for pressed: bool in [true, false]:
+			var e := InputEventAction.new()
+			e.action = &"ui_cancel"
+			e.pressed = pressed
+			Input.parse_input_event(e)
 
 
 func is_dedicated_server() -> bool:

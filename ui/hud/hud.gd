@@ -355,7 +355,7 @@ func _draw_stats() -> void:
 	if Settings.get_value("hud", "show_stats") != true or _fps <= 0:
 		return
 	var s := _scale
-	var at := Vector2(270.0, 50.0) if _touch else Vector2(16.0 * s, 26.0 * s)
+	var at := Vector2(110.0, 50.0) if _touch else Vector2(16.0 * s, 26.0 * s)
 	var fps := tr("HUD_STATS_FPS") % _fps
 	var fps_col := UiStyle.TEXT if _fps >= 50 else (UiStyle.WARN if _fps >= 30 else UiStyle.DANGER)
 	_text(at, fps, 16, fps_col)

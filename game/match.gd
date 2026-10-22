@@ -59,7 +59,8 @@ var _scoreboard: MatchPanel
 var _results: MatchPanel
 var _death_label: Label
 var _loadout_bar: HBoxContainer  ## primary choice while respawning (PLAN §2.6)
-var _scores_button: Button
+## The scoreboard on the pause menu, right of its buttons.
+var _pause_scores: MatchPanel
 var _results_until: float = 0.0
 ## Death cam (PLAN §2.6): {pos, killer, until} while active.
 var _death_cam: Dictionary = {}
@@ -811,13 +812,15 @@ func _update_match_ui(delta: float) -> void:
 		else:
 			_results.footer.text = (_results.footer_extra + "\n" if not _results.footer_extra.is_empty() else "") \
 					+ tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
-	var want_scores := (Input.is_action_pressed("scoreboard") or _scores_button.button_pressed) and not _results.visible
-	if want_scores:
-		_scoreboard.show_scoreboard(_roster(), local_id(),
-				tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else "",
-				_team_scores() if _game_mode() == GameMode.TDM else PackedInt32Array())
+	var subtitle := tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else ""
+	var team_scores := _team_scores() if _game_mode() == GameMode.TDM else PackedInt32Array()
+	if Input.is_action_pressed("scoreboard") and not _results.visible and not _paused:
+		_scoreboard.show_scoreboard(_roster(), local_id(), subtitle, team_scores)
 	else:
 		_scoreboard.visible = false
+	# The pause menu shows the scores too (the way to see them on touch).
+	if _paused:
+		_pause_scores.show_scoreboard(_roster(), local_id(), subtitle, team_scores)
 
 
 ## Our own reload, weapon switch and shield recharge sounds, from state changes.
@@ -1074,16 +1077,6 @@ func _build_ui() -> void:
 	touch.input = input
 	touch.hud_target = hud.touch_target
 	layer.add_child(touch)
-	# Touch: hold to see the scoreboard (Tab on keyboards).
-	_scores_button = Button.new()
-	_scores_button.text = "TOUCH_SCORES"
-	_scores_button.toggle_mode = false
-	_scores_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	_scores_button.custom_minimum_size = Vector2(110, 56)
-	_scores_button.position = Vector2(140, 25)
-	_scores_button.visible = DisplayServer.is_touchscreen_available()
-	_scores_button.focus_mode = Control.FOCUS_NONE
-	layer.add_child(_scores_button)
 	_pause_panel = _make_pause_panel()
 	layer.add_child(_pause_panel)
 	_confirm_panel = _make_confirm_panel()
@@ -1134,25 +1127,25 @@ func _make_pause_panel() -> Control:
 	box.add_child(Control.new())
 	box.add_child(hint)
 	if config.mode == MatchConfig.Mode.HOST:
-		root.add_child(_make_join_code())
+		box.add_child(_make_join_code())
+	_pause_scores = MatchPanel.new()
+	# Centred in the space right of the button column.
+	_pause_scores.anchor_left = 0.68
+	_pause_scores.anchor_right = 0.68
+	root.add_child(_pause_scores)
 	return root
 
 
-## Hosts show a QR join code (PLAN §3.6): a phone camera opens the
+## Hosts show their join code under the pause buttons: the online invite
+## code, or a LAN QR code (PLAN §3.6) that a phone camera opens as an
 ## ionfall://join link, which starts the game and joins.
 func _make_join_code() -> Control:
 	var addresses := Discovery.lan_addresses()
 	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	box.offset_left = -400
-	box.offset_right = -60
-	box.offset_top = -230
-	box.offset_bottom = 230
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 6)
 	if not _online_code.is_empty():
-		box.add_child(UiStyle.label("PAUSE_INVITE_CODE", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER))
-		var code := UiStyle.label(_online_code, &"TitleLabel", HORIZONTAL_ALIGNMENT_CENTER)
+		box.add_child(UiStyle.label("PAUSE_INVITE_CODE", &"DimLabel", HORIZONTAL_ALIGNMENT_LEFT))
+		var code := UiStyle.label(_online_code, &"TitleLabel", HORIZONTAL_ALIGNMENT_LEFT)
 		box.add_child(code)
 		return box
 	if addresses.is_empty():
@@ -1161,15 +1154,16 @@ func _make_join_code() -> Control:
 	var qr := QrCode.encode(link)
 	if qr == null:
 		return box
-	box.add_child(UiStyle.label("PAUSE_SCAN_TO_JOIN", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER))
+	box.add_child(UiStyle.label("PAUSE_SCAN_TO_JOIN", &"DimLabel", HORIZONTAL_ALIGNMENT_LEFT))
 	var tex := TextureRect.new()
 	tex.texture = ImageTexture.create_from_image(qr.to_image(8))
 	tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tex.custom_minimum_size = Vector2(300, 300)
+	tex.custom_minimum_size = Vector2(170, 170)
+	tex.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	box.add_child(tex)
-	box.add_child(UiStyle.label("%s:%d" % [addresses[0], config.port], &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER))
+	box.add_child(UiStyle.label("%s:%d" % [addresses[0], config.port], &"DimLabel", HORIZONTAL_ALIGNMENT_LEFT))
 	return box
 
 
@@ -1282,16 +1276,19 @@ func _fail(reason: String) -> void:
 	_leave()
 
 
+## Escape / Android back (Platform turns it into ui_cancel): dismiss the
+## leave question, else toggle the pause menu.
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		_set_paused(not _paused)
+		if _confirm_panel.visible:
+			_confirm_panel.visible = false
+		else:
+			_set_paused(not _paused)
 		get_viewport().set_input_as_handled()
 
 
 func _notification(what: int) -> void:
 	match what:
-		NOTIFICATION_WM_GO_BACK_REQUEST:
-			_set_paused(not _paused)
 		NOTIFICATION_APPLICATION_PAUSED:
 			_paused_at_ms = Time.get_ticks_msec()
 			if server != null:

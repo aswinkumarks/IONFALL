@@ -113,6 +113,7 @@ func toggle_overlay() -> void:
 ## `click` presses the visible, enabled button whose label, key or `ui_key` meta
 ## matches, at its on-screen centre (`click:~text`: label contains text); `type` sends key events to the focused control;
 ## `mouse:right:down` presses or releases a mouse button (in-game: aim, fire);
+## `back` sends the Android back button's go-back request;
 ## `shot` saves the screen. Every step is logged ("UI ...").
 func _run_ui_steps(spec: String) -> void:
 	for step in spec.split(",", false):
@@ -165,6 +166,10 @@ func _run_ui_steps(spec: String) -> void:
 				e.global_position = e.position
 				Input.parse_input_event(e)
 				Platform.perf_log("UI mouse %s" % arg)
+			"back":  # the Android back button's go-back request
+				get_tree().root.propagate_notification(NOTIFICATION_WM_GO_BACK_REQUEST)
+				await get_tree().process_frame
+				Platform.perf_log("UI back")
 			"shot":
 				await RenderingServer.frame_post_draw
 				get_viewport().get_texture().get_image().save_png(arg)

@@ -55,6 +55,7 @@ var _online_error: String = ""
 var _listing: bool = false
 var _profile_panel := ProfilePanel.new()
 var _settings := SettingsMenu.new()
+var _quit_panel: Control  ## "Quit IONFALL?", from Back on the home page
 
 
 func _ready() -> void:
@@ -78,6 +79,8 @@ func _ready() -> void:
 	move_child(_version_label, -1)
 	add_child(_profile_panel)
 	add_child(_settings)
+	_quit_panel = _make_quit_panel()
+	add_child(_quit_panel)
 	_settings.closed.connect(func() -> void: (_first[Page.HOME] as Control).grab_focus())
 	_profile_panel.closed.connect(func() -> void:
 		_update_player_card()
@@ -147,8 +150,8 @@ func _build_home() -> void:
 	var quit := MenuKit.icon_button("power", "", get_tree().quit)
 	quit.set_meta("ui_key", "MENU_QUIT")
 	quit.tooltip_text = "MENU_QUIT"
-	# Browsers and mobile apps are closed by the OS, not by an in-game button.
-	quit.visible = not (Platform.is_web() or Platform.is_mobile())
+	# Browsers close the tab instead.
+	quit.visible = not Platform.is_web()
 	top.add_child(quit)
 
 	var spacer := Control.new()
@@ -421,11 +424,40 @@ func _go_back() -> void:
 		(_opener[from] as Control).grab_focus.call_deferred()
 
 
+## Escape / Android back: up to the home page, then asks to quit.
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") and _page != Page.HOME and not _settings.visible \
-			and not _profile_panel.visible:
-		get_viewport().set_input_as_handled()
+	if not event.is_action_pressed("ui_cancel") or _settings.visible or _profile_panel.visible:
+		return
+	get_viewport().set_input_as_handled()
+	if _quit_panel.visible:
+		_quit_panel.visible = false
+		(_first[Page.HOME] as Control).grab_focus()
+	elif _page != Page.HOME:
 		_go_back()
+	elif not Platform.is_web():
+		_quit_panel.visible = true
+
+
+func _make_quit_panel() -> Control:
+	var parts := UiStyle.menu_overlay()
+	var root: Control = parts[0]
+	var box: VBoxContainer = parts[1]
+	root.visible = false
+	var text := UiStyle.label("QUIT_CONFIRM", &"HeaderLabel")
+	text.add_theme_font_size_override("font_size", 30)
+	box.add_child(text)
+	var stay := UiStyle.menu_button("LEAVE_CONFIRM_NO", &"PrimaryButton")
+	stay.pressed.connect(func() -> void:
+		root.visible = false
+		(_first[Page.HOME] as Control).grab_focus())
+	box.add_child(stay)
+	var quit := UiStyle.menu_button("MENU_QUIT")
+	quit.pressed.connect(get_tree().quit)
+	box.add_child(quit)
+	root.visibility_changed.connect(func() -> void:
+		if root.visible:
+			stay.grab_focus())
+	return root
 
 
 ## Entrance: the title slides in and the cards fade up one after another.

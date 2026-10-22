@@ -5,6 +5,7 @@ MENU_HOST,Host Game
 MENU_JOIN,Join Game
 MENU_SETTINGS,Settings
 MENU_QUIT,Quit
+QUIT_CONFIRM,Quit IONFALL?
 MENU_COMING_SOON,Coming in a later milestone
 MENU_PROFILE_NOT_SAVED,Your profile won't be saved on this device
 HUD_SCORE,Score %d
@@ -67,7 +68,6 @@ DEATH_KILLED_BY,Killed by %s
 DEATH_KILLER_STATUS,"Their shield %d · health %d"
 DEATH_DAMAGE,"You dealt %d · took %d"
 DEATH_SUICIDE,You died
-TOUCH_SCORES,Scores
 RESULTS_XP,"+%d XP · Level %d (%d / %d)"
 MENU_PROFILE,Profile
 PROFILE_LEVEL,Level

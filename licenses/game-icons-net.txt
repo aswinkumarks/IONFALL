@@ -2,7 +2,6 @@ Touch control icons from game-icons.net (https://game-icons.net)
 
   art/ui/touch/fire.png      "Crosshair" by Delapouite  https://game-icons.net/1x1/delapouite/crosshair.html
   art/ui/touch/jump.png      "Jump across" by Delapouite https://game-icons.net/1x1/delapouite/jump-across.html
-  art/ui/touch/scope.png     "Spyglass" by Lorc          https://game-icons.net/1x1/lorc/spyglass.html
   art/ui/touch/grenade.png   "Grenade" by Lorc           https://game-icons.net/1x1/lorc/grenade.html
   art/ui/touch/interact.png  "Hand" by Lorc              https://game-icons.net/1x1/lorc/hand.html
 

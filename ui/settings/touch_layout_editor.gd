@@ -82,6 +82,12 @@ func _select(id: String) -> void:
 	_size_slider.set_value_no_signal(_controls.scale_of(id) if not id.is_empty() else 1.0)
 
 
+func _input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_done()
+
+
 func _done() -> void:
 	Settings.set_value("input", "touch_layout", _controls.layout())
 	Settings.set_value("input", "touch_opacity", _opacity_slider.value)
