@@ -87,6 +87,23 @@ jobs:
           timeout 600 godot --headless -s addons/gut/gut_cmdln.gd -gconfig=.gutconfig.json -gexit 2>&1 | tee gut.log
           grep -q -- "---- All tests passed! ----" gut.log
 
+      # Internet play (decision 0005) needs the EOS credentials file, which is
+      # never committed. With the repository secrets set, client builds get it
+      # and show online play; without them they're LAN-only.
+      - name: EOS credentials from secrets
+        env:
+          EOS_PRODUCT_ID: ${{ secrets.EOS_PRODUCT_ID }}
+          EOS_SANDBOX_ID: ${{ secrets.EOS_SANDBOX_ID }}
+          EOS_DEPLOYMENT_ID: ${{ secrets.EOS_DEPLOYMENT_ID }}
+          EOS_CLIENT_ID: ${{ secrets.EOS_CLIENT_ID }}
+          EOS_CLIENT_SECRET: ${{ secrets.EOS_CLIENT_SECRET }}
+        run: |
+          if [ -z "$EOS_CLIENT_SECRET" ]; then echo "No EOS secrets: builds are LAN-only"; exit 0; fi
+          umask 077
+          printf '[eos]\nproduct_name="IONFALL"\nproduct_id="%s"\nsandbox_id="%s"\ndeployment_id="%s"\nclient_id="%s"\nclient_secret="%s"\n' \
+            "$EOS_PRODUCT_ID" "$EOS_SANDBOX_ID" "$EOS_DEPLOYMENT_ID" "$EOS_CLIENT_ID" "$EOS_CLIENT_SECRET" > eos_credentials.cfg
+          echo "EOS credentials written: online play enabled in client builds"
+
       - name: Export desktop, server and web builds
         env:
           IONFALL_BUILD_NUMBER: "0"
@@ -103,9 +120,19 @@ jobs:
           export_preset "Server Linux" server-linux x86_64 release build/server-linux/ionfall_server.x86_64
           export_preset "Server Windows" server-windows x86_64 release build/server-windows/ionfall_server.exe
           export_preset "Web" web wasm32 release build/web/index.html
+          cp tools/server/ionfall_server.sh build/server-linux/
+          cp tools/server/ionfall_server.bat tools/server/stop_server.bat build/server-windows/
+          cp docs/server.md build/server-linux/README.md
+          cp docs/server.md build/server-windows/README.md
 
-      - name: Smoke test exported dedicated server
-        run: timeout 60 build/server-linux/ionfall_server.x86_64 --headless -- --smoke-test
+      - name: Smoke test exported dedicated server (every map and mode)
+        run: |
+          set -euo pipefail
+          for map in station spire; do
+            for mode in ffa tdm; do
+              timeout 60 build/server-linux/ionfall_server.x86_64 --headless -- --map $map --mode $mode --no-discovery --smoke-test
+            done
+          done
 
       - name: Install Android SDK packages
         run: |

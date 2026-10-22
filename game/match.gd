@@ -265,6 +265,8 @@ func _on_client_lost(reason: String) -> void:
 			_fail("NET_DISCONNECTED")
 		"connection failed":
 			_fail("NET_UNREACHABLE")
+		"server_shutdown":
+			_fail("NET_SERVER_SHUTDOWN")
 		_:
 			_fail(reason)
 
@@ -517,7 +519,7 @@ func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32
 		var def: Dictionary = pickups.spots[i]
 		if def.weapon == &"grenade":
 			continue
-		var tag: String = KillFeed.WEAPON_TAGS.get(def.weapon, String(def.weapon))
+		var tag: String = KillFeed.weapon_tag(def.weapon)
 		var ticks: int = spot_ticks[i] if i < spot_ticks.size() else 0
 		var secs := ceili(ticks / float(Sim.TICK_RATE))
 		timers.append("%s %s" % [tag, tr("HUD_PICKUP_READY") if ticks == 0 else "%d:%02d" % [floori(secs / 60.0), secs % 60]])
@@ -705,7 +707,7 @@ func _update_match_ui(delta: float) -> void:
 		var names := PackedStringArray()
 		for i in me.state.weapons.size():
 			var w := me.state.weapon(i)
-			names.append(KillFeed.WEAPON_TAGS.get(w.id, w.display_name))
+			names.append(KillFeed.weapon_tag(w.id) if KillFeed.WEAPON_TAGS.has(w.id) else tr(w.display_name))
 		hud.set_slots(names, me.state.weapon_slot)
 		_local_sounds(me.state)
 	# Death cam: 3 s looking at the killer from where we died.
@@ -787,6 +789,7 @@ func _visual_for(id: int, display_name: String, is_bot: bool, character: int, co
 		v.setup(display_name, is_bot, color, id, style)
 		if team < 2:
 			v.set_label_color(color.lightened(0.35))
+			v.set_team(team, color.lightened(0.35))
 		_visuals[id] = v
 	return v
 

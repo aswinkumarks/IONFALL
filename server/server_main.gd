@@ -5,7 +5,7 @@ extends Node
 ## with training dummies up to N combatants, `--status-interval S` seconds between status lines,
 ## `--name NAME` shown in LAN server lists, `--mode ffa|tdm`, `--friendly-fire` (TDM),
 ## `--bot-difficulty easy|normal|hard|insane`,
-## `--no-discovery` stops beacons, `--smoke-test`
+## `--no-discovery` stops beacons, `--stop-file PATH` (graceful shutdown, below), `--smoke-test`
 ## exits right after startup so CI can verify that the exported server boots.
 ## Logs go to stderr; stdout is reserved for the managed-mode JSON protocol.
 
@@ -15,11 +15,18 @@ var server: ServerSession
 var _status_timer: float = 0.0
 var _status_interval: float = 10.0
 var _started_ms: int = 0
+var _stopping: bool = false
+var _stop_file: String = ""
+var _stop_poll: float = 0.0
 var _step_ms := FrameStats.new(600)  ## server tick wall time (simulation + snapshots)
 var _sim_ms := FrameStats.new(600)  ## of which world.step()
 
 
 func _ready() -> void:
+	get_tree().auto_accept_quit = false  # shutdown() quits after telling the clients
+	_stop_file = Platform.get_user_arg("--stop-file", OS.get_executable_path().get_base_dir().path_join("ionfall_server.stop"))
+	if FileAccess.file_exists(_stop_file):
+		DirAccess.remove_absolute(_stop_file)  # left over from a crash
 	printerr("IONFALL server %s starting (engine %s, compat %s)" % [
 		BuildInfo.display_string(), BuildInfo.engine_version, BuildInfo.compat_hash,
 	])
@@ -76,6 +83,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_stop_poll += delta
+	if _stop_poll >= 1.0:
+		_stop_poll = 0.0
+		if FileAccess.file_exists(_stop_file):
+			DirAccess.remove_absolute(_stop_file)
+			shutdown()
 	if server == null:
 		return
 	_status_timer += delta
@@ -83,6 +96,29 @@ func _process(delta: float) -> void:
 		return
 	_status_timer = 0.0
 	printerr(status_line())
+
+
+## Graceful shutdown (PLAN §3.5.2): the clients are told first, so they
+## leave with a clear message instead of timing out, then the server quits.
+## Triggered by a close request or the stop file: Godot doesn't hand Unix
+## signals to scripts, so `ionfall_server.sh` turns Ctrl+C / SIGTERM into
+## the stop file (`--stop-file PATH`, default next to the executable).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		shutdown()
+
+
+func shutdown() -> void:
+	if server == null or _stopping:
+		get_tree().quit()
+		return
+	_stopping = true
+	printerr("IONFALL server: shutting down (%d clients)" % server.clients.size())
+	server.notify_clients(Protocol.Notice.SERVER_SHUTDOWN)
+	await get_tree().create_timer(0.5).timeout  # let the notice leave
+	server.transport.close()
+	printerr("IONFALL server: stopped")
+	get_tree().quit()
 
 
 ## One-line health summary for logs and soak tests.

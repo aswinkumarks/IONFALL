@@ -1,10 +1,13 @@
 # IONFALL
 
-A fast sci-fi arena FPS for Android, Linux and Windows with LAN cross-play, built with Godot 4.7.2.
+A fast sci-fi arena FPS for Android, Linux and Windows: single player against bots, LAN cross-play, and
+player-hosted internet games (Epic Online Services). Built with Godot 4.7.2.
 
 - **Plan:** [PLAN.md](PLAN.md) (design, architecture, milestones)
 - **Toolchain:** [docs/toolchain.md](docs/toolchain.md) (pinned versions and common commands)
-- **Status:** M0 complete (foundations & pipelines). Next: M1a (simulation & feel)
+- **Status:** M0–M4 complete, plus internet play, lobby and menu redesign; finishing M5–M6 for v1.0
+  ([release checklist](docs/release/checklist.md))
+- **Online play:** [docs/online.md](docs/online.md) · **Dedicated server:** [docs/server.md](docs/server.md)
 
 ## Quick start
 

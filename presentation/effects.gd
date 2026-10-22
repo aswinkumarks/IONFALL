@@ -198,7 +198,7 @@ func explosion(at: Vector3, radius: float) -> void:
 		return
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.6, 0.3)
-	light.light_energy = 6.0
+	light.light_energy = _explosion_energy()
 	light.omni_range = radius * 2.5
 	light.shadow_enabled = false
 	add_child(light)
@@ -250,6 +250,9 @@ func _ring(at: Vector3, color: Color, radius: float, life: float) -> void:
 
 
 func _spark_flash(at: Vector3, size: float, color: Color, life: float) -> void:
+	if _reduce_flashes():  # accessibility: smaller and dimmer (additive blend)
+		size *= 0.55
+		color = Color(color * 0.5, color.a)
 	var mi := _mesh_node()
 	mi.mesh = _quad
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -262,6 +265,14 @@ func _spark_flash(at: Vector3, size: float, color: Color, life: float) -> void:
 		_flash_mats[color] = mat
 	mi.material_override = _flash_mats[color]
 	_fading.append([mi, 0.0, life, "pop"])
+
+
+static func _reduce_flashes() -> bool:
+	return Settings.get_value("accessibility", "reduce_flashes") == true
+
+
+static func _explosion_energy() -> float:
+	return 2.0 if _reduce_flashes() else 6.0
 
 
 ## True when the live effect nodes reach the density-scaled budget.
@@ -493,7 +504,7 @@ func _process(delta: float) -> void:
 				node.scale = Vector3(1.0 - t * 0.7, 2.4 * (0.3 + sqrt(t)), 1.0 - t * 0.7)
 				node.transparency = t
 			"light":
-				(node as OmniLight3D).light_energy = 6.0 * (1.0 - t)
+				(node as OmniLight3D).light_energy = _explosion_energy() * (1.0 - t)
 		keep.append(f)
 	_fading = keep
 

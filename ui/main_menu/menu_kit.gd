@@ -47,6 +47,9 @@ static func chips(labels: Array, selected: int, on_select: Callable, read_only: 
 		b.button_pressed = i == selected
 		b.custom_minimum_size = Vector2(0, 46)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		# Long (translated) labels shorten with "…" instead of widening the row.
+		b.clip_text = true
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		if read_only:
 			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			b.focus_mode = Control.FOCUS_NONE

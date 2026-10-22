@@ -10,6 +10,12 @@ const NAME_KEYS := ["MODE_FFA", "MODE_TDM"]
 ## Team 0 (cyan) spawns on the west half, team 1 (orange) on the east.
 const TEAM_COLORS := [Color(0.35, 0.9, 1.0), Color(1.0, 0.6, 0.25)]
 const TEAM_KEYS := ["TEAM_CYAN", "TEAM_ORANGE"]
+## Each team also has a shape (PLAN §3.16: never colour alone): cyan a
+## diamond, orange a triangle; points around the origin, radius 1.
+const TEAM_SHAPES := [
+	[Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)],
+	[Vector2(0, -1), Vector2(0.95, 0.75), Vector2(-0.95, 0.75)],
+]
 const NO_TEAM := 255
 
 
@@ -29,3 +35,4 @@ static func from_id(id: String) -> int:
 ## The side of the map a team spawns on (-1 west, +1 east).
 static func team_side(team: int) -> float:
 	return -1.0 if team == 0 else 1.0
+

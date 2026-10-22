@@ -27,6 +27,7 @@ var rig: CharacterRig
 var rig_style: String = ""
 var color := Color.WHITE
 var _label: Label3D
+static var _shape_textures: Dictionary = {}  ## team -> ImageTexture
 var _height: float = 1.8
 var _last_time: float = -1.0
 var shield: float = 0.0  ## at the latest update
@@ -109,6 +110,26 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 ## Nameplate tint (TDM team colour).
 func set_label_color(c: Color) -> void:
 	_label.modulate = c
+
+
+## TDM: the team's shape above the nameplate, in its colour (PLAN §3.16:
+## teams are never told apart by colour alone).
+func set_team(team: int, c: Color) -> void:
+	if team < 0 or team >= GameMode.TEAM_SHAPES.size():
+		return
+	if not _shape_textures.has(team):
+		_shape_textures[team] = UiStyle.team_shape_texture(team)
+	var marker := Sprite3D.new()
+	marker.texture = _shape_textures[team]
+	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.pixel_size = 0.0045
+	marker.modulate = c
+	marker.position = Vector3(0, 0.3, 0)  # above the name; follows it when crouching
+	marker.no_depth_test = false
+	marker.visibility_range_end = NAMEPLATE_RANGE
+	marker.visibility_range_end_margin = 4.0
+	marker.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	_label.add_child(marker)
 
 
 ## Hit feedback: a white flash on the body (brighter when the shield breaks)

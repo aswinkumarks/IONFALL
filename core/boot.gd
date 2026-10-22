@@ -9,6 +9,8 @@ const TEST_CLIENTS := "res://game/test_clients.tscn"
 
 
 func _ready() -> void:
+	if Platform.user_args.has("--pseudoloc"):
+		_pseudolocalize()
 	if Platform.user_args.has("--replay-check"):
 		var check := ReplayCheck.new()
 		check.finished.connect(func(_s: String) -> void: get_tree().quit())
@@ -21,3 +23,19 @@ func _ready() -> void:
 	if not Platform.is_dedicated_server() and Platform.user_args.has("--test-clients"):
 		target = TEST_CLIENTS
 	get_tree().change_scene_to_file.call_deferred(target)
+
+
+## Release check (PLAN §3.16): every translated string accented, 40% longer
+## and bracketed, so clipped or untranslated text shows up on screenshots.
+func _pseudolocalize() -> void:
+	var base := "internationalization/pseudolocalization/"
+	ProjectSettings.set_setting(base + "expansion_ratio", 0.4)
+	ProjectSettings.set_setting(base + "replace_with_accents", true)
+	ProjectSettings.set_setting(base + "double_vowels", false)
+	ProjectSettings.set_setting(base + "fake_bidi", false)
+	ProjectSettings.set_setting(base + "override", false)
+	ProjectSettings.set_setting(base + "skip_placeholders", true)
+	ProjectSettings.set_setting(base + "prefix", "[")
+	ProjectSettings.set_setting(base + "suffix", "]")
+	TranslationServer.pseudolocalization_enabled = true
+	TranslationServer.reload_pseudolocalization()

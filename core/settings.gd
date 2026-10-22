@@ -46,6 +46,7 @@ const DEFAULTS := {
 	"accessibility": {
 		"hud_scale": 1.0,
 		"reduce_screen_shake": false,
+		"reduce_flashes": false,  ## dimmer, smaller muzzle flashes, explosions and screen tints (PLAN §3.16)
 		"vignette": 1.0,  ## low-health vignette intensity
 		"captions": true,
 	},

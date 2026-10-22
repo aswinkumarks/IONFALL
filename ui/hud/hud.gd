@@ -212,7 +212,8 @@ func _process(delta: float) -> void:
 	_caption_time = maxf(0.0, _caption_time - delta)
 	var intensity: float = Settings.get_value("accessibility", "vignette")
 	var low := clampf(1.0 - _health / 45.0, 0.0, 1.0) * (0.55 + 0.15 * sin(_time * 5.0)) if _alive else 0.0
-	_vignette.modulate.a = maxf(_damage_flash * 0.45, low * 0.8) * intensity
+	var hit := 0.2 if Settings.get_value("accessibility", "reduce_flashes") == true else 0.45
+	_vignette.modulate.a = maxf(_damage_flash * hit, low * 0.8) * intensity
 	queue_redraw()
 
 
@@ -258,7 +259,7 @@ func _segmented_bar(origin: Vector2, w: float, h: float, value: float, shown: fl
 func _draw() -> void:
 	var c := size * 0.5
 	var s := _scale
-	if _shield_flash > 0.0:
+	if _shield_flash > 0.0 and Settings.get_value("accessibility", "reduce_flashes") != true:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(UiStyle.SHIELD, _shield_flash * 0.16))
 	_draw_top()
 	if not _alive:
@@ -295,6 +296,8 @@ func _draw_top() -> void:
 			var tx := x + (-44.0 if t == 0 else 44.0) * s
 			var col: Color = GameMode.TEAM_COLORS[t]
 			_text(Vector2(tx, y + 28 * s), str(_team_scores[t]), 30, col, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
+			# Team shape (◆ cyan, ▲ orange) so teams aren't told apart by colour alone.
+			UiStyle.draw_team_shape(self, t, Vector2(tx + (-30.0 if t == 0 else 30.0) * s, y + 18 * s), 9.0 * s, col)
 			if t == _team:
 				draw_rect(Rect2(Vector2(tx - 20 * s, y + 34 * s), Vector2(40 * s, 3 * s)), col)
 		_text(Vector2(x, y + 26 * s), "·", 24, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
@@ -351,7 +354,7 @@ func _draw_vitals() -> void:
 	var shield_col := UiStyle.SHIELD if not _shield_rising else Color(UiStyle.SHIELD, pulse)
 	if _shield_flash > 0.0:
 		shield_col = shield_col.lerp(Color.WHITE, _shield_flash)
-	_text(origin + Vector2(0, -8 * s), "SHIELD", 15, UiStyle.TEXT_DIM)
+	_text(origin + Vector2(0, -8 * s), tr("HUD_SHIELD"), 15, UiStyle.TEXT_DIM)
 	_text(origin + Vector2(w, -8 * s), str(ceili(_shield)), 22, UiStyle.SHIELD, HORIZONTAL_ALIGNMENT_RIGHT, UiStyle.font_display_bold)
 	_segmented_bar(origin, w, 16 * s, _shield / Health.MAX_SHIELD, _shield_shown / Health.MAX_SHIELD, shield_col,
 			Color(1, 1, 1, 0.55))
@@ -360,7 +363,7 @@ func _draw_vitals() -> void:
 	var health_col := Color(UiStyle.DANGER, pulse) if low else UiStyle.HEALTH
 	_segmented_bar(o2, w, 10 * s, _health / Health.MAX_HEALTH, _health_shown / Health.MAX_HEALTH, health_col,
 			Color(UiStyle.DANGER, 0.7))
-	_text(o2 + Vector2(0, 32 * s), "HEALTH", 15, UiStyle.TEXT_DIM)
+	_text(o2 + Vector2(0, 32 * s), tr("HUD_HEALTH"), 15, UiStyle.TEXT_DIM)
 	_text(o2 + Vector2(w, 32 * s), str(ceili(_health)), 22, UiStyle.DANGER if low else UiStyle.TEXT,
 			HORIZONTAL_ALIGNMENT_RIGHT, UiStyle.font_display_bold)
 

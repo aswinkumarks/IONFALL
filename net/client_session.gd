@@ -275,6 +275,8 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 				host_paused = false
 			elif code == Protocol.Notice.RETURN_TO_LOBBY:
 				lobby_called.emit()
+			elif code == Protocol.Notice.SERVER_SHUTDOWN:
+				left.emit("server_shutdown")
 		Protocol.Msg.SNAPSHOT:
 			host_paused = false
 			_on_snapshot(data)

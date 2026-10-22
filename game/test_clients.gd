@@ -4,11 +4,11 @@ extends Node
 ## interval and a verdict at the end.
 ##
 ## Run: godot --headless -- --test-clients 8 --join 127.0.0.1 [--port N]
-##      [--duration S] [--status-interval S]
+##      [--duration S] [--status-interval S] [--map ID]  (same map as the server;
+##      default test_arena)
 ## Exit code 0 when every client stayed connected with clean snapshots.
 
 const MOVEMENT := preload("res://data/movement_config.tres")
-const ARENA_GAMEPLAY := preload("res://maps/test_arena/gameplay.tscn")
 
 var clients: Array[ClientSession] = []
 var failures: PackedStringArray = []
@@ -24,7 +24,7 @@ func _ready() -> void:
 	var port := Platform.get_user_arg("--port", str(Protocol.DEFAULT_PORT)).to_int()
 	_duration = Platform.get_user_arg("--duration", "0").to_float()
 	_status_interval = maxf(Platform.get_user_arg("--status-interval", "30").to_float(), 1.0)
-	var gameplay := ARENA_GAMEPLAY.instantiate()
+	var gameplay := Maps.gameplay(Maps.from_args("test_arena"))
 	add_child(gameplay)
 	await get_tree().physics_frame
 	var loadout := Loadouts.ffa()

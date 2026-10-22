@@ -250,3 +250,16 @@ LOBBY_LAN_HINT,Players on this network see the game under Join Game.
 LOBBY_LAN_CAPTION,Local network
 LOBBY_HOST_BOTS_HINT,Bots fill the empty places. Start when everyone is in.
 MENU_GAMES_EMPTY,"No games yet. Ask a friend to host, or enter their address or invite code."
+NET_SERVER_SHUTDOWN,The server was shut down
+SETTING_REDUCE_FLASHES,Reduce flashes
+HUD_SHIELD,SHIELD
+HUD_HEALTH,HEALTH
+TAG_PULSE,PULSE
+TAG_PISTOL,PISTOL
+TAG_ARC,ARC
+TAG_BURST,BURST
+TAG_RAIL,RAIL
+TAG_SCATTER,SCATTER
+TAG_FRAG,FRAG
+TAG_MELEE,MELEE
+TAG_FALL,FALL

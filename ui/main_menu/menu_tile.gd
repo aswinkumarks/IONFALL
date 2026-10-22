@@ -90,15 +90,25 @@ func _draw() -> void:
 	var icon_size := 48.0 if big else 30.0
 	var text_x := pad if big or icon_kind.is_empty() else pad + icon_size + 14.0
 	var y := size.y - pad
+	var width := size.x - text_x - pad
 	if not subtitle.is_empty():
-		var sub_size := 17 if big else 15
+		var sub_size := _fit(UiStyle.font_body, tr(subtitle), width, 17 if big else 15)
 		draw_string(UiStyle.font_body, Vector2(text_x, y), tr(subtitle), HORIZONTAL_ALIGNMENT_LEFT,
-				size.x - text_x - pad, sub_size, Color(UiStyle.TEXT_DIM.lerp(UiStyle.TEXT, lit * 0.5), dim))
+				width, sub_size, Color(UiStyle.TEXT_DIM.lerp(UiStyle.TEXT, lit * 0.5), dim))
 		y -= sub_size + 10
-	var title_size := (34 if size.y >= 200 else 30) if big else 26
+	var title_size := _fit(UiStyle.font_display_bold, tr(title), width, (34 if size.y >= 200 else 30) if big else 26)
 	draw_string(UiStyle.font_display_bold, Vector2(text_x, y), tr(title), HORIZONTAL_ALIGNMENT_LEFT,
-			size.x - text_x - pad, title_size, Color(UiStyle.TEXT, dim))
+			width, title_size, Color(UiStyle.TEXT, dim))
 	if not icon_kind.is_empty():
 		var at := Vector2(pad + icon_size * 0.5, pad + icon_size * 0.5) if big \
 				else Vector2(pad + icon_size * 0.5, size.y * 0.5)
 		MenuKit.draw_icon(self, icon_kind, at, icon_size, Color(accent.lerp(Color.WHITE, lit * 0.4), dim))
+
+
+## The largest font size up to `preferred` (down to 70% of it) at which
+## `text` fits `width`; longer (translated) text then clips at that size.
+static func _fit(font: Font, text: String, width: float, preferred: int) -> int:
+	var fs := preferred
+	while fs > roundi(preferred * 0.7) and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > width:
+		fs -= 1
+	return fs

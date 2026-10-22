@@ -11,7 +11,7 @@ const MAX_PEERS := 16
 
 enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27, LOBBY = 28, START = 29 }
 ## NOTICE codes: host lifecycle hints (PLAN §3.5.1, best effort).
-enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2, RETURN_TO_LOBBY = 3 }
+enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2, RETURN_TO_LOBBY = 3, SERVER_SHUTDOWN = 4 }
 const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED, Msg.LOADOUT]
 
 ## Logical channels (PLAN §3.3.3).

@@ -145,7 +145,8 @@ func kick(strength: float = 1.0) -> void:
 	_cam_dip += 0.006 * strength * shake
 	_flash_time = 0.05
 	_flash.rotation.z = randf() * TAU
-	_flash.scale = Vector3.ONE * randf_range(0.8, 1.25) * (1.6 if strength > 1.5 else 1.0)
+	_flash.scale = Vector3.ONE * randf_range(0.8, 1.25) * (1.6 if strength > 1.5 else 1.0) \
+			* (0.55 if Settings.get_value("accessibility", "reduce_flashes") == true else 1.0)
 
 
 func _show_weapon(id: StringName) -> void:
@@ -244,7 +245,8 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 
 	_flash_time -= delta
 	_flash.visible = _flash_time > 0.0
-	_flash_light.light_energy = 2.5 if _flash_time > 0.0 else 0.0
+	_flash_light.light_energy = (0.8 if Settings.get_value("accessibility", "reduce_flashes") == true else 2.5) \
+			if _flash_time > 0.0 else 0.0
 	_flash_light.visible = _flash_time > 0.0 and Settings.video("lights") == true
 	if _muzzle != null:
 		_flash_light.global_position = _muzzle.global_position

@@ -126,6 +126,34 @@ static func menu_overlay(column_width: float = 440.0) -> Array:
 	return [root, column]
 
 
+## Draws team `team`'s shape (GameMode.TEAM_SHAPES) at `center`.
+static func draw_team_shape(ci: CanvasItem, team: int, center: Vector2, radius: float, color: Color) -> void:
+	if team < 0 or team >= GameMode.TEAM_SHAPES.size():
+		return
+	var pts := PackedVector2Array()
+	for p: Vector2 in GameMode.TEAM_SHAPES[team]:
+		pts.append(center + p * radius)
+	ci.draw_colored_polygon(pts, color)
+
+
+## A white team-shape texture `size` px across (nameplates), outlined dark.
+static func team_shape_texture(team: int, size: int = 48) -> ImageTexture:
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var poly := PackedVector2Array()
+	var r := size * 0.42
+	for p: Vector2 in GameMode.TEAM_SHAPES[team]:
+		poly.append(Vector2(size, size) * 0.5 + p * r)
+	var outline := Geometry2D.offset_polygon(poly, size * 0.06)
+	for y in size:
+		for x in size:
+			var at := Vector2(x + 0.5, y + 0.5)
+			if Geometry2D.is_point_in_polygon(at, poly):
+				img.set_pixel(x, y, Color.WHITE)
+			elif not outline.is_empty() and Geometry2D.is_point_in_polygon(at, outline[0]):
+				img.set_pixel(x, y, Color(0, 0, 0, 0.75))
+	return ImageTexture.create_from_image(img)
+
+
 ## A menu button; `kind` "" (default), "PrimaryButton" or "GhostButton".
 static func menu_button(text: String, kind: StringName = &"") -> Button:
 	var b := Button.new()

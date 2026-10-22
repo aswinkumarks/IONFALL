@@ -50,6 +50,7 @@ const SCHEMA := {
 		["accessibility", "hud_scale", "SETTING_HUD_SCALE", "percent", 0.8, 1.5, 0.05],
 		["accessibility", "vignette", "SETTING_VIGNETTE", "percent", 0.0, 1.0, 0.05],
 		["accessibility", "reduce_screen_shake", "SETTING_REDUCE_SHAKE", "check"],
+		["accessibility", "reduce_flashes", "SETTING_REDUCE_FLASHES", "check"],
 		["accessibility", "captions", "SETTING_CAPTIONS", "check"],
 	],
 }

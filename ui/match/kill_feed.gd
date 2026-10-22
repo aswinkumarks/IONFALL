@@ -6,9 +6,15 @@ extends VBoxContainer
 
 const MAX_ROWS := 5
 const ROW_SECONDS := 6.0
-const WEAPON_TAGS := {&"pulse_rifle": "PULSE", &"mag_pistol": "PISTOL", &"arc_launcher": "ARC",
-		&"burst_rifle": "BURST", &"rail_sniper": "RAIL", &"scatter_gun": "SCATTER", &"frag_grenade": "FRAG",
-		&"melee": "MELEE", &"": "FALL"}
+## Short weapon tags (translation keys) for the feed, HUD slots and timers.
+const WEAPON_TAGS := {&"pulse_rifle": "TAG_PULSE", &"mag_pistol": "TAG_PISTOL", &"arc_launcher": "TAG_ARC",
+		&"burst_rifle": "TAG_BURST", &"rail_sniper": "TAG_RAIL", &"scatter_gun": "TAG_SCATTER", &"frag_grenade": "TAG_FRAG",
+		&"melee": "TAG_MELEE", &"": "TAG_FALL"}
+
+
+## The translated short tag of weapon `id` (its id in capitals if unknown).
+static func weapon_tag(id: StringName) -> String:
+	return TranslationServer.translate(WEAPON_TAGS[id]) if WEAPON_TAGS.has(id) else String(id).to_upper()
 
 
 ## Rows are built once and reused, oldest first: building a row's controls
@@ -56,7 +62,7 @@ func add_death(e: Dictionary, name_of: Callable, local_id: int) -> void:
 		row.add_theme_stylebox_override("panel", _involved_box)
 	else:
 		row.remove_theme_stylebox_override("panel")
-	var weapon: String = WEAPON_TAGS.get(e.weapon, String(e.weapon).to_upper())
+	var weapon: String = weapon_tag(e.weapon)
 	if e.get("environment", false):
 		weapon = "FALL"
 	var headshot: bool = e.get("headshot", false)
