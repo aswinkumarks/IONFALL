@@ -185,6 +185,8 @@ TEAM_ORANGE,Orange
 RESULTS_TEAM_WINS,%s team wins
 MENU_MODE,Mode: %s  ›
 SETTINGS_FRIENDLY_FIRE,Friendly fire when hosting Team Deathmatch
+SETTING_BROWSER_PLAYERS,"Allow browser players when hosting on LAN (WebSocket, port 47711)"
+LOBBY_BROWSER_HINT,"Browsers on this network can join too (web build served over http, port %d)."
 SETTINGS_TAB_GAME,Game
 SETTING_BOT_DIFFICULTY,Bot difficulty
 SETTING_VALUE_EASY,Easy

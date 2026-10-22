@@ -90,6 +90,9 @@ func _open() -> void:
 	else:
 		err = session.host(config.player_name, max_players, config.port)
 		_subtitle.text = tr("LOBBY_LAN_HINT")
+		var web_port := session.transport.host_web_port()
+		if err == OK and web_port > 0:
+			_subtitle.text += "\n" + tr("LOBBY_BROWSER_HINT") % web_port
 		_code_caption.text = tr("LOBBY_LAN_CAPTION")
 		_code.text = Discovery.lan_addresses()[0]
 		var advertiser := Discovery.Advertiser.new()

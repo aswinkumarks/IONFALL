@@ -91,3 +91,51 @@ func test_websocket_lobby_member_gets_start() -> void:
 	await wait_until(func() -> bool: return get_signal_emit_count(member, "started") > 0, 3.0)
 	assert_signal_emitted(member, "started")
 	assert_signal_not_emitted(member, "closed")
+
+
+func test_browser_commands_at_30_hz_keep_prediction_clean() -> void:
+	var browser := _join(true, "Browser")
+	await wait_until(func() -> bool: return browser.is_predicting(), 6.0)
+	assert_true(browser.transport.is_stream_client())
+	var c: ServerSession.Client = server.clients.values()[0]
+	assert_true(server.transport.is_stream(c.id))
+	await wait_seconds(1.0)
+	browser.reset_metrics()
+	await wait_seconds(2.0)
+	var rate := browser.transport.stats.packets_out_per_s
+	assert_between(rate, 25, 40, "about 30 command packets a second (plus pings)")
+	assert_eq(browser.visible_corrections, 0, "no visible corrections at 30 Hz commands")
+	assert_lt(c.synthesized, 10, "the server rarely has to guess a command")
+	gut.p("corrections=%d synthesized=%d stalled=%d packets/s=%d" % [browser.corrections, c.synthesized, c.stalled, rate])
+
+
+class BackedUpTransport:
+	extends Transport
+	var backlog: int = 0
+
+	func is_stream(_id: int) -> bool:
+		return true
+
+	func buffered_bytes(_id: int) -> int:
+		return backlog
+
+
+func test_backed_up_stream_coalesces_then_resyncs_then_drops() -> void:
+	var s := ServerSession.new()
+	var t := BackedUpTransport.new()
+	s.transport = t
+	var c := ServerSession.Client.new()
+	c.sent = {5: {}}
+	assert_true(s._stream_ready(c), "an empty queue sends")
+	t.backlog = ServerSession.STREAM_BACKLOG_BYTES + 1
+	assert_false(s._stream_ready(c), "a backed-up queue skips the snapshot")
+	assert_eq(c.coalesced, 1)
+	c.backlog_since_ms = Time.get_ticks_msec() - ServerSession.STREAM_RESYNC_MS - 10
+	assert_false(s._stream_ready(c))
+	assert_true(c.resync, "a long backlog asks for a full state")
+	t.backlog = 0
+	assert_true(s._stream_ready(c))
+	assert_true(c.sent.is_empty(), "no baseline: the next snapshot is full")
+	assert_eq(c.backlog_since_ms, 0)
+	t.free()
+	s.free()

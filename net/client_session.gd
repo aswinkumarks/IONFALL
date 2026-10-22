@@ -208,12 +208,16 @@ func _predict_tick() -> void:
 	cmd.interp_ticks = interp_ticks
 	_commands[pred_tick] = cmd
 	prev_state = pred.state.copy()
-	var recent: Array[PlayerCommand] = []
-	for t in range(pred_tick - Protocol.CMD_REDUNDANCY + 1, pred_tick + 1):
-		if _commands.has(t):
-			recent.append(_commands[t])
-	var ack := latest_snapshot.id if latest_snapshot != null else 0
-	transport.send(1, Protocol.encode_commands(match_id, ack, interp_ticks, recent), Protocol.CH_GAME, false)
+	# Over WebSocket (a browser; PLAN §3.20 rule 4) the stream is reliable:
+	# send every other tick (30 Hz) with just the new commands.
+	var stream := transport.is_stream_client()
+	if not stream or pred_tick % 2 == 1:
+		var recent: Array[PlayerCommand] = []
+		for t in range(pred_tick - (1 if stream else Protocol.CMD_REDUNDANCY - 1), pred_tick + 1):
+			if _commands.has(t):
+				recent.append(_commands[t])
+		var ack := latest_snapshot.id if latest_snapshot != null else 0
+		transport.send(1, Protocol.encode_commands(match_id, ack, interp_ticks, recent), Protocol.CH_GAME, false)
 	_simulate(cmd, true)
 	_predicted[pred_tick] = pred.state.copy()
 	_commands.erase(pred_tick - HISTORY_TICKS)

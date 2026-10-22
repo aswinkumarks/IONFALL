@@ -52,9 +52,39 @@ func _exit_tree() -> void:
 
 
 ## LAN and dedicated servers: ENet over UDP and, when `web_port` > 0, also
-## WebSocket for browser clients on that TCP port (CompositePeer). -1: from
-## the `--web-port` argument (a prototype, off by default; PLAN §3.20).
+## WebSocket for browser clients on that TCP port (CompositePeer). -1: the
+## `--web-port` argument, else Protocol.DEFAULT_WEB_PORT when the host
+## allows browser players (Settings, off by default; PLAN §3.20).
 var web_port: int = -1
+
+
+## The WebSocket port host() opens (0: none).
+func host_web_port() -> int:
+	if web_port >= 0:
+		return web_port
+	if Platform.user_args.has("--web-port"):
+		return Platform.get_user_arg("--web-port", "0").to_int()
+	return Protocol.DEFAULT_WEB_PORT if Settings.get_value("profile", "browser_players") else 0
+
+
+## Server: peer `id` is on a stream transport (WebSocket: one ordered TCP
+## stream, PLAN §3.20 rule 4) rather than ENet.
+func is_stream(id: int) -> bool:
+	var mp := api.multiplayer_peer
+	return mp is CompositePeer and (mp as CompositePeer).adapter_of(id) is WebSocketMultiplayerPeer
+
+
+## Server: bytes queued for stream peer `id` that the OS hasn't taken yet.
+func buffered_bytes(id: int) -> int:
+	var ws := (api.multiplayer_peer as CompositePeer).adapter_of(id) as WebSocketMultiplayerPeer \
+			if api.multiplayer_peer is CompositePeer else null
+	var peer := ws.get_peer(id) if ws != null else null
+	return peer.get_current_outbound_buffered_amount() if peer != null else 0
+
+
+## Client: connected over a stream transport (a browser).
+func is_stream_client() -> bool:
+	return api.multiplayer_peer is WebSocketMultiplayerPeer
 
 
 func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
@@ -67,7 +97,7 @@ func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 	# packets to ~1/32 once per second. Remove the bogus limit before anyone
 	# connects.
 	peer.host.bandwidth_limit(0, 0)
-	var ws_port := web_port if web_port >= 0 else Platform.get_user_arg("--web-port", "0").to_int()
+	var ws_port := host_web_port()
 	if ws_port > 0:
 		var ws := WebSocketMultiplayerPeer.new()
 		err = ws.create_server(ws_port)
