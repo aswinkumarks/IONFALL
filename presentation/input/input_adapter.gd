@@ -59,6 +59,16 @@ func reset_held() -> void:
 	assist_fire = false
 
 
+## Lets go of a held mouse button (all of them with the default), e.g. when
+## the cursor is freed and the release may never reach the game. Toggled aim
+## stays as it is.
+func release_mouse(button: int = -1) -> void:
+	if button in [-1, MOUSE_BUTTON_LEFT]:
+		_mouse_fire = false
+	if button in [-1, MOUSE_BUTTON_RIGHT] and not Settings.get_value("input", "aim_toggle"):
+		_mouse_aim = false
+
+
 func build_command(tick: int) -> PlayerCommand:
 	var c := PlayerCommand.new()
 	c.tick = tick
@@ -106,6 +116,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			if event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not Platform.is_mobile():
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			elif not event.pressed:
+				# The cursor was freed while a button was held (death, a
+				# menu): still let go, or the trigger stays held.
+				release_mouse(event.button_index)
 			return
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:

@@ -749,6 +749,9 @@ func _update_match_ui(delta: float) -> void:
 		_loadout_bar.visible = choosing
 		if not Platform.is_mobile() and not _paused:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if choosing else Input.MOUSE_MODE_CAPTURED
+			# Firing when we died: that button's release may land on the
+			# loadout bar, so don't carry the held trigger into the respawn.
+			input.release_mouse()
 	_banner.visible = not _results.visible
 	# Results until the next match starts; the scoreboard while held.
 	if _results.visible:
