@@ -12,7 +12,7 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 | Server guide shipped with the server builds | ✅ `docs/server.md` → `README.md` in both server folders |
 | 16 test clients, 60 min, within tick/bandwidth budgets | ✅ PASS: 16/16 for 60 min, tick p99 4.4 ms (median window), 96 MiB, 0 visible corrections; `docs/perf/m5.md` |
 | Fuzz tests: decoders, snapshots, beacons, lobby, handshakes, ingress floods | ✅ `tests/unit/test_fuzz.gd` (+ the existing server message fuzz) |
-| Lobby → match → lobby cycles hold for 30 min (online) | ⏳ |
+| Lobby → match → lobby cycles hold for 30 min (online) | ✅ 21 cycles in 30 min, 0 failures (after adding handover retries: an Epic stall had failed 1 reconnect in 14 earlier); `docs/online.md` |
 | EOS credentials from CI secrets for release builds | ✅ CI step; 👤 add the five `EOS_*` repository secrets |
 | Phone on **mobile data** hosts and joins online | 👤 needs the phone off Wi-Fi |
 | **Windows** build hosts and joins online | 👤 needs a Windows PC |
@@ -26,13 +26,32 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 | Intel Iris Xe laptop (Medium, 1080p, 8 combatants, p95 ≤ 16.7 ms, 20 min) | ✅ 60 fps, p95 16.7 ms for 21 min on Medium; High also holds 60 fps (`docs/perf/m6.md`) |
 | Min-spec Android phone | 👤 none on hand → no min-spec claims in the store listing (PLAN §3.10) |
 | Dedicated-GPU PC | 👤 none on hand → no high-refresh claims |
-| Version 1.0.0 (versionCode 1000000 + build) | ⏳ at tagging |
-| Desktop release builds (Linux, Windows) | ⏳ CI on the `v1.0.0` tag; 👤 approve publishing a GitHub release |
-| Signed release AAB with all 16 KB checks | ⏳ `tools/android_install.sh` (upload key in `~/.local/share/ionfall-keys/`) |
-| App icon, adaptive icons, feature graphic, screenshots | ✅ icon and feature graphic (`tools/store_art.tscn`); ⏳ screenshots |
+| Version 1.0.0 (versionCode 1000000 + build) | ✅ `project.godot`; tag `v1.0.0-rc1` |
+| Desktop release builds (Linux, Windows) | ✅ CI builds and uploads them for `v*` tags (artifact `ionfall-<run>`); 👤 add the EOS secrets first so they include online play; 👤 decide on publishing a GitHub release |
+| Signed release AAB with all 16 KB checks | ✅ `tools/android_release.sh`: 1.0.0 (code 1000000), 56 MB, ELF + ZIP 16 KB checks pass, upload-key signature verified. Runtime check on a 16 KB device/emulator not repeated for this build |
+| App icon, adaptive icons, feature graphic, screenshots | ✅ `docs/release/art/`: icon 512, feature graphic 1024×500, four 1920×1080 screenshots (home, single player, match, lobby) |
 | Store listing text, content-rating answers | ✅ draft: `docs/release/store-listing.md` |
 | Data flows review (Data Safety) | ✅ `docs/release/data-safety.md` |
 | Privacy policy | ✅ text: `docs/release/privacy-policy.md`; 👤 publish at a public URL (the repo is private) and fill in publisher/contact |
 | Epic: developer terms reviewed, Epic named as processor | 👤 review Epic's terms; privacy policy and Data Safety already name Epic |
 | Name/trademark check for "IONFALL" (PLAN §8) | 👤 |
 | Play Console: app created, closed testing track (12 testers × 14 days if required), Data Safety form, content rating, listing | 👤 |
+
+## What only the owner can do (in order)
+
+1. **EOS secrets** in GitHub (Settings → Secrets → Actions): `EOS_PRODUCT_ID`,
+   `EOS_SANDBOX_ID`, `EOS_DEPLOYMENT_ID`, `EOS_CLIENT_ID`, `EOS_CLIENT_SECRET`
+   (values from `eos_credentials.cfg`), so CI release builds include online
+   play. From this machine: `gh secret set EOS_CLIENT_SECRET` (it prompts for
+   the value), and the same for the other four.
+2. **Mobile data test:** phone on mobile data (Wi-Fi off) hosts an internet
+   game and joins one hosted by the laptop.
+3. **Windows test:** the CI Windows build hosts and joins an internet game.
+4. **Privacy policy:** fill in publisher and contact in
+   `docs/release/privacy-policy.md` and publish it at a public URL.
+5. **Epic terms** and a **name check** for "IONFALL".
+6. **Play Console:** create the app (`io.github.aswinkumarks.ionfall`),
+   upload `build/android/ionfall.aab` to **closed testing**, fill in the
+   listing (`store-listing.md`, `art/`), Data Safety (`data-safety.md`),
+   content rating and target audience; 12 testers for 14 days if Play asks.
+7. After closed testing: promote to production, tag `v1.0.0`.

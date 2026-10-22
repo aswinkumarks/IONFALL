@@ -40,6 +40,8 @@ godot --headless --export-release "Linux" build/linux/ionfall.x86_64
 godot --headless --export-release "Server Linux" build/server-linux/ionfall_server.x86_64
 build/server-linux/ionfall_server.x86_64 --headless -- --server --smoke-test
 
+# Signed release AAB for Play, with the 16 KB checks (no install):
+#   tools/android_release.sh
 # Signed release AAB (loads the upload key from outside the repo)
 set -a; source ~/.local/share/ionfall-keys/upload-key.env; set +a
 godot --headless --export-release "Android" build/android/ionfall.aab

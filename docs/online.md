@@ -128,6 +128,15 @@ on home Wi-Fi, driven by `--ui` through `launch_args.txt`:
 | Laptop host leaves the lobby | phone: "The host closed the lobby" |
 | Menu, lobby and game list at 2400×1080 | large cards fit; lobby lists only joined players |
 
+**Long run (2026-10-22, laptop, two headless instances, 60 s matches):**
+lobby → match → lobby cycles for 30 min. The first run failed one reconnect
+after 13 cycles: Epic's lobby service stalled for a few seconds ("lobby
+update: TimedOut" on the host) and the joiner's P2P connection hung until
+the timeout. Handover connections (lobby → match and back) now retry up to
+5 times, and a hung attempt counts as a failure after 15 s. Re-run: 21
+cycles in 30 min, 0 failures. Retry path checked with a host that opens its
+lobby 20 s late: the joiner's first attempt fails, the second gets in.
+
 A 0–0 (or tied TDM) result at the time limit goes to sudden death for up
 to 2 minutes before the lobby returns; that is the normal tie rule.
 
