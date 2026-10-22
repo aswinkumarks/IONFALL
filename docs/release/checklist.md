@@ -10,7 +10,7 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 | Exported Linux + Windows dedicated server; CI boots it on every map × mode | ✅ CI smoke test loops station/spire × ffa/tdm |
 | Graceful shutdown (players told "The server was shut down") | ✅ stop file + `ionfall_server.sh` (Ctrl+C/SIGTERM) / `stop_server.bat`; verified with test clients |
 | Server guide shipped with the server builds | ✅ `docs/server.md` → `README.md` in both server folders |
-| 16 test clients, 60 min, within tick/bandwidth budgets | ⏳ see `docs/perf/m5.md` |
+| 16 test clients, 60 min, within tick/bandwidth budgets | ✅ PASS: 16/16 for 60 min, tick p99 4.4 ms (median window), 96 MiB, 0 visible corrections; `docs/perf/m5.md` |
 | Fuzz tests: decoders, snapshots, beacons, lobby, handshakes, ingress floods | ✅ `tests/unit/test_fuzz.gd` (+ the existing server message fuzz) |
 | Lobby → match → lobby cycles hold for 30 min (online) | ⏳ |
 | EOS credentials from CI secrets for release builds | ✅ CI step; 👤 add the five `EOS_*` repository secrets |
