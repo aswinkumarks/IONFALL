@@ -133,7 +133,7 @@ MAP_STATION,Meridian Station
 MAP_SPIRE,Halcyon Spire
 MENU_MAP,"Map: %s  ›"
 MAP_TEST_ARENA,Test Arena
-MENU_TAGLINE,Arena combat · LAN · Cross-play
+MENU_TAGLINE,Arena combat · LAN & online · Cross-play
 MENU_XP_PROGRESS,Level %d · %d / %d XP
 HUD_RESPAWN_LABEL,Respawning in
 PROFILE_TILE_VS_PLAYERS,Vs players K / D / A
@@ -263,3 +263,4 @@ TAG_SCATTER,SCATTER
 TAG_FRAG,FRAG
 TAG_MELEE,MELEE
 TAG_FALL,FALL
+NET_ONLINE_UNREACHABLE,"Couldn't connect to the host over the internet. Check your connection and try again."

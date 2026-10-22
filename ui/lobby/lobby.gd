@@ -10,7 +10,12 @@ extends Control
 
 const MATCH := "res://game/match.tscn"
 const MAIN_MENU := "res://ui/main_menu/main_menu.tscn"
-const CONNECT_TIMEOUT_S := 20.0
+const CONNECT_TIMEOUT_S := 15.0
+## Back from a match, the host reopens its lobby on the same socket while the
+## old connection may still be closing (seen online: one attempt in ~5
+## failed), so the reconnect is retried before giving up.
+const HANDOVER_ATTEMPTS := 5
+const HANDOVER_RETRY_S := 2.0
 
 var config: MatchConfig
 var session := LobbySession.new()
@@ -18,6 +23,7 @@ var _host: bool = false
 var _leaving: bool = false
 var _joined: bool = false  ## client: the first LOBBY arrived
 var _starting: bool = false
+var _attempt: int = 0
 var _subtitle: Label
 var _code_caption: Label
 var _code: Label
@@ -36,17 +42,21 @@ func _ready() -> void:
 	MatchConfig.pending = null
 	_host = config.mode == MatchConfig.Mode.HOST
 	_build_ui()
+	_add_session()
+	if _host:
+		await _open()
+	else:
+		await _connect()
+	_refresh()
+
+
+func _add_session() -> void:
 	session.name = "Lobby"
 	add_child(session)
 	session.changed.connect(_refresh)
 	session.started.connect(_on_started)
 	session.closed.connect(_on_closed)
 	session.in_match.connect(_on_in_match)
-	if _host:
-		await _open()
-	else:
-		await _connect()
-	_refresh()
 
 
 func _exit_tree() -> void:
@@ -93,7 +103,7 @@ func _open() -> void:
 
 ## Client: connects by address, invite code or known online host.
 func _connect() -> void:
-	if config.from_lobby:  # back from a match: the host reopens its lobby
+	if config.from_lobby and _attempt == 0:  # back from a match: the host reopens its lobby
 		_subtitle.text = tr("LOBBY_CONNECTING")
 		await get_tree().create_timer(1.5).timeout
 	var peer: MultiplayerPeer = null
@@ -116,9 +126,12 @@ func _connect() -> void:
 	if err != OK:
 		_fail(tr("NET_CONNECT_ERROR") % error_string(err))
 		return
+	var attempt := _attempt
 	get_tree().create_timer(CONNECT_TIMEOUT_S).timeout.connect(func() -> void:
-		if not _joined and not _leaving:
-			_fail("NET_UNREACHABLE"))
+		# An online connection can hang instead of failing (seen when Epic's
+		# services stalled for a few seconds): handled like a failure.
+		if not _joined and not _leaving and attempt == _attempt:
+			_on_closed("connection failed"))
 
 
 func _online_info() -> Dictionary:
@@ -247,9 +260,19 @@ func _on_in_match(map_id: String) -> void:
 
 
 func _on_closed(reason: String) -> void:
+	if reason == "connection failed" and config.from_lobby and not _joined and _attempt + 1 < HANDOVER_ATTEMPTS:
+		_attempt += 1
+		Platform.perf_log("LOBBY reconnect attempt %d failed, retrying" % _attempt)
+		session.queue_free()
+		session = LobbySession.new()
+		_add_session()
+		await get_tree().create_timer(HANDOVER_RETRY_S).timeout
+		if not _leaving:
+			_connect()
+		return
 	match reason:
 		"disconnected": _fail("LOBBY_HOST_LEFT")
-		"connection failed": _fail("NET_UNREACHABLE")
+		"connection failed": _fail("NET_ONLINE_UNREACHABLE" if config.online else "NET_UNREACHABLE")
 		_: _fail(reason)
 
 

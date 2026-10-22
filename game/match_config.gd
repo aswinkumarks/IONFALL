@@ -71,6 +71,8 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	var level: Variant = Settings.get_value("profile", "bot_difficulty")
 	c.bot_difficulty = maxi(BotBrain.DIFFICULTY_IDS.find(Platform.get_user_arg("--bot-difficulty",
 			level if level is String else "normal")), 0)
+	if Platform.get_user_arg("--port").is_valid_int():  # dev: hosts and joins on another port
+		c.port = clampi(Platform.get_user_arg("--port").to_int(), 1, 65535)
 	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches
 		c.bots = Platform.get_user_arg("--bots").to_int()
 	if not p_address.is_empty():

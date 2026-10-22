@@ -15,6 +15,9 @@ const RECONNECT_AFTER_MS := 5000
 const DEATH_CAM_SECONDS := 3.0
 ## Clients from a lobby wait this long for the host's match to listen.
 const LOBBY_HANDOVER_SECONDS := 1.5
+## Joining the match from the lobby is retried this often (the host's socket
+## may still be switching from the lobby to the match).
+const HANDOVER_ATTEMPTS := 5
 
 var config: MatchConfig
 var server: ServerSession  ## offline and host
@@ -43,6 +46,7 @@ var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
 var _online_code: String = ""  ## hosting online: the invite code (decision 0005)
 var _to_lobby: bool = false  ## going back to the lobby: the online game stays open
+var _join_attempt: int = 0
 var _confirm_panel: Control
 var _settings_menu: SettingsMenu
 var _autopilot: WanderInput
@@ -245,6 +249,13 @@ func _start_client(token: int) -> bool:
 		online_peer = joined.peer
 		config.online_host = joined.host_id  # the lobby reconnects to it after the match
 	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns, online_peer)
+	if config.from_lobby and token == 0:
+		# An online connection can hang instead of failing: retry it too.
+		var attempt := _join_attempt
+		var joining := client
+		get_tree().create_timer(15.0).timeout.connect(func() -> void:
+			if client == joining and client.local_id == 0 and attempt == _join_attempt and not _leaving:
+				_on_client_lost("connection failed"))
 	if err != OK:
 		_fail(tr("NET_CONNECT_ERROR") % error_string(err))
 		return false
@@ -260,11 +271,19 @@ func _on_client_lost(reason: String) -> void:
 		_reconnect_until_ms = Time.get_ticks_msec() + ServerSession.RECONNECT_WINDOW_MS
 		_reconnect_step.call_deferred()
 		return
+	if reason == "connection failed" and config.from_lobby and client.local_id == 0 \
+			and _join_attempt + 1 < HANDOVER_ATTEMPTS and not _leaving:
+		_join_attempt += 1
+		Platform.perf_log("MATCH join attempt %d failed, retrying" % _join_attempt)
+		get_tree().create_timer(2.0).timeout.connect(func() -> void:
+			if not _leaving:
+				_start_client(0))
+		return
 	match reason:
 		"disconnected":
 			_fail("NET_DISCONNECTED")
 		"connection failed":
-			_fail("NET_UNREACHABLE")
+			_fail("NET_ONLINE_UNREACHABLE" if config.online else "NET_UNREACHABLE")
 		"server_shutdown":
 			_fail("NET_SERVER_SHUTDOWN")
 		_:
