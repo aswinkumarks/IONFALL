@@ -78,6 +78,12 @@ tools/check_16kb.sh build/android/ionfall.aab
   Visual checks need a real device (Mi 11X), or possibly `-gpu host` from a local (non-VNC) desktop session.
 - Release builds ignore the `command_line_params` launch extra, so renderer overrides can't be passed at launch.
 
+## Compatibility (OpenGL) fallback on Android
+
+- `rendering/rendering_device/fallback_to_opengl3=true`: on a device without usable Vulkan, Godot switches the Mobile renderer to Compatibility (OpenGL ES 3.0) instead of failing to start. `Settings.default_quality()` then starts on **Low**, as in browsers.
+- Verified 2026-10-23 on the emulator with Vulkan disabled (`-feature -Vulkan -gpu swiftshader_indirect`): logcat shows "Your device does not seem to support Vulkan, switching to OpenGL 3" and the game runs on OpenGL ES 3.0. SwiftShader's uniform limits (261 fragment / 256 vertex vectors, close to the ES 3.0 minimum) are below what Godot's own scene, sky, canvas and particle shaders need, so the picture stays white there; lowering `limits/opengl/max_lights_per_object` doesn't change that.
+- The same renderer is exercised by the web build and by desktop runs with `--rendering-method gl_compatibility --rendering-driver opengl3` (both maps render at 60 fps on Iris Xe). A real non-Vulkan phone is still untested (no such device on hand).
+
 ## Known engine quirks
 
 - **Dedicated-server exports and CSV translations:** with the `customized` / `strip` export mode, Godot 4.7.2 logs "Failed loading resource: res://locale/strings.csv" (multi-locale CSV imports have no single import path). Server presets therefore exclude `locale/*`, and `project.godot` sets `locale/translations.dedicated_server` to an empty list.
