@@ -6,19 +6,20 @@ web or dedicated servers.
 
 ## Playing
 
-Menu: **Play** → **Single Player** (map, mode, duration, Start) or
-**Multiplayer** → **Host Game** / **Join Game**.
+Home screen: three cards, **Single Player** (map cards, mode and length
+chips, Start), **Host Game** and **Join Game**.
 
-- **Host Game** → *Local network (LAN)* or *Internet (invite code)* opens a
-  **lobby**. The host picks map, mode and duration (5–20 min) and sees
-  everyone who joins; **Start match** sends everybody into the match.
-  Without the EOS backend, Host opens a LAN lobby directly.
+- **Host Game** → *Local network* or *Internet* opens a **lobby**. The
+  host picks map, mode and length (5–20 min) and sees every player in the
+  slot list; **Start match** sends everybody into the match. When the match
+  ends (after the results), everyone returns to the same lobby. Without
+  the EOS backend, Host opens a LAN lobby directly.
 - **Join Game** lists LAN games (beacons) and online games (EOS lobby
-  search, this build only, refreshed every 5 s), each marked *In lobby* or
-  *Playing*. A lobby row joins the lobby (settings read-only); a *Playing*
-  row joins the match. The field takes an IP address or an invite code
-  (case, spaces and dashes don't matter); it goes to the lobby, or straight
-  into the match if the host already started.
+  search, this build only, refreshed every 5 s) as cards, green *In lobby*
+  or orange *Playing*. A lobby card joins the lobby (settings read-only); a
+  *Playing* card joins the match. *Join directly* takes an IP address or an
+  invite code (case, spaces and dashes don't matter); it goes to the lobby,
+  or straight into the match if the host already started.
 - Host caps are unchanged: 4 combatants on a phone host, 8 on a PC host.
 - The code stops working when the host leaves the lobby or the match.
 
@@ -30,7 +31,10 @@ Menu: **Play** → **Single Player** (map, mode, duration, Start) or
 host closes the lobby connections and opens the match on the same port or
 EOS socket; clients wait 1.5 s, then connect to it (online: straight to the
 host's product user ID, no new search). A client whose lobby connection
-reaches a running match (a `WELCOME`) joins that match instead. Online, the
+reaches a running match (a `WELCOME`) joins that match instead. When a
+lobby match's results have been shown, the host sends `NOTICE
+RETURN_TO_LOBBY`, closes the match and reopens the lobby (same port, or
+the same online game and code); clients wait 1.5 s and reconnect. Online, the
 EOS lobby's attributes (name, map, mode, players, max, state) feed the
 browser; LAN lobbies set `Discovery.FLAG_LOBBY` in their beacon.
 
@@ -88,13 +92,13 @@ Intel Xe laptop, 2026-10-22:
 `--eos-log` prints the EOS SDK's own log (Info level) for debugging.
 
 **Through the menu UI** (`--ui` sends real mouse and key events; see
-`core/diagnostics.gd`; `click:~text` matches part of a label, for browser
-rows): the host clicks through to an online lobby and starts once the
+`core/diagnostics.gd`; `click:~text` matches part of a label, for game
+cards; drawn cards match by their `ui_key` meta): the host clicks through to an online lobby and starts once the
 joiner, who picked the game from the list, is in:
 
 ```sh
-HOME=/tmp/eos-a XDG_DATA_HOME=/tmp/eos-a/data godot --path . -- --ui "wait:6,click:MENU_PLAY,click:MENU_MULTIPLAYER,click:MENU_HOST,click:MENU_HOST_ONLINE,wait:30,click:LOBBY_START,wait:30,shot:/tmp/host.png"
-HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,click:MENU_PLAY,click:MENU_MULTIPLAYER,click:MENU_JOIN,wait:18,click:~Online,wait:40,shot:/tmp/joined.png"
+HOME=/tmp/eos-a XDG_DATA_HOME=/tmp/eos-a/data godot --path . -- --ui "wait:6,click:MENU_HOST,click:MENU_HOST_ONLINE,wait:30,click:LOBBY_START,wait:30,shot:/tmp/host.png"
+HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,click:MENU_JOIN,wait:18,click:~Online,wait:40,shot:/tmp/joined.png"
 ```
 
 (Before the lobby, the same check ran with the old single-page menu:
@@ -110,6 +114,8 @@ HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,cli
 | Join a host that already started: LAN by address / online *Playing* row | redirected into the match / joined it directly; host `clients=1` |
 | Single Player: duration 15 min, Start | offline match with a 15:00 timer |
 | Exported Linux release builds: `--lobby --online --autostart 2` and `--join CODE` | lobby → match over EOS, RTT 49 ms |
+
+| Lobby match ends (`--time-limit 20`), LAN and online | results, then host and player back in the same lobby (online: same code); two LAN cycles in a row |
 
 Dev flags: `--lobby [--online]` opens a hosted lobby, `--autostart N`
 starts it once N players are in; `--host` still goes straight to a match.

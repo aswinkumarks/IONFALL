@@ -19,14 +19,16 @@ var _leaving: bool = false
 var _joined: bool = false  ## client: the first LOBBY arrived
 var _starting: bool = false
 var _subtitle: Label
-var _map_button: Button
-var _mode_button: Button
-var _duration_button: Button
-var _players: VBoxContainer
+var _code_caption: Label
+var _code: Label
+var _map_tiles: Array[MenuTile] = []
+var _mode_chips: HBoxContainer
+var _duration_chips: HBoxContainer
+var _slots: VBoxContainer
 var _count: Label
 var _start_button: Button
 var _waiting: Label
-var _status: Label
+var _dots: float = 0.0
 
 
 func _ready() -> void:
@@ -60,16 +62,26 @@ func _open() -> void:
 	var err := OK
 	if config.online:
 		_subtitle.text = tr("NET_ONLINE_SIGNING_IN")
-		var hosted: Dictionary = await Online.host(config.player_name, max_players, _online_info())
+		# Back from a match: the online game (and its code) is still open.
+		var hosted: Dictionary = {"code": Online.hosting_code}
+		if Online.hosting_code.is_empty():
+			hosted = await Online.host(config.player_name, max_players, _online_info())
+		else:
+			hosted.merge(Online.serve())
+			Online.update_info(_online_info())
 		if hosted.has("error"):
 			_fail(tr("NET_ONLINE_ERROR") % hosted.error)
 			return
 		err = session.host(config.player_name, max_players, -1, hosted.peer)
-		_subtitle.text = tr("LOBBY_INVITE_CODE") % hosted.code
+		_subtitle.text = tr("LOBBY_SHARE_CODE")
+		_code_caption.text = tr("PAUSE_INVITE_CODE")
+		_code.text = hosted.code
 		Platform.perf_log("LOBBY hosting online with invite code %s" % hosted.code)
 	else:
 		err = session.host(config.player_name, max_players, config.port)
-		_subtitle.text = tr("LOBBY_LAN") % ", ".join(Discovery.lan_addresses())
+		_subtitle.text = tr("LOBBY_LAN_HINT")
+		_code_caption.text = tr("LOBBY_LAN_CAPTION")
+		_code.text = Discovery.lan_addresses()[0]
 		var advertiser := Discovery.Advertiser.new()
 		advertiser.beacon_source = func() -> Discovery.Beacon:
 			return session.beacon(tr("NET_GAME_OF") % config.player_name, config.port)
@@ -81,6 +93,9 @@ func _open() -> void:
 
 ## Client: connects by address, invite code or known online host.
 func _connect() -> void:
+	if config.from_lobby:  # back from a match: the host reopens its lobby
+		_subtitle.text = tr("LOBBY_CONNECTING")
+		await get_tree().create_timer(1.5).timeout
 	var peer: MultiplayerPeer = null
 	if config.online:
 		_subtitle.text = tr("NET_ONLINE_JOINING") % config.online_code if config.online_host.is_empty() \
@@ -117,31 +132,11 @@ func _refresh() -> void:
 		_joined = true
 		_subtitle.text = tr("LOBBY_JOINED") % _host_name()
 		Platform.perf_log("LOBBY joined %s's lobby" % _host_name())
-	_map_button.text = tr("MENU_MAP") % tr(Maps.LIST[session.map_id].name)
-	_mode_button.text = tr("MENU_MODE") % tr(GameMode.NAME_KEYS[session.game_mode])
-	_duration_button.text = tr("MENU_DURATION") % session.minutes
-	if not _host:  # read-only: no "›" cycling hint
-		for b: Button in [_map_button, _mode_button, _duration_button]:
-			b.text = b.text.trim_suffix("›").strip_edges()
-	for child in _players.get_children():
-		child.queue_free()
-	var me_seen := false
-	for m: Dictionary in session.members:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		var name_label := UiStyle.label(m.name)
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(name_label)
-		var tags := PackedStringArray()
-		if m.host:
-			tags.append(tr("LOBBY_HOST_TAG"))
-		# Names aren't unique; the host is us when hosting, else our first match.
-		if (_host and m.host) or (not _host and not m.host and not me_seen and m.name == config.player_name):
-			me_seen = true
-			tags.append(tr("LOBBY_YOU_TAG"))
-			name_label.add_theme_color_override("font_color", UiStyle.ACCENT)
-		row.add_child(UiStyle.label(" · ".join(tags), &"DimLabel"))
-		_players.add_child(row)
+	for i in _map_tiles.size():
+		_map_tiles[i].selected = Maps.PLAYABLE[i] == session.map_id
+	MenuKit.select_chip(_mode_chips, session.game_mode)
+	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(session.minutes))
+	_fill_slots()
 	_count.text = tr("LOBBY_PLAYERS") % [session.members.size(), session.max_players]
 	_start_button.disabled = session.members.is_empty() or _starting
 	if _host and config.online:
@@ -149,6 +144,56 @@ func _refresh() -> void:
 	if _host and Platform.get_user_arg("--autostart").is_valid_int() \
 			and session.members.size() >= Platform.get_user_arg("--autostart").to_int():
 		_start.call_deferred()
+
+
+## One row per place: who is in it, then open places.
+func _fill_slots() -> void:
+	for child in _slots.get_children():
+		child.queue_free()
+	var me_seen := false
+	for i in session.max_players:
+		var slot := PanelContainer.new()
+		var filled := i < session.members.size()
+		slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85 if filled else 0.35),
+				Color(UiStyle.ACCENT, 0.25 if filled else 0.08), 1, UiStyle.SKEW, 12, 4))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		slot.add_child(row)
+		_slots.add_child(slot)
+		if not filled:
+			row.add_child(UiStyle.label("LOBBY_OPEN_SLOT", &"DimLabel"))
+			slot.modulate.a = 0.6
+			continue
+		var m: Dictionary = session.members[i]
+		# Names aren't unique; the host is us when hosting, else our first match.
+		var me: bool = (_host and m.host) or (not _host and not m.host and not me_seen and m.name == config.player_name)
+		me_seen = me_seen or me
+		var initial := UiStyle.label(m.name.left(1).to_upper(), &"BadgeLabel", HORIZONTAL_ALIGNMENT_CENTER)
+		initial.add_theme_font_size_override("font_size", 20)
+		initial.custom_minimum_size = Vector2(36, 30)
+		row.add_child(initial)
+		var name_label := UiStyle.label(m.name)
+		name_label.add_theme_font_override("font", UiStyle.font_display_bold)
+		name_label.add_theme_font_size_override("font_size", 22)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if me:
+			name_label.add_theme_color_override("font_color", UiStyle.ACCENT)
+		row.add_child(name_label)
+		var tags := PackedStringArray()
+		if m.host:
+			tags.append(tr("LOBBY_HOST_TAG"))
+		if me:
+			tags.append(tr("LOBBY_YOU_TAG"))
+		var tag := UiStyle.label(" · ".join(tags), &"DimLabel")
+		tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(tag)
+
+
+func _process(delta: float) -> void:
+	# "Waiting for the host to start…" with moving dots.
+	if not _host and _joined and not _leaving and not _starting:
+		_dots += delta * 2.5
+		_waiting.text = tr("LOBBY_WAITING_FOR_HOST").trim_suffix("…") + ".".repeat(1 + int(_dots) % 3)
 
 
 func _host_name() -> String:
@@ -159,20 +204,6 @@ func _host_name() -> String:
 
 
 # --- Host settings ---
-
-func _cycle_map() -> void:
-	var i := Maps.PLAYABLE.find(session.map_id)
-	_apply(Maps.PLAYABLE[(i + 1) % Maps.PLAYABLE.size()], session.game_mode, session.minutes)
-
-
-func _cycle_mode() -> void:
-	_apply(session.map_id, (session.game_mode + 1) % GameMode.IDS.size(), session.minutes)
-
-
-func _cycle_duration() -> void:
-	var i := LobbySession.DURATIONS.find(session.minutes)
-	_apply(session.map_id, session.game_mode, LobbySession.DURATIONS[(i + 1) % LobbySession.DURATIONS.size()])
-
 
 ## Applies and remembers the host's choices (the next lobby starts with them).
 func _apply(map_id: String, mode: int, minutes: int) -> void:
@@ -199,6 +230,7 @@ func _on_started(settings: Dictionary) -> void:
 	config.game_mode = settings.mode
 	config.minutes = settings.minutes
 	config.from_lobby = true
+	_starting = true
 	_waiting.text = tr("LOADING")
 	if _host:
 		# Let START reach everyone before the lobby's connections close; the
@@ -249,7 +281,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_back()
 
 
-# --- Layout: header, settings card and players card side by side ---
+# --- Layout: header with the invite code; map, mode and length on the left,
+# the players' places on the right; Start at the bottom ---
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -257,85 +290,108 @@ func _build_ui() -> void:
 	backdrop.set_script(load("res://ui/main_menu/menu_backdrop.gd"))
 	add_child(backdrop)
 	var shade := ColorRect.new()
-	shade.color = Color(UiStyle.BG, 0.72)
+	shade.color = Color(UiStyle.BG, 0.66)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side: String in ["left", "right"]:
-		margin.add_theme_constant_override("margin_" + side, 72)
-	margin.add_theme_constant_override("margin_top", 40)
+		margin.add_theme_constant_override("margin_" + side, 56)
+	margin.add_theme_constant_override("margin_top", 32)
 	margin.add_theme_constant_override("margin_bottom", 32)
 	add_child(margin)
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 14)
+	root.add_theme_constant_override("separation", 12)
 	margin.add_child(root)
-	root.add_child(UiStyle.label("LOBBY_TITLE", &"HeaderLabel"))
+
+	# The invite code (or LAN address), big, at the top right.
+	var code_box := VBoxContainer.new()
+	code_box.add_theme_constant_override("separation", 0)
+	_code_caption = MenuKit.section("")
+	_code_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	code_box.add_child(_code_caption)
+	_code = UiStyle.label("", &"HeaderLabel", HORIZONTAL_ALIGNMENT_RIGHT)
+	_code.add_theme_color_override("font_color", UiStyle.ACCENT)
+	_code.add_theme_font_size_override("font_size", 44)
+	code_box.add_child(_code)
+	root.add_child(MenuKit.header("LOBBY_TITLE", "LOBBY_LEAVE", _back, code_box))
 	_subtitle = UiStyle.label("", &"DimLabel")
 	_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(_subtitle)
 
 	var columns := HBoxContainer.new()
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 20)
+	columns.add_theme_constant_override("separation", 24)
 	root.add_child(columns)
-	var settings := _card(columns, "LOBBY_SETTINGS")
-	_map_button = _setting(settings, _cycle_map)
-	_mode_button = _setting(settings, _cycle_mode)
-	_duration_button = _setting(settings, _cycle_duration)
-	if not _host:
-		settings.add_child(UiStyle.label("LOBBY_HOST_CHOOSES", &"DimLabel"))
-	var players := _card(columns, "LOBBY_PLAYERS_TITLE")
-	_count = UiStyle.label("", &"DimLabel")
-	players.add_child(_count)
-	_players = VBoxContainer.new()
-	_players.add_theme_constant_override("separation", 8)
-	players.add_child(_players)
+	var settings := VBoxContainer.new()
+	settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings.size_flags_stretch_ratio = 1.7
+	settings.add_theme_constant_override("separation", 12)
+	columns.add_child(settings)
+	settings.add_child(MenuKit.section("MENU_SECTION_MAP" if _host else "LOBBY_HOST_CHOOSES"))
+	var maps := HBoxContainer.new()
+	maps.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	maps.add_theme_constant_override("separation", 14)
+	settings.add_child(maps)
+	for id: String in Maps.PLAYABLE:
+		var tile := MenuTile.make(Maps.LIST[id].name, Maps.LIST[id].blurb, "", load(Maps.LIST[id].thumb))
+		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tile.read_only = not _host
+		tile.pressed.connect(func() -> void: _apply(id, session.game_mode, session.minutes))
+		maps.add_child(tile)
+		_map_tiles.append(tile)
+	var options := HBoxContainer.new()
+	options.add_theme_constant_override("separation", 28)
+	settings.add_child(options)
+	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.NAME_KEYS,
+			func(i: int) -> void: _apply(session.map_id, i, session.minutes))
+	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
+			func(i: int) -> void: _apply(session.map_id, session.game_mode, LobbySession.DURATIONS[i]))
+
+	var players := PanelContainer.new()
+	players.theme_type_variation = &"CardPanel"
+	players.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columns.add_child(players)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 6)
+	players.add_child(list)
+	var heading := HBoxContainer.new()
+	list.add_child(heading)
+	var title := MenuKit.section("LOBBY_PLAYERS_TITLE")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(title)
+	_count = MenuKit.section("")
+	heading.add_child(_count)
+	_slots = VBoxContainer.new()
+	_slots.add_theme_constant_override("separation", 6)
+	list.add_child(_slots)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	root.add_child(actions)
-	var leave := UiStyle.menu_button("LOBBY_LEAVE", &"GhostButton")
-	leave.custom_minimum_size = Vector2(200, 52)
-	leave.pressed.connect(_back)
-	actions.add_child(leave)
-	_waiting = UiStyle.label("LOBBY_WAITING_FOR_HOST", &"DimLabel")
+	_waiting = UiStyle.label("LOBBY_HOST_BOTS_HINT" if _host else "", &"DimLabel")
 	_waiting.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_waiting.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_waiting.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	actions.add_child(_waiting)
 	_start_button = UiStyle.menu_button("LOBBY_START", &"PrimaryButton")
-	_start_button.custom_minimum_size = Vector2(260, 52)
+	_start_button.custom_minimum_size = Vector2(320, 64)
+	_start_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_start_button.pressed.connect(_start)
 	_start_button.visible = _host
 	_start_button.disabled = true
 	actions.add_child(_start_button)
-	_waiting.text = "" if _host else tr("LOBBY_WAITING_FOR_HOST")
-	_status = UiStyle.label("", &"DimLabel")
-	root.add_child(_status)
-	(_start_button if _host else leave).grab_focus.call_deferred()
+	if _host:
+		_start_button.grab_focus.call_deferred()
 
 
-func _card(parent: Control, title: String) -> VBoxContainer:
-	var card := PanelContainer.new()
-	card.theme_type_variation = &"CardPanel"
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
+## A captioned chip row; read-only for players.
+func _option(parent: Control, caption: String, labels: Array, on_select: Callable) -> HBoxContainer:
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	card.add_child(box)
-	box.add_child(UiStyle.label(title, &"DimLabel"))
-	return box
-
-
-## A setting row: the host cycles it, players only see it.
-func _setting(parent: Control, cycle: Callable) -> Button:
-	var b := UiStyle.menu_button("")
-	b.custom_minimum_size.y = 50
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.disabled = not _host
-	b.pressed.connect(cycle)
-	parent.add_child(b)
-	return b
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 8)
+	parent.add_child(box)
+	box.add_child(MenuKit.section(caption))
+	var chips := MenuKit.chips(labels, 0, on_select, not _host)
+	box.add_child(chips)
+	return chips

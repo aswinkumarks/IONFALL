@@ -7,6 +7,8 @@ extends Node
 signal joined
 signal failed(reason: String)
 signal left(reason: String)
+## The host is taking everyone back to its lobby (the match is over).
+signal lobby_called
 
 const HISTORY_TICKS := 120
 const VISIBLE_CORRECTION_M := 0.05
@@ -271,6 +273,8 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 				host_paused = true
 			elif code == Protocol.Notice.HOST_RESUMED:
 				host_paused = false
+			elif code == Protocol.Notice.RETURN_TO_LOBBY:
+				lobby_called.emit()
 		Protocol.Msg.SNAPSHOT:
 			host_paused = false
 			_on_snapshot(data)

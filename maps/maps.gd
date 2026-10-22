@@ -10,11 +10,15 @@ const PLAYABLE := ["station", "spire"]
 const LIST := {
 	"station": {
 		"name": "MAP_STATION",
+		"blurb": "MAP_STATION_BLURB",
+		"thumb": "res://ui/maps/station.png",
 		"gameplay": "res://maps/station/gameplay.tscn",
 		"presentation": "res://maps/station/presentation.tscn",
 	},
 	"spire": {
 		"name": "MAP_SPIRE",
+		"blurb": "MAP_SPIRE_BLURB",
+		"thumb": "res://ui/maps/spire.png",
 		"gameplay": "res://maps/spire/gameplay.tscn",
 		"presentation": "res://maps/spire/presentation.tscn",
 	},

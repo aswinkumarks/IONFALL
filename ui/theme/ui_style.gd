@@ -5,7 +5,7 @@ extends Node
 ## hover tick and a press click (UI bus).
 ##
 ## Theme type variations for special cases: "TitleLabel", "HeaderLabel",
-## "DimLabel", "BadgeLabel", "PrimaryButton", "GhostButton", "CardPanel",
+## "DimLabel", "BadgeLabel", "PrimaryButton", "GhostButton", "ChipButton", "CardPanel",
 ## "HudPanel".
 
 # --- Palette ---
@@ -207,6 +207,18 @@ func build() -> Theme:
 	t.set_color("font_hover_pressed_color", "PrimaryButton", Color.WHITE)
 	t.set_font("font", "PrimaryButton", font_display_bold)
 	t.set_font_size("font_size", "PrimaryButton", 28)
+	# Chips: option toggles (mode, duration); the chosen one is filled.
+	_variation(t, "ChipButton", "Button")
+	var chip := box(Color(0.05, 0.09, 0.14, 0.85), Color(ACCENT, 0.2), 1, SKEW, 16, 6)
+	var chip_on := box(Color(ACCENT, 0.92), ACCENT, 1, SKEW, 16, 6)
+	t.set_stylebox("normal", "ChipButton", chip)
+	t.set_stylebox("hover", "ChipButton", box(Color(0.09, 0.17, 0.24, 0.95), Color(ACCENT, 0.8), 1, SKEW, 16, 6))
+	t.set_stylebox("pressed", "ChipButton", chip_on)
+	t.set_stylebox("hover_pressed", "ChipButton", chip_on)
+	t.set_stylebox("focus", "ChipButton", box(Color.TRANSPARENT, Color.WHITE, 2, SKEW, 16, 6))
+	t.set_font_size("font_size", "ChipButton", 21)
+	for c in ["font_pressed_color", "font_hover_pressed_color"]:
+		t.set_color(c, "ChipButton", BG)
 	_variation(t, "GhostButton", "Button")
 	t.set_stylebox("normal", "GhostButton", box(Color.TRANSPARENT, Color.TRANSPARENT, 0, SKEW, 22, 10))
 	t.set_color("font_color", "GhostButton", TEXT_DIM)

@@ -45,7 +45,7 @@ LEAVE_CONFIRM_YES,Leave
 LEAVE_CONFIRM_NO,Stay
 NET_GAME_OF,%s's game
 MENU_GAMES_SEARCHING,Looking for games on this network and online…
-MENU_GAMES,Available games
+MENU_GAMES,Games found: %d
 MENU_LAN_UNAVAILABLE,"Can't search this network, enter an address or invite code"
 MENU_LAN_OTHER_VERSION,different version (%s)
 NET_UNREACHABLE,"Couldn't reach the host. Both devices must be on the same network; guest Wi-Fi and access-point isolation block LAN games."
@@ -202,7 +202,7 @@ TOUCH_EDIT_RESET,Reset
 MENU_REJOIN,Rejoin match
 PAUSE_SCAN_TO_JOIN,Scan to join
 LOADING,Loading
-MENU_HOST_ONLINE,Internet (invite code)
+MENU_HOST_ONLINE,Internet
 NET_ONLINE_SIGNING_IN,Connecting to online services…
 NET_ONLINE_HOSTING,"Online game · invite code %s"
 NET_ONLINE_ERROR,Online play failed (%s)
@@ -211,26 +211,43 @@ NET_ONLINE_JOINING,Joining online game %s…
 PAUSE_INVITE_CODE,Invite code
 NET_ONLINE_VERSION,That game runs a different version of IONFALL
 MENU_SINGLE_PLAYER,Single Player
-MENU_MULTIPLAYER,Multiplayer
 MENU_START,Start
-MENU_DURATION,"Duration: %d min  ›"
-MENU_HOST_LAN,Local network (LAN)
+MENU_HOST_LAN,Local network
 MENU_TAG_LAN,LAN
 MENU_TAG_ONLINE,Online
 MENU_IN_LOBBY,In lobby
 MENU_IN_MATCH,Playing
 LOBBY_TITLE,Lobby
-LOBBY_INVITE_CODE,"Online game · invite code %s"
-LOBBY_LAN,"Local network · %s"
 LOBBY_CONNECTING,Connecting…
 LOBBY_JOINED,%s's lobby
-LOBBY_SETTINGS,Match settings
-LOBBY_HOST_CHOOSES,The host chooses the map and mode
+LOBBY_HOST_CHOOSES,Map (the host chooses)
 LOBBY_PLAYERS_TITLE,Players
-LOBBY_PLAYERS,%d / %d players
+LOBBY_PLAYERS,%d / %d
 LOBBY_HOST_TAG,Host
 LOBBY_YOU_TAG,You
 LOBBY_LEAVE,Leave
 LOBBY_START,Start match
 LOBBY_WAITING_FOR_HOST,Waiting for the host to start…
 LOBBY_HOST_LEFT,The host closed the lobby
+MAP_STATION_BLURB,Compact station deck · close quarters
+MAP_SPIRE_BLURB,Open moon platform · long sightlines
+MENU_SINGLE_PLAYER_SUB,Practice against bots on any map
+MENU_HOST_SUB,Open a lobby on your network or online
+MENU_HOST_LAN_SUB,Players on the same Wi-Fi join you
+MENU_HOST_ONLINE_SUB,Friends anywhere join with an invite code
+MENU_JOIN_SUB,Find games nearby and online
+MENU_HOST_HINT,You pick the map and mode in the lobby once players have joined.
+MENU_SECTION_MAP,Map
+MENU_SECTION_MODE,Mode
+MENU_SECTION_DURATION,Match length
+MENU_MINUTES,%d min
+MENU_SOLO_HINT,You against %d bots
+MENU_JOIN_DIRECT,Join directly
+MENU_JOIN_DIRECT_HINT,"Enter the host's IP address (192.168.0.10) or a 6-letter invite code."
+MENU_JOIN_DIRECT_HINT_LAN,"Enter the host's IP address, e.g. 192.168.0.10."
+LOBBY_SHARE_CODE,Share the invite code with friends. They find the game under Join Game or type the code.
+LOBBY_LAN_HINT,Players on this network see the game under Join Game.
+LOBBY_LAN_CAPTION,Local network
+LOBBY_OPEN_SLOT,Open slot
+LOBBY_HOST_BOTS_HINT,Bots fill the open slots. Start when everyone is in.
+MENU_GAMES_EMPTY,"No games yet. Ask a friend to host, or enter their address or invite code."

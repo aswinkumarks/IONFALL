@@ -1,9 +1,13 @@
 extends Control
-## Main menu. Every visible string is a translation key (PLAN §3.16).
+## Main menu, full screen over the station backdrop. Every visible string is
+## a translation key (PLAN §3.16).
 ##
-## Nested pages: Play → Single player (map, mode, duration) or Multiplayer →
-## Host (LAN or online) opens a lobby, Join lists LAN and online games and
-## takes an address or invite code. Back and Escape go up one page.
+## Home: the title, the player card with Settings and Quit at the top, and
+## three big cards along the bottom: Single Player, Host Game, Join Game.
+## Each opens its own screen: Single Player picks map, mode and duration;
+## Host picks LAN or internet and opens the lobby; Join lists LAN and online
+## games next to a box for an address or invite code. Back and Escape return
+## home.
 ##
 ## Quick test launches (desktop): `-- --play`, `-- --host` (straight into a
 ## hosted match), `-- --lobby [--online]` (a hosted lobby), `-- --join
@@ -16,32 +20,31 @@ const LOBBY := "res://ui/lobby/lobby.tscn"
 const OFFLINE_DUMMIES := 3
 const HOST_DUMMIES := 2
 const ONLINE_LIST_INTERVAL_S := 5.0
+const MARGIN := Vector2(56, 40)
 
-enum Page { MAIN, PLAY, SOLO, MULTI, HOST, JOIN }
-const PARENT := {Page.PLAY: Page.MAIN, Page.SOLO: Page.PLAY, Page.MULTI: Page.PLAY, Page.HOST: Page.MULTI,
-		Page.JOIN: Page.MULTI}
+enum Page { HOME, SOLO, HOST, JOIN }
 
 @onready var _version_label: Label = %VersionLabel
-@onready var _storage_warning: Label = %StorageWarning
-@onready var _quit_button: Button = %QuitButton
-@onready var _play_button: Button = %PlayButton
-@onready var _join_panel: Control = %JoinPanel
-@onready var _address_edit: LineEdit = %AddressEdit
-@onready var _connect_button: Button = %ConnectButton
-@onready var _back_button: Button = %BackButton
-@onready var _name_edit: LineEdit = %NameEdit
-@onready var _status: Label = %StatusLabel
-@onready var _games_label: Label = %GamesLabel
-@onready var _game_list: VBoxContainer = %GameList
 
 static var _quick_launched: bool = false
-var _page: int = Page.MAIN
+var _page: int = Page.HOME
 var _pages: Dictionary = {}  ## Page -> Control
-var _first: Dictionary = {}  ## Page -> the button focused on entry
-var _opener: Dictionary = {}  ## Page -> the button that opens it (focused on Back)
-var _map_button: Button
-var _mode_button: Button
-var _duration_button: Button
+var _first: Dictionary = {}  ## Page -> the control focused on entry
+var _opener: Dictionary = {}  ## Page -> the home card that opens it
+var _dim := ColorRect.new()
+var _status: Label
+var _notices: VBoxContainer
+var _badge: Label
+var _chip_name: Label
+var _xp_bar: ProgressBar
+var _xp_label: Label
+var _map_tiles: Array[MenuTile] = []
+var _mode_chips: HBoxContainer
+var _duration_chips: HBoxContainer
+var _address_edit: LineEdit
+var _games_label: Label
+var _game_list: VBoxContainer
+var _join_status: Label
 var _browser: Discovery.Browser
 var _online_games: Array = []
 var _online_error: String = ""
@@ -58,33 +61,30 @@ func _ready() -> void:
 	add_child(music)
 	music.play()
 	_version_label.text = BuildInfo.display_string()
-	_storage_warning.visible = not Platform.storage_available
-	# Browsers and mobile apps are closed by the OS, not by an in-game button.
-	_quit_button.visible = not (Platform.is_web() or Platform.is_mobile())
-	_quit_button.pressed.connect(get_tree().quit)
-	_name_edit.text = Platform.get_user_arg("--name", MatchConfig.profile_name())
-	var last: Variant = Settings.get_value("profile", "last_address")
-	_address_edit.text = last if last is String else ""
-	_build_pages()
-	_back_button.pressed.connect(_go_back)
-	_connect_button.pressed.connect(_join_manual)
-	_address_edit.text_submitted.connect(func(_t: String) -> void: _join_manual())
+	# Sub-screens dim the backdrop so their content reads well.
+	_dim.color = UiStyle.BG
+	_dim.modulate.a = 0.0
+	_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_dim)
+	_build_home()
+	_build_solo()
+	_build_host()
+	_build_join()
+	move_child(_version_label, -1)
 	add_child(_profile_panel)
 	add_child(_settings)
-	%SettingsButton.pressed.connect(_settings.open)
-	_settings.closed.connect(func() -> void: %SettingsButton.grab_focus())
+	_settings.closed.connect(func() -> void: (_first[Page.HOME] as Control).grab_focus())
 	_profile_panel.closed.connect(func() -> void:
-		_name_edit.text = MatchConfig.profile_name()
-		%ProfileButton.grab_focus())
-	%ProfileButton.pressed.connect(func() -> void: _profile_panel.open(_name_edit.text))
+		_update_player_card()
+		(_first[Page.HOME] as Control).grab_focus())
 	if not MatchConfig.last_error.is_empty():
-		_status.text = tr(MatchConfig.last_error)
-		_status.visible = true
+		_show_status(tr(MatchConfig.last_error))
 		MatchConfig.last_error = ""
 	_offer_rejoin()
 	_update_player_card()
 	Profile.changed.connect(_update_player_card)
-	_play_button.grab_focus()
+	_show(Page.HOME, false)
 	_animate_in()
 	if _try_join_link():
 		return
@@ -96,9 +96,9 @@ func _ready() -> void:
 	if Platform.user_args.has("--open-settings"):
 		_settings.open()
 	elif Platform.user_args.has("--open-profile"):
-		_profile_panel.open(_name_edit.text)
+		_profile_panel.open(_player_name())
 	elif Platform.user_args.has("--open-stats"):
-		_profile_panel.open(_name_edit.text, ProfilePanel.Tab.STATS)
+		_profile_panel.open(_player_name(), ProfilePanel.Tab.STATS)
 	elif Platform.user_args.has("--play"):
 		_start_solo.call_deferred()
 	elif Platform.user_args.has("--host"):
@@ -110,121 +110,370 @@ func _ready() -> void:
 		_join_manual.call_deferred()
 
 
-# --- Pages ---
+# --- Screens ---
 
-## Builds the sub-pages (the main page and the join panel are in the scene).
-func _build_pages() -> void:
-	_pages[Page.MAIN] = %MainPage
-	_pages[Page.JOIN] = _join_panel
-	_first[Page.MAIN] = _play_button
-	_play_button.pressed.connect(_show.bind(Page.PLAY))
-	_opener[Page.PLAY] = _play_button
+## A full-screen page with the menu's margins; returns its content column.
+func _page_root(page: int) -> VBoxContainer:
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", int(MARGIN.x))
+	margin.add_theme_constant_override("margin_right", int(MARGIN.x))
+	margin.add_theme_constant_override("margin_top", int(MARGIN.y))
+	margin.add_theme_constant_override("margin_bottom", int(MARGIN.y))
+	add_child(margin)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 14)
+	margin.add_child(column)
+	_pages[page] = margin
+	return column
+
+
+func _build_home() -> void:
+	var column := _page_root(Page.HOME)
+	# Top: player card, Settings, Quit.
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 10)
+	top.alignment = BoxContainer.ALIGNMENT_END
+	column.add_child(top)
+	top.add_child(_player_card())
+	var settings := MenuKit.icon_button("gear", "", _settings.open)
+	settings.set_meta("ui_key", "MENU_SETTINGS")
+	settings.tooltip_text = "MENU_SETTINGS"
+	top.add_child(settings)
+	var quit := MenuKit.icon_button("power", "", get_tree().quit)
+	quit.set_meta("ui_key", "MENU_QUIT")
+	quit.tooltip_text = "MENU_QUIT"
+	# Browsers and mobile apps are closed by the OS, not by an in-game button.
+	quit.visible = not (Platform.is_web() or Platform.is_mobile())
+	top.add_child(quit)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(spacer)
+	var title := UiStyle.label("MENU_TITLE", &"TitleLabel")
+	title.name = "Title"
+	title.add_theme_font_size_override("font_size", 112)
+	column.add_child(title)
+	var bar := ColorRect.new()
+	bar.name = "TitleBar"
+	bar.color = UiStyle.ACCENT
+	bar.custom_minimum_size = Vector2(120, 4)
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	column.add_child(bar)
+	var tagline := UiStyle.label("MENU_TAGLINE", &"DimLabel")
+	tagline.add_theme_font_size_override("font_size", 20)
+	column.add_child(tagline)
+	var gap := Control.new()
+	gap.custom_minimum_size.y = 18
+	column.add_child(gap)
+	# Errors, the profile warning and the rejoin offer, just above the cards.
+	_notices = VBoxContainer.new()
+	_notices.add_theme_constant_override("separation", 6)
+	column.add_child(_notices)
+	_status = UiStyle.label("")
+	_status.add_theme_color_override("font_color", UiStyle.DANGER)
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.visible = false
+	_notices.add_child(_status)
+	var storage := UiStyle.label("MENU_PROFILE_NOT_SAVED")
+	storage.add_theme_color_override("font_color", UiStyle.WARN)
+	storage.visible = not Platform.storage_available
+	_notices.add_child(storage)
+
+	var cards := HBoxContainer.new()
+	cards.name = "Cards"
+	cards.add_theme_constant_override("separation", 18)
+	cards.custom_minimum_size.y = 220
+	column.add_child(cards)
+	var solo := _card(cards, "MENU_SINGLE_PLAYER", "MENU_SINGLE_PLAYER_SUB", "solo", _show.bind(Page.SOLO))
+	_opener[Page.SOLO] = solo
+	_first[Page.HOME] = solo
 	# Web builds can't host or use ENet (PLAN §3.20); they get a WebSocket transport later.
-	var play := _page_box(Page.PLAY, "MENU_PLAY")
-	_opener[Page.SOLO] = _add_button(play, Page.PLAY, "MENU_SINGLE_PLAYER", _show.bind(Page.SOLO), &"PrimaryButton")
-	_opener[Page.MULTI] = _add_button(play, Page.PLAY, "MENU_MULTIPLAYER", _show.bind(Page.MULTI))
-	_opener[Page.MULTI].visible = not Platform.is_web()
-	_add_button(play, Page.PLAY, "MENU_BACK", _go_back, &"GhostButton")
-
-	var solo := _page_box(Page.SOLO, "MENU_SINGLE_PLAYER")
-	_map_button = _add_button(solo, Page.SOLO, "", _next_map)
-	_mode_button = _add_button(solo, Page.SOLO, "", _next_mode)
-	_duration_button = _add_button(solo, Page.SOLO, "", _next_duration)
-	_add_button(solo, Page.SOLO, "MENU_START", _start_solo, &"PrimaryButton")
-	_add_button(solo, Page.SOLO, "MENU_BACK", _go_back, &"GhostButton")
-	_first[Page.SOLO] = solo.get_child(solo.get_child_count() - 2)  # Start
-	_update_solo_buttons()
-
-	var multi := _page_box(Page.MULTI, "MENU_MULTIPLAYER")
-	# Internet play (decision 0005) only where the EOS backend is available;
-	# elsewhere Host opens a LAN lobby directly.
-	_opener[Page.HOST] = _add_button(multi, Page.MULTI, "MENU_HOST",
-			_show.bind(Page.HOST) if Online.available() else _host_lobby.bind(false), &"PrimaryButton")
-	_opener[Page.JOIN] = _add_button(multi, Page.MULTI, "MENU_JOIN", _show.bind(Page.JOIN))
-	_add_button(multi, Page.MULTI, "MENU_BACK", _go_back, &"GhostButton")
-
-	var host := _page_box(Page.HOST, "MENU_HOST")
-	_add_button(host, Page.HOST, "MENU_HOST_LAN", _host_lobby.bind(false), &"PrimaryButton")
-	_add_button(host, Page.HOST, "MENU_HOST_ONLINE", _host_lobby.bind(true))
-	_add_button(host, Page.HOST, "MENU_BACK", _go_back, &"GhostButton")
-	_first[Page.JOIN] = _address_edit
-	_show(Page.MAIN)
+	if not Platform.is_web():
+		# Internet play (decision 0005) only where the EOS backend is
+		# available; elsewhere Host opens a LAN lobby directly.
+		var host := _card(cards, "MENU_HOST", "MENU_HOST_SUB" if Online.available() else "MENU_HOST_LAN_SUB",
+				"host", _show.bind(Page.HOST) if Online.available() else _host_lobby.bind(false))
+		host.accent = UiStyle.GOOD
+		_opener[Page.HOST] = host
+		var join := _card(cards, "MENU_JOIN", "MENU_JOIN_SUB", "join", _show.bind(Page.JOIN))
+		join.accent = UiStyle.WARN
+		_opener[Page.JOIN] = join
 
 
-## A page: a column under the player card with a small heading.
-func _page_box(page: int, heading: String) -> VBoxContainer:
+func _card(row: HBoxContainer, title: String, subtitle: String, icon: String, action: Callable) -> MenuTile:
+	var tile := MenuTile.make(title, subtitle, icon)
+	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tile.pressed.connect(action)
+	row.add_child(tile)
+	return tile
+
+
+## Level badge, name and XP; opens the profile.
+func _player_card() -> Button:
+	var card := Button.new()
+	card.custom_minimum_size = Vector2(320, 76)
+	card.set_meta("ui_key", "MENU_PROFILE")
+	card.tooltip_text = "MENU_PROFILE"
+	card.pressed.connect(func() -> void: _profile_panel.open(_player_name()))
+	var row := HBoxContainer.new()
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.add_theme_constant_override("separation", 14)
+	card.add_child(row)
+	var pad := Control.new()
+	pad.custom_minimum_size.x = 8
+	row.add_child(pad)
+	_badge = UiStyle.label("1", &"BadgeLabel", HORIZONTAL_ALIGNMENT_CENTER)
+	_badge.custom_minimum_size = Vector2(54, 48)
+	_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_badge)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.alignment = BoxContainer.ALIGNMENT_CENTER
+	info.add_theme_constant_override("separation", 4)
+	row.add_child(info)
+	_chip_name = UiStyle.label("")
+	_chip_name.add_theme_font_override("font", UiStyle.font_display_bold)
+	_chip_name.add_theme_font_size_override("font_size", 24)
+	info.add_child(_chip_name)
+	_xp_bar = ProgressBar.new()
+	_xp_bar.custom_minimum_size = Vector2(200, 5)
+	_xp_bar.show_percentage = false
+	info.add_child(_xp_bar)
+	_xp_label = UiStyle.label("", &"DimLabel")
+	_xp_label.add_theme_font_size_override("font_size", 14)
+	info.add_child(_xp_label)
+	var end := Control.new()
+	end.custom_minimum_size.x = 14
+	row.add_child(end)
+	for c: Control in [row, info, pad, end, _badge, _chip_name, _xp_bar, _xp_label]:
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return card
+
+
+func _build_solo() -> void:
+	var column := _page_root(Page.SOLO)
+	column.add_child(MenuKit.header("MENU_SINGLE_PLAYER", "MENU_BACK", _go_back))
+	var c := MatchConfig.make(MatchConfig.Mode.OFFLINE, "")
+	column.add_child(MenuKit.section("MENU_SECTION_MAP"))
+	var maps := HBoxContainer.new()
+	maps.add_theme_constant_override("separation", 18)
+	maps.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(maps)
+	for id: String in Maps.PLAYABLE:
+		var tile := MenuTile.make(Maps.LIST[id].name, Maps.LIST[id].blurb, "", load(Maps.LIST[id].thumb))
+		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tile.selected = id == c.map
+		tile.pressed.connect(_save_choice.bind("map", id))
+		maps.add_child(tile)
+		_map_tiles.append(tile)
+	var options := HBoxContainer.new()
+	options.add_theme_constant_override("separation", 40)
+	column.add_child(options)
+	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.NAME_KEYS, c.game_mode,
+			func(i: int) -> void: _save_choice("mode", GameMode.IDS[i]))
+	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
+			LobbySession.DURATIONS.find(c.minutes),
+			func(i: int) -> void: _save_choice("minutes", LobbySession.DURATIONS[i]))
+	var bottom := HBoxContainer.new()
+	column.add_child(bottom)
+	var hint := UiStyle.label(tr("MENU_SOLO_HINT") % OFFLINE_DUMMIES, &"DimLabel")
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bottom.add_child(hint)
+	var start := UiStyle.menu_button("MENU_START", &"PrimaryButton")
+	start.custom_minimum_size = Vector2(320, 64)
+	start.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	start.pressed.connect(_start_solo)
+	bottom.add_child(start)
+	_first[Page.SOLO] = start
+
+
+## A captioned chip row in `parent`.
+func _option(parent: Control, caption: String, labels: Array, selected: int, on_select: Callable) -> HBoxContainer:
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 9)
-	box.add_child(UiStyle.label(heading, &"DimLabel"))
-	%MainPage.add_sibling(box)
-	_pages[page] = box
-	return box
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 8)
+	parent.add_child(box)
+	box.add_child(MenuKit.section(caption))
+	var chips := MenuKit.chips(labels, selected, on_select)
+	box.add_child(chips)
+	return chips
 
 
-func _add_button(box: VBoxContainer, page: int, text: String, action: Callable, kind: StringName = &"") -> Button:
-	var b := UiStyle.menu_button(text, kind)
-	b.pressed.connect(action)
-	box.add_child(b)
-	if not _first.has(page):
-		_first[page] = b
-	return b
+func _build_host() -> void:
+	var column := _page_root(Page.HOST)
+	column.add_child(MenuKit.header("MENU_HOST", "MENU_BACK", _go_back))
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(spacer)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	row.custom_minimum_size.y = 300
+	column.add_child(row)
+	var lan := _card(row, "MENU_HOST_LAN", "MENU_HOST_LAN_SUB", "lan", _host_lobby.bind(false))
+	lan.accent = UiStyle.GOOD
+	_card(row, "MENU_HOST_ONLINE", "MENU_HOST_ONLINE_SUB", "online", _host_lobby.bind(true))
+	_first[Page.HOST] = lan
+	var after := Control.new()
+	after.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(after)
+	column.add_child(UiStyle.label("MENU_HOST_HINT", &"DimLabel"))
 
 
-func _show(page: int) -> void:
+func _build_join() -> void:
+	var column := _page_root(Page.JOIN)
+	column.add_child(MenuKit.header("MENU_JOIN", "MENU_BACK", _go_back))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 20)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(row)
+	# Left: every game we can see.
+	var games := PanelContainer.new()
+	games.theme_type_variation = &"CardPanel"
+	games.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	games.size_flags_stretch_ratio = 1.8
+	row.add_child(games)
+	var list_box := VBoxContainer.new()
+	list_box.add_theme_constant_override("separation", 10)
+	games.add_child(list_box)
+	_games_label = MenuKit.section("MENU_GAMES_SEARCHING")
+	list_box.add_child(_games_label)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_box.add_child(scroll)
+	_game_list = VBoxContainer.new()
+	_game_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_game_list.add_theme_constant_override("separation", 10)
+	scroll.add_child(_game_list)
+	# Right: join by address or invite code.
+	var direct := PanelContainer.new()
+	direct.theme_type_variation = &"CardPanel"
+	direct.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	direct.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(direct)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	direct.add_child(box)
+	box.add_child(MenuKit.section("MENU_JOIN_DIRECT"))
+	var hint := UiStyle.label("MENU_JOIN_DIRECT_HINT" if Online.available() else "MENU_JOIN_DIRECT_HINT_LAN", &"DimLabel")
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(hint)
+	_address_edit = LineEdit.new()
+	_address_edit.placeholder_text = "MENU_ADDRESS_PLACEHOLDER"
+	_address_edit.select_all_on_focus = true
+	_address_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_URL
+	_address_edit.custom_minimum_size.y = 52
+	var last: Variant = Settings.get_value("profile", "last_address")
+	_address_edit.text = last if last is String else ""
+	_address_edit.text_submitted.connect(func(_t: String) -> void: _join_manual())
+	box.add_child(_address_edit)
+	var connect := UiStyle.menu_button("MENU_CONNECT", &"PrimaryButton")
+	connect.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	connect.pressed.connect(_join_manual)
+	box.add_child(connect)
+	_join_status = UiStyle.label("")
+	_join_status.add_theme_color_override("font_color", UiStyle.DANGER)
+	_join_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_join_status)
+	_first[Page.JOIN] = _address_edit
+
+
+## Shows a page with a short slide-in; sub-pages dim the backdrop.
+func _show(page: int, animate: bool = true) -> void:
 	_page = page
 	for p: int in _pages:
 		(_pages[p] as Control).visible = p == page
-	_status.visible = _status.visible and page != Page.JOIN
 	_set_browsing(page == Page.JOIN)
 	if page == Page.SOLO:
-		_update_solo_buttons()
+		_update_solo()
+	var root: Control = _pages[page]
+	var tween := create_tween().set_parallel().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(_dim, "modulate:a", 0.0 if page == Page.HOME else 0.62, 0.3)
+	if animate:
+		# Slide by the margin: moving an anchored page would break its size.
+		root.modulate.a = 0.0
+		tween.tween_property(root, "modulate:a", 1.0, 0.25)
+		tween.tween_method(func(v: float) -> void: root.add_theme_constant_override("margin_left", roundi(v)),
+				MARGIN.x + 48.0, MARGIN.x, 0.3)
 	(_first[page] as Control).grab_focus.call_deferred()
 
 
 func _go_back() -> void:
-	if _page == Page.MAIN:
+	if _page == Page.HOME:
 		return
 	var from := _page
-	_show(PARENT[from])
-	if _opener.has(from):  # focus the button that led here
+	_show(Page.HOME)
+	if _opener.has(from):  # focus the card that led here
 		(_opener[from] as Control).grab_focus.call_deferred()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") and _page != Page.MAIN and not _settings.visible \
+	if event.is_action_pressed("ui_cancel") and _page != Page.HOME and not _settings.visible \
 			and not _profile_panel.visible:
 		get_viewport().set_input_as_handled()
 		_go_back()
 
 
+## Entrance: the title slides in and the cards fade up one after another.
+func _animate_in() -> void:
+	var home: Control = _pages[Page.HOME]
+	var title: Control = home.find_child("Title", true, false)
+	var bar: Control = home.find_child("TitleBar", true, false)
+	var cards: Control = home.find_child("Cards", true, false)
+	var tween := create_tween().set_parallel().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	title.modulate.a = 0.0
+	tween.tween_property(title, "modulate:a", 1.0, 0.5)
+	tween.tween_method(func(v: float) -> void: home.add_theme_constant_override("margin_left", roundi(v)),
+			MARGIN.x - 40.0, MARGIN.x, 0.6)
+	bar.custom_minimum_size.x = 0.0
+	tween.tween_property(bar, "custom_minimum_size:x", 120.0, 0.7).set_delay(0.2)
+	var i := 0
+	for card: Control in cards.get_children():
+		card.modulate.a = 0.0
+		tween.tween_property(card, "modulate:a", 1.0, 0.4).set_delay(0.15 + i * 0.08)
+		i += 1
+
+
+func _show_status(text: String) -> void:
+	_status.text = text
+	_status.visible = true
+	_join_status.text = text if _page == Page.JOIN else ""
+
+
+# --- Player card ---
+
+## Level badge and XP progress from the local profile (PLAN §3.13).
+func _update_player_card() -> void:
+	var lv := ProfileData.level_for(Profile.data.xp())
+	_badge.text = str(lv.level)
+	_chip_name.text = _player_name()
+	_xp_bar.max_value = lv.needed
+	_xp_bar.value = lv.into
+	_xp_label.text = tr("MENU_XP_PROGRESS") % [lv.level, lv.into, lv.needed]
+
+
+## The profile name, or a dev `--name` for this session.
+func _player_name() -> String:
+	return ServerSession.sanitize_name(Platform.get_user_arg("--name", MatchConfig.profile_name()))
+
+
 # --- Single player: map, mode and duration (saved for next time) ---
-
-func _next_map() -> void:
-	var i := Maps.PLAYABLE.find(Maps.from_args(Settings.get_value("profile", "map")))
-	_save_choice("map", Maps.PLAYABLE[(i + 1) % Maps.PLAYABLE.size()])
-
-
-func _next_mode() -> void:
-	var i := GameMode.from_id(str(Settings.get_value("profile", "mode")))
-	_save_choice("mode", GameMode.IDS[(i + 1) % GameMode.IDS.size()])
-
-
-func _next_duration() -> void:
-	var i := LobbySession.DURATIONS.find(MatchConfig.make(MatchConfig.Mode.OFFLINE, "").minutes)
-	_save_choice("minutes", LobbySession.DURATIONS[(i + 1) % LobbySession.DURATIONS.size()])
-
 
 func _save_choice(key: String, value: Variant) -> void:
 	Settings.set_value("profile", key, value)
 	Settings.save_settings()
-	_update_solo_buttons()
+	_update_solo()
 
 
-func _update_solo_buttons() -> void:
+func _update_solo() -> void:
 	var c := MatchConfig.make(MatchConfig.Mode.OFFLINE, "")
-	_map_button.text = tr("MENU_MAP") % tr(Maps.LIST[c.map].name)
-	_mode_button.text = tr("MENU_MODE") % tr(GameMode.NAME_KEYS[c.game_mode])
-	_duration_button.text = tr("MENU_DURATION") % c.minutes
+	for i in _map_tiles.size():
+		_map_tiles[i].selected = Maps.PLAYABLE[i] == c.map
+	MenuKit.select_chip(_mode_chips, c.game_mode)
+	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(c.minutes))
 
 
 ## After a match was lost to the network, a button rejoins it with our
@@ -234,9 +483,9 @@ func _offer_rejoin() -> void:
 	if offer.is_empty():
 		return
 	var button := UiStyle.menu_button("MENU_REJOIN", &"PrimaryButton")
-	button.custom_minimum_size.y = 50
-	_status.get_parent().add_child(button)
-	_status.get_parent().move_child(button, _status.get_index() + 1)
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	button.custom_minimum_size = Vector2(320, 54)
+	_notices.add_child(button)
 	button.pressed.connect(func() -> void:
 		var config: MatchConfig = offer.config
 		config.reconnect_token = offer.token
@@ -248,31 +497,7 @@ func _offer_rejoin() -> void:
 	get_tree().create_timer((int(offer.until_ms) - Time.get_ticks_msec()) / 1000.0).timeout.connect(func() -> void:
 		if is_instance_valid(button):
 			button.queue_free())
-	button.grab_focus.call_deferred()
-
-
-## Level badge and XP progress from the local profile (PLAN §3.13).
-func _update_player_card() -> void:
-	var lv := ProfileData.level_for(Profile.data.xp())
-	%LevelBadge.text = str(lv.level)
-	%XpBar.max_value = lv.needed
-	%XpBar.value = lv.into
-	%XpLabel.text = tr("MENU_XP_PROGRESS") % [lv.level, lv.into, lv.needed]
-
-
-## Entrance: the column slides in from the left and its rows fade in one
-## after another.
-func _animate_in() -> void:
-	var margin: MarginContainer = $Margin
-	var tween := create_tween().set_parallel().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tween.tween_method(func(v: float) -> void: margin.add_theme_constant_override("margin_left", roundi(v)), 24.0, 72.0, 0.6)
-	%TitleBar.custom_minimum_size.x = 0.0
-	tween.tween_property(%TitleBar, "custom_minimum_size:x", 96.0, 0.7).set_delay(0.2)
-	var i := 0
-	for row: Control in %Center.get_children():
-		row.modulate.a = 0.0
-		tween.tween_property(row, "modulate:a", 1.0, 0.35).set_delay(0.05 + i * 0.04)
-		i += 1
+	_first[Page.HOME] = button
 
 
 func _notification(what: int) -> void:
@@ -295,9 +520,8 @@ func _try_join_link() -> bool:
 
 # --- Join: LAN and online games, or an address / invite code ---
 
-## While the join page is open, LAN beacons are heard and online games are
-## listed every few seconds (PLAN §3.6). The page replaces the menu column,
-## so on phones the address field sits above the on-screen keyboard.
+## While the join screen is open, LAN beacons are heard and online games are
+## listed every few seconds (PLAN §3.6).
 func _set_browsing(on: bool) -> void:
 	if on and _browser == null:
 		_browser = Discovery.Browser.new()
@@ -316,7 +540,7 @@ func _list_online() -> void:
 		return
 	_listing = true
 	while _browser != null and is_inside_tree():
-		var listed: Dictionary = await Online.list_games(ServerSession.sanitize_name(_name_edit.text))
+		var listed: Dictionary = await Online.list_games(_player_name())
 		if not is_inside_tree():
 			return
 		_online_games = listed.get("games", [])
@@ -334,18 +558,23 @@ func _refresh_games() -> void:
 	if _browser != null and not _browser.listening and _online_games.is_empty():
 		_games_label.text = tr("MENU_LAN_UNAVAILABLE")
 	else:
-		_games_label.text = tr("MENU_GAMES_SEARCHING") if count == 0 else tr("MENU_GAMES")
+		_games_label.text = tr("MENU_GAMES_SEARCHING") if count == 0 else tr("MENU_GAMES") % count
 	if not _online_error.is_empty():
-		_games_label.text += "\n" + tr("NET_ONLINE_ERROR") % _online_error
+		_games_label.text += " · " + tr("NET_ONLINE_ERROR") % _online_error
+	if count == 0:
+		var empty := UiStyle.label("MENU_GAMES_EMPTY", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER)
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty.custom_minimum_size.y = 160
+		empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_game_list.add_child(empty)
 	for b: Discovery.Beacon in lan:
-		var row := _game_row("MENU_TAG_LAN", b.name, b.mode, b.map, b.combatants, b.max_combatants,
-				b.flags & Discovery.FLAG_LOBBY != 0)
+		var lobby := b.flags & Discovery.FLAG_LOBBY != 0
+		var row := _game_row("lan", b.name, b.mode, b.map, b.combatants, b.max_combatants, lobby)
 		if not b.compatible():
-			row.text += " · " + tr("MENU_LAN_OTHER_VERSION") % b.build
+			row.subtitle += " · " + tr("MENU_LAN_OTHER_VERSION") % b.build
 			row.disabled = true
 		var address := b.address
 		var port := b.game_port
-		var lobby := b.flags & Discovery.FLAG_LOBBY != 0
 		var map := b.map
 		row.pressed.connect(func() -> void:
 			var config := _config(MatchConfig.Mode.JOIN)
@@ -356,7 +585,7 @@ func _refresh_games() -> void:
 			_go(LOBBY if lobby else MATCH, config))
 	for g: Dictionary in _online_games:
 		var lobby: bool = g.get("state", "") == "lobby"
-		var row := _game_row("MENU_TAG_ONLINE", str(g.get("name", g.code)), str(g.get("mode", "ffa")),
+		var row := _game_row("online", str(g.get("name", g.code)), str(g.get("mode", "ffa")),
 				str(g.get("map", "")), int(g.get("players", 0)), int(g.get("max", 0)), lobby)
 		var host_id: String = g.host_id
 		var code: String = g.code
@@ -371,20 +600,21 @@ func _refresh_games() -> void:
 			_go(LOBBY if lobby else MATCH, config))
 
 
-## A browser row, two lines: "Name's game · 2/8 · In lobby" over
-## "LAN · Mode · Map".
-func _game_row(tag: String, title: String, mode: String, map: String, players: int, max_players: int,
-		lobby: bool) -> Button:
-	var row := Button.new()
+## A game card over its map's picture: "Name's game · 2/8" above
+## "LAN · In lobby · Mode · Map"; green while in the lobby, orange playing.
+func _game_row(kind: String, title: String, mode: String, map: String, players: int, max_players: int,
+		lobby: bool) -> MenuTile:
 	var map_name := tr(Maps.LIST[map].name) if Maps.has(map) else map
 	var mode_name := tr(GameMode.NAME_KEYS[GameMode.from_id(mode)])
-	var top := PackedStringArray([title])
-	if max_players > 0:
-		top.append("%d/%d" % [players, max_players])
-	top.append(tr("MENU_IN_LOBBY" if lobby else "MENU_IN_MATCH"))
-	row.text = " · ".join(top) + "\n" + " · ".join(PackedStringArray([tr(tag), mode_name, map_name]))
-	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	row.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var heading := title + ("  ·  %d/%d" % [players, max_players] if max_players > 0 else "")
+	var details := " · ".join(PackedStringArray([tr("MENU_TAG_LAN" if kind == "lan" else "MENU_TAG_ONLINE"),
+			tr("MENU_IN_LOBBY" if lobby else "MENU_IN_MATCH"), mode_name, map_name]))
+	var thumb: Texture2D = load(Maps.LIST[map].thumb) if Maps.has(map) and Maps.LIST[map].has("thumb") else null
+	var row := MenuTile.make(heading, details, kind, thumb)
+	row.set_meta("ui_key", heading + " · " + details)
+	row.accent = UiStyle.GOOD if lobby else UiStyle.WARN
+	row.custom_minimum_size.y = 96
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_game_list.add_child(row)
 	return row
 
@@ -405,8 +635,7 @@ func _join_manual() -> void:
 			config.port = clampi(address.substr(colon + 1).to_int(), 1, 65535)
 			address = address.left(colon)
 		if not address.is_valid_ip_address():
-			_status.text = tr("MENU_BAD_ADDRESS")
-			_status.visible = true
+			_show_status(tr("MENU_BAD_ADDRESS"))
 			return
 		config.address = address
 		Settings.set_value("profile", "last_address", address)
@@ -433,14 +662,8 @@ func _host_match(online: bool) -> void:
 	_go(MATCH, config)
 
 
-## A config for this player; a typed name is saved (a dev `--name` is for
-## this session only).
 func _config(mode: int, bots: int = 0) -> MatchConfig:
-	var player_name := ServerSession.sanitize_name(_name_edit.text)
-	if player_name != MatchConfig.profile_name() and not Platform.user_args.has("--name"):
-		Settings.set_value("profile", "name", player_name)
-		Settings.save_settings()
-	return MatchConfig.make(mode, player_name, bots)
+	return MatchConfig.make(mode, _player_name(), bots)
 
 
 func _go(scene: String, config: MatchConfig) -> void:

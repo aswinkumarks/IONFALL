@@ -8,6 +8,9 @@ extends Node
 signal phase_changed(phase: int)
 ## Emitted after every simulation step.
 signal stepped
+## The match ended and its results were shown; with `lobby_after_match`
+## the host takes everyone back to the lobby instead of starting again.
+signal match_over
 
 const SNAPSHOT_INTERVAL := 2
 ## Command buffer target per client, in ticks: the minimum on a clean
@@ -66,6 +69,7 @@ var networked: bool = false
 var map_id: String = Maps.DEFAULT  ## sent in WELCOME and beacons
 var time_limit_ticks: int = MatchPhase.FFA_TIME_LIMIT_TICKS
 var max_combatants: int = Protocol.MAX_PEERS
+var lobby_after_match: bool = false
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
 ## Recent (claimed - expected) view tick errors, for diagnostics and tests.
@@ -496,7 +500,10 @@ func _update_phase() -> void:
 			elif world.tick >= phase_ends_tick:
 				_end_match(0)  # draw
 		MatchPhase.POST_MATCH:
-			if world.tick >= phase_ends_tick:
+			if world.tick >= phase_ends_tick and lobby_after_match:
+				phase_ends_tick = 0x7FFFFFFF  # once
+				match_over.emit()
+			elif world.tick >= phase_ends_tick:
 				match_id = _rng.randi() | 1
 				phase_seq = 0
 				world.reset_match(_rng.randi())

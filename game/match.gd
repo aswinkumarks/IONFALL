@@ -8,6 +8,7 @@ extends Node3D
 const MOVEMENT := preload("res://data/movement_config.tres")
 const HUD_SCENE := preload("res://ui/hud/hud.tscn")
 const MAIN_MENU := "res://ui/main_menu/main_menu.tscn"
+const LOBBY := "res://ui/lobby/lobby.tscn"
 ## A client suspended this long reconnects instead of waiting for the old
 ## connection (the server times it out after 10 s).
 const RECONNECT_AFTER_MS := 5000
@@ -41,6 +42,7 @@ var _spawns: Array[Transform3D] = []
 var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended)
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
 var _online_code: String = ""  ## hosting online: the invite code (decision 0005)
+var _to_lobby: bool = false  ## going back to the lobby: the online game stays open
 var _confirm_panel: Control
 var _settings_menu: SettingsMenu
 var _autopilot: WanderInput
@@ -166,6 +168,8 @@ func _ready() -> void:
 		server.bot_nav = nav
 		server.max_combatants = config.max_combatants()
 		server.bot_fill = 1 + config.bots
+		server.lobby_after_match = config.from_lobby
+		server.match_over.connect(_back_to_lobby)
 		var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
 		input.look_yaw = me.state.yaw
 		if config.online:
@@ -186,7 +190,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	Platform.set_low_latency_network(false)
-	if not _online_code.is_empty():
+	if not _online_code.is_empty() and not _to_lobby:
 		Online.stop_hosting()
 	if Diagnostics.net_info == _net_info:
 		Diagnostics.net_info = Callable()
@@ -222,6 +226,7 @@ func _start_client(token: int) -> bool:
 				get_tree().reload_current_scene.call_deferred()
 			else:
 				_fail(tr("NET_MAP_MISMATCH") % client.map_id))
+	client.lobby_called.connect(_back_to_lobby)
 	client.failed.connect(_on_client_lost)
 	client.left.connect(_on_client_lost)
 	if config.from_lobby and token == 0:
@@ -238,6 +243,7 @@ func _start_client(token: int) -> bool:
 				_: _fail(tr("NET_ONLINE_ERROR") % joined.error)
 			return false
 		online_peer = joined.peer
+		config.online_host = joined.host_id  # the lobby reconnects to it after the match
 	var err := client.join(config.address, config.port, MOVEMENT, _loadout, _spawns, online_peer)
 	if err != OK:
 		_fail(tr("NET_CONNECT_ERROR") % error_string(err))
@@ -1151,6 +1157,29 @@ func _choose_primary(i: int) -> void:
 		(_loadout_bar.get_child(k + 1) as Button).button_pressed = k == i
 
 
+## The lobby match is over (results shown): everyone goes back to the
+## host's lobby. The host tells the clients first, then reopens the lobby on
+## the same port or online game.
+func _back_to_lobby() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	_to_lobby = true
+	Platform.perf_log("MATCH over: back to the lobby")
+	if server != null:
+		server.notify_clients(Protocol.Notice.RETURN_TO_LOBBY)
+		await get_tree().create_timer(0.5).timeout
+	else:
+		client.leave()
+	config.mode = MatchConfig.Mode.HOST if server != null else MatchConfig.Mode.JOIN
+	config.from_lobby = true
+	config.reconnect_token = 0
+	config.map_retried = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	MatchConfig.pending = config
+	get_tree().change_scene_to_file.call_deferred(LOBBY)
+
+
 func _leave() -> void:
 	if _leaving:
 		return
@@ -1164,6 +1193,8 @@ func _leave() -> void:
 
 ## Back to the menu, which shows `reason` (a translation key or text).
 func _fail(reason: String) -> void:
+	if _to_lobby:
+		return  # the host closed the match on purpose
 	MatchConfig.last_error = reason
 	Platform.perf_log("MATCH left: %s" % tr(reason))
 	# Lost to the network after joining: the menu offers to rejoin while the
