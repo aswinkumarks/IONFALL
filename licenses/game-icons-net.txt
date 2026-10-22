@@ -1,0 +1,14 @@
+Touch control icons from game-icons.net (https://game-icons.net)
+
+  art/ui/touch/fire.png      "Crosshair" by Delapouite  https://game-icons.net/1x1/delapouite/crosshair.html
+  art/ui/touch/jump.png      "Jump across" by Delapouite https://game-icons.net/1x1/delapouite/jump-across.html
+  art/ui/touch/scope.png     "Spyglass" by Lorc          https://game-icons.net/1x1/lorc/spyglass.html
+  art/ui/touch/grenade.png   "Grenade" by Lorc           https://game-icons.net/1x1/lorc/grenade.html
+  art/ui/touch/interact.png  "Hand" by Lorc              https://game-icons.net/1x1/lorc/hand.html
+
+Licensed under Creative Commons Attribution 3.0 Unported (CC BY 3.0):
+https://creativecommons.org/licenses/by/3.0/
+Attribution is required wherever the game credits third-party assets.
+
+Changes: rasterised to 256 px white masks (trimmed, padded, black background
+removed) and tinted at runtime.

@@ -69,6 +69,14 @@ const LAYOUT_VERSION := 3
 ## bottom-left corner, in screen heights.
 const STICK_HINT := Vector2(0.3, 0.3)
 const MIN_SCALE := 0.6
+const ICONS := {
+	"fire": preload("res://art/ui/touch/fire.png"),
+	"scope": preload("res://art/ui/touch/scope.png"),
+	"jump": preload("res://art/ui/touch/jump.png"),
+	"crouch": preload("res://art/ui/touch/crouch.png"),
+	"grenade": preload("res://art/ui/touch/grenade.png"),
+	"interact": preload("res://art/ui/touch/interact.png"),
+}
 const MAX_SCALE := 1.8
 
 var editing: bool = false
@@ -81,6 +89,7 @@ var _fingers: Dictionary = {}  ## index -> {kind, origin, pos, button}
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS  # icons drawn well below 256 px
 	visible = DisplayServer.is_touchscreen_available()
 	apply_layout(Settings.get_value("input", "touch_layout"))
 	modulate.a = float(Settings.get_value("input", "touch_opacity"))
@@ -339,57 +348,12 @@ func _draw() -> void:
 		draw_arc(hint, 30.0, 0.0, TAU, 32, Color(1, 1, 1, 0.35), 1.5)
 
 
-## Vector icons that picture the action, so buttons read without text.
-## `s` is about the icon's half-size.
+## Icons that picture the action, so buttons read without text: white
+## masks tinted when drawn (art/ui/touch; sources in art/ASSETS.csv). `s` is
+## about the icon's half-size.
 func _icon(id: String, c: Vector2, s: float, col: Color) -> void:
-	var w := maxf(3.0, s * 0.17)
-	match id:
-		"fire":  # crosshair
-			draw_arc(c, s * 0.7, 0.0, TAU, 40, col, w)
-			for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
-				draw_line(c + d * s * 0.42, c + d * s * 1.05, col, w * 1.2)
-			draw_circle(c, s * 0.13, col)
-		"scope":  # a rifle scope from the side: tube, bells at both ends, mounts
-			draw_line(c + Vector2(-0.55, 0.0) * s, c + Vector2(0.45, 0.0) * s, col, s * 0.32)
-			_poly(c, s, [[0.3, -0.2], [0.95, -0.42], [0.95, 0.42], [0.3, 0.2]], col)
-			_poly(c, s, [[-0.95, -0.3], [-0.5, -0.18], [-0.5, 0.18], [-0.95, 0.3]], col)
-			draw_line(c + Vector2(-0.18, 0.16) * s, c + Vector2(-0.18, 0.62) * s, col, w * 1.3)
-			draw_line(c + Vector2(0.12, 0.16) * s, c + Vector2(0.12, 0.62) * s, col, w * 1.3)
-			draw_line(c + Vector2(-0.4, 0.62) * s, c + Vector2(0.34, 0.62) * s, col, w)
-		"jump":  # up arrow leaving the ground
-			_poly(c, s, [[-0.17, 0.5], [0.17, 0.5], [0.17, -0.15], [-0.17, -0.15]], col)
-			_poly(c, s, [[-0.58, -0.1], [0.0, -0.85], [0.58, -0.1]], col)
-			draw_line(c + Vector2(-0.7, 0.82) * s, c + Vector2(0.7, 0.82) * s, col, w)
-		"crouch":  # a figure down on one knee, with a down arrow
-			draw_circle(c + Vector2(0.2, -0.68) * s, s * 0.17, col)
-			draw_polyline(_pts(c, s, [[0.14, -0.46], [-0.08, 0.1]]), col, w * 1.4)  # back
-			draw_polyline(_pts(c, s, [[-0.08, 0.1], [0.36, 0.14], [0.38, 0.74]]), col, w * 1.3)  # front leg
-			draw_polyline(_pts(c, s, [[-0.08, 0.1], [-0.12, 0.72], [-0.5, 0.72]]), col, w * 1.3)  # knee down
-			draw_polyline(_pts(c, s, [[0.1, -0.36], [0.38, -0.08]]), col, w * 1.1)  # arm
-			_poly(c, s, [[-0.88, -0.2], [-0.48, -0.2], [-0.68, 0.12]], col)  # down arrow head
-			draw_line(c + Vector2(-0.68, -0.72) * s, c + Vector2(-0.68, -0.2) * s, col, w * 1.1)
-			draw_line(c + Vector2(-0.95, 0.86) * s, c + Vector2(0.75, 0.86) * s, col, w)
-		"grenade":  # body, lever and pin ring
-			draw_circle(c + Vector2(0, 0.22) * s, s * 0.58, col)
-			draw_line(c + Vector2(-0.5, 0.22) * s, c + Vector2(0.5, 0.22) * s, Color(0, 0, 0, 0.45), w * 0.8)
-			_poly(c, s, [[-0.22, -0.55], [0.22, -0.55], [0.22, -0.32], [-0.22, -0.32]], col)
-			draw_polyline(_pts(c, s, [[0.15, -0.55], [0.55, -0.82], [0.62, -0.1]]), col, w)
-			draw_arc(c + Vector2(-0.45, -0.68) * s, s * 0.2, 0.0, TAU, 20, col, w)
-		"interact":  # arrow dropping into a tray: pick up
-			_poly(c, s, [[-0.15, -0.85], [0.15, -0.85], [0.15, -0.05], [-0.15, -0.05]], col)
-			_poly(c, s, [[-0.45, -0.12], [0.0, 0.38], [0.45, -0.12]], col)
-			draw_polyline(_pts(c, s, [[-0.75, 0.15], [-0.75, 0.75], [0.75, 0.75], [0.75, 0.15]]), col, w)
-		_:
-			draw_circle(c, s * 0.3, col)
-
-
-## Points [[x, y], …] in units of `s` around `c`.
-func _pts(c: Vector2, s: float, points: Array) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for p: Array in points:
-		out.append(c + Vector2(p[0], p[1]) * s)
-	return out
-
-
-func _poly(c: Vector2, s: float, points: Array, col: Color) -> void:
-	draw_colored_polygon(_pts(c, s, points), col)
+	var tex: Texture2D = ICONS.get(id)
+	if tex == null:
+		draw_circle(c, s * 0.3, col)
+		return
+	draw_texture_rect(tex, Rect2(c - Vector2(s, s), Vector2(s, s) * 2.0), false, col)
