@@ -128,6 +128,15 @@ on home Wi-Fi, driven by `--ui` through `launch_args.txt`:
 | Laptop host leaves the lobby | phone: "The host closed the lobby" |
 | Menu, lobby and game list at 2400×1080 | large cards fit; lobby lists only joined players |
 
+**Phone on mobile data (Mi 11X on LTE, Wi-Fi off, adb over USB) with the
+laptop on home broadband**, 2026-10-22, 1.0.0 test APK:
+
+| Check | Result |
+|---|---|
+| Phone hosts online, laptop joins by code | lobby → match → results → same lobby, then a second match; phone host 60 fps, tick p99 1.7 ms, `clients=1` |
+| Laptop hosts online, phone joins by code | lobby → match → results → same lobby, then a second match |
+| Latency | RTT 180–200 ms (carrier NAT, likely an Epic relay), 0 visible corrections |
+
 **Long run (2026-10-22, laptop, two headless instances, 60 s matches):**
 lobby → match → lobby cycles for 30 min. The first run failed one reconnect
 after 13 cycles: Epic's lobby service stalled for a few seconds ("lobby
