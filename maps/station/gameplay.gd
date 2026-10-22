@@ -24,3 +24,7 @@ func spawn_points() -> Array[Transform3D]:
 
 func pickup_spots() -> Array:
 	return StationLayout.pickup_spots()
+
+
+func flag_bases() -> Array:
+	return StationLayout.flag_bases()

@@ -80,7 +80,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 - **Extensibility**: new *variants* of existing firing types (hitscan auto/burst/semi, pellet, projectile) need only data plus a model. A genuinely new mechanic needs a checklist: sim state, prediction, replication, hit validation, presentation, audio, bot usage, balance-table entry
 
 ### 2.4 Scoring & modes
-Victory is decided by an explicit **score** value (a player's score in FFA, a team's in TDM), not by a kill count.
+Victory is decided by an explicit **score** value (a player's score in FFA, a team's in the team modes), not by a kill count.
 
 | Rule | FFA (player score) | TDM (team score) |
 |---|---|---|
@@ -98,7 +98,24 @@ Victory is decided by an explicit **score** value (a player's score in FFA, a te
 
 **Assist**: ≥ 40 damage within 300 ticks before an enemy's death, by someone other than the killer → assist (stat + XP only, no score).
 
-Post-v1.0: **CTF** (map 2 is built symmetric and CTF-ready) and **Co-op Waves**.
+**Capture the flag** (both maps; each has a base per team, `flag_bases()`):
+
+| Rule | CTF |
+|---|---|
+| Win | **3 captures**, or the most at the time limit (ties: sudden death as above) |
+| Take | Touch the enemy flag (at its base or on the ground) |
+| Capture | Bring it to your own base **while your own flag is home**: +1 team, +5 personal |
+| Carrier dies or leaves | The flag drops where they were. The owners touching it return it (+1 personal); otherwise it goes home after 1800 ticks (30 s) |
+| Kills | +1 personal only (no team score) |
+
+**Co-op waves** (humans on team 0 against bot waves on team 1, no friendly fire, no clock):
+
+| Rule | Co-op waves |
+|---|---|
+| Waves | 10. The first comes after 8 s; wave *n* has 2 + (*n* − 1) bots, +1 per extra human, capped by the match size; one difficulty step harder every 3 waves |
+| Wave bots | Hunt the nearest human; don't respawn (they leave 2 s after dying) |
+| Falling | A fallen human waits for the end of the wave and comes back when it's cleared |
+| Win / lose | Clear wave 10 to win; everyone down at once loses. The team score is the waves cleared |
 
 ### 2.5 Spawn system
 - **Server-side spawn scoring** for each spawn point: + distance to nearest enemy, − enemy line of sight (1 raycast per enemy, cached per tick), − recent deaths nearby (last 5 s), − occupied (another player within 2 m). TDM adds a bonus near teammates and a penalty for the enemy half. Pick randomly among the top 3. **Fallback**: the least-bad point, never blocked

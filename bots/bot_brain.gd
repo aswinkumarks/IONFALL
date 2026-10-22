@@ -8,7 +8,7 @@ extends RefCounted
 ## stuck recovery. Perception runs at 10 Hz, re-pathing at most 2 Hz,
 ## staggered across bots.
 
-enum Goal { ROAM, ATTACK, CHASE, RETREAT, PICKUP }
+enum Goal { ROAM, ATTACK, CHASE, RETREAT, PICKUP, OBJECTIVE }
 
 const Held := PlayerCommand.Held
 const Action := PlayerCommand.Action
@@ -79,6 +79,8 @@ var _sidestep_until: int = 0
 var _traversal: int = T.NONE
 var _traversal_jumps: int = 0
 var _destination := Vector3.INF  ## explicit roam target (objectives, pickups)
+## Co-op waves: hunt the nearest human instead of roaming.
+var hunt: bool = false
 
 
 ## Roam towards `pos` instead of random points (until reached).
@@ -153,7 +155,7 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 		Goal.CHASE:
 			move = _follow(tick, p, _last_seen_pos)
 			held |= Held.SPRINT if move.length() > 0.5 else 0
-		Goal.RETREAT, Goal.PICKUP:
+		Goal.RETREAT, Goal.PICKUP, Goal.OBJECTIVE:
 			move = _follow(tick, p, _path_goal)
 			held |= Held.SPRINT if move.length() > 0.5 else 0
 		_:
@@ -247,6 +249,10 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 	if goal == Goal.RETREAT and tick < _retreat_until and s.shield < 60.0:
 		return
 	var target: SimPlayer = _world.players.get(target_id)
+	# A flag carrier runs home, fights or not.
+	if _world.flag_of(_id) != null:
+		_set_objective(_objective(p))
+		return
 	if _visible and target != null:
 		var losing := s.shield <= 0.0 and s.health < 45.0 and target.state.shield + target.state.health > s.health + 20.0
 		if losing and goal != Goal.RETREAT:
@@ -261,6 +267,10 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 		goal = Goal.CHASE
 	else:
 		target_id = 0
+		var objective := _objective(p)
+		if objective != Vector3.INF:
+			_set_objective(objective)
+			return
 		var item := _wanted_item(p)
 		if item != Vector3.INF:
 			if goal != Goal.PICKUP or _path_goal.distance_to(item) > 0.5:
@@ -272,6 +282,47 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 		if goal != Goal.ROAM:
 			_path_goal = Vector3.INF
 		goal = Goal.ROAM
+
+
+func _set_objective(at: Vector3) -> void:
+	if at == Vector3.INF:
+		return
+	if goal != Goal.OBJECTIVE or _path_goal.distance_to(at) > 0.5:
+		_path_goal = at
+		_path = []
+		_last_repath = -100000
+	goal = Goal.OBJECTIVE
+
+
+## Where the mode wants us (INF: nowhere in particular). Co-op hunters go for
+## the nearest human. CTF: a carrier heads home; one bot in three defends
+## (its own flag, or the base while the flag is home); the others take the
+## enemy flag or escort its carrier; anyone recovers their own dropped flag.
+func _objective(p: SimPlayer) -> Vector3:
+	var s := p.state
+	if hunt:
+		var best := Vector3.INF
+		var best_d := INF
+		for other: SimPlayer in _world.players.values():
+			if other.team != p.team and other.state.alive and other.state.position.distance_to(s.position) < best_d:
+				best_d = other.state.position.distance_to(s.position)
+				best = other.state.position
+		return best
+	if _world.flags.size() < 2 or p.team > 1:
+		return Vector3.INF
+	var own: SimWorld.Flag = _world.flags[p.team]
+	var enemy: SimWorld.Flag = _world.flags[1 - p.team]
+	if enemy.carrier == _id:
+		return own.base
+	if not own.at_base() and own.carrier == 0:
+		return own.position  # dropped: return it
+	if _id % 3 == 0:  # defender
+		if own.carrier != 0:
+			return own.position  # chase the thief
+		return own.base if s.position.distance_to(own.base) > 10.0 else Vector3.INF
+	if enemy.carrier == 0:
+		return enemy.position
+	return enemy.position if enemy.carrier != _id else own.base  # escort our carrier
 
 
 ## The nearest power weapon (holding none) or grenade pickup (short of

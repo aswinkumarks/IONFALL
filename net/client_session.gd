@@ -54,6 +54,8 @@ var server_state: PlayerSimState  ## latest authoritative owner state
 var projectiles: Array = []
 var items: Array = []  ## latest snapshot's floor items {id, weapon, position}
 var spot_ticks := PackedInt32Array()
+var flags: Array = []  ## CTF: latest snapshot's flags (Snapshot.flags)
+var wave: Dictionary = {}  ## co-op: latest snapshot's wave status (Snapshot.wave)
 
 # Metrics
 var corrections: int = 0
@@ -346,6 +348,8 @@ func _on_snapshot(data: PackedByteArray) -> void:
 	projectiles = snap.projectiles
 	items = snap.items
 	spot_ticks = snap.spot_ticks
+	flags = snap.flags
+	wave = snap.wave
 	_events.append_array(snap.events)
 	# Time dilation (PLAN §3.3.2): run up to 5% faster or slower to keep the
 	# server's command buffer at its target, instead of hard resyncs.
