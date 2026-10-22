@@ -167,7 +167,8 @@ func _build_home() -> void:
 	bar.custom_minimum_size = Vector2(120, 4)
 	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	column.add_child(bar)
-	var tagline := UiStyle.label("MENU_TAGLINE", &"DimLabel")
+	# The browser build is single player only: no LAN or internet play there.
+	var tagline := UiStyle.label("MENU_TAGLINE_WEB" if Platform.is_web() else "MENU_TAGLINE", &"DimLabel")
 	tagline.add_theme_font_size_override("font_size", 20)
 	column.add_child(tagline)
 	var gap := Control.new()
