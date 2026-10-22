@@ -8,8 +8,11 @@ extends Control
 ## Layout: the right-hand buttons form one thumb cluster around Fire,
 ## anchored to the bottom-right corner and measured in screen heights, so it
 ## keeps its shape on 16:9 and 20:9 screens alike: Jump in the corner where
-## the thumb rests, Crouch below Fire, Reload, Melee and Grenade along its
-## left and top, Swap on its right. Icons only, each a picture of the action.
+## the thumb rests, Crouch below Fire, Scope (a toggle) on its left, Grenade
+## above Jump. Kept to the essentials: tapping a weapon chip in the HUD
+## switches to it, tapping the ammo counter reloads (empty magazines reload
+## on their own), and firing at an enemy within arm's reach melees. Icons
+## only, each a picture of the action.
 ## Layout editor (PLAN §3.11): each button's position and size can be
 ## overridden (settings input/touch_layout) and all share an opacity; in
 ## `editing` mode fingers (or the mouse) drag buttons instead of playing.
@@ -25,6 +28,21 @@ const SPRINT_THRESHOLD := 0.9
 var input: InputAdapter
 ## Aim assist slowdown on look fingers (AimAssist.slowdown).
 var assist_scale: float = 1.0
+## The scope button's toggle: holds aim until tapped again. The match turns
+## it off on death.
+var scope_on: bool = false:
+	set(v):
+		if v != scope_on:
+			scope_on = v
+			if input != null:
+				if v:
+					input.touch_held |= PlayerCommand.Held.AIM
+				else:
+					input.touch_held &= ~PlayerCommand.Held.AIM
+			queue_redraw()
+## Taps that miss every button go here first (Hud.touch_target): returns
+## "slot:N", "reload" or "".
+var hud_target: Callable
 ## The interact button shows only while something can be picked up.
 var show_interact: bool = false:
 	set(v):
@@ -39,16 +57,14 @@ const DEFAULT_BUTTONS := [
 	{"id": "fire", "label": "TOUCH_FIRE", "pos": Vector2(0.27, 0.31), "radius": 0.1, "kind": Kind.FIRE},
 	{"id": "jump", "label": "TOUCH_JUMP", "pos": Vector2(0.09, 0.12), "radius": 0.075, "press": PlayerCommand.Action.JUMP, "held": PlayerCommand.Held.JUMP},
 	{"id": "crouch", "label": "TOUCH_CROUCH", "pos": Vector2(0.29, 0.115), "radius": 0.055, "held": PlayerCommand.Held.CROUCH},
-	{"id": "reload", "label": "TOUCH_RELOAD", "pos": Vector2(0.47, 0.22), "radius": 0.055, "press": PlayerCommand.Action.RELOAD},
-	{"id": "swap", "label": "TOUCH_SWAP", "pos": Vector2(0.09, 0.40), "radius": 0.055, "press": PlayerCommand.Action.SWITCH},
-	{"id": "grenade", "label": "TOUCH_GRENADE", "pos": Vector2(0.25, 0.56), "radius": 0.05, "press": PlayerCommand.Action.GRENADE},
-	{"id": "melee", "label": "TOUCH_MELEE", "pos": Vector2(0.44, 0.44), "radius": 0.05, "press": PlayerCommand.Action.MELEE},
-	{"id": "interact", "label": "TOUCH_INTERACT", "pos": Vector2(0.62, 0.62), "radius": 0.06, "press": PlayerCommand.Action.INTERACT,
+	{"id": "scope", "label": "TOUCH_SCOPE", "pos": Vector2(0.48, 0.26), "radius": 0.065, "toggle": PlayerCommand.Held.AIM},
+	{"id": "grenade", "label": "TOUCH_GRENADE", "pos": Vector2(0.09, 0.36), "radius": 0.055, "press": PlayerCommand.Action.GRENADE},
+	{"id": "interact", "label": "TOUCH_INTERACT", "pos": Vector2(0.44, 0.49), "radius": 0.06, "press": PlayerCommand.Action.INTERACT,
 			"contextual": true},
 ]
-## Saved layouts older than this used fractions of the screen and are
-## dropped for the new defaults.
-const LAYOUT_VERSION := 2
+## Saved layouts older than this are dropped for the new defaults (v1 used
+## fractions of the screen, v2 had Reload, Swap and Melee buttons).
+const LAYOUT_VERSION := 3
 ## Where the floating stick's resting hint sits: offset from the
 ## bottom-left corner, in screen heights.
 const STICK_HINT := Vector2(0.3, 0.3)
@@ -181,6 +197,7 @@ func _input(event: InputEvent) -> void:
 func release_all() -> void:
 	for index in _fingers.keys():
 		_on_up(index)
+	scope_on = false
 
 
 func _on_down(index: int, pos: Vector2) -> void:
@@ -191,16 +208,30 @@ func _on_down(index: int, pos: Vector2) -> void:
 		if kind == Kind.FIRE:
 			input.press(PlayerCommand.Action.FIRE)
 			input.touch_held |= PlayerCommand.Held.FIRE
+		elif button.has("toggle"):
+			scope_on = not scope_on
 		else:
 			if button.has("press"):
 				input.press(button.press)
 			if button.has("held"):
 				input.touch_held |= button.held
+	elif _hud_tap(pos):
+		_fingers[index] = {"kind": Kind.BUTTON, "origin": pos, "pos": pos, "button": {"id": "hud"}}
 	elif pos.x < _screen().x * 0.4 and not _has_kind(Kind.MOVE):
 		_fingers[index] = {"kind": Kind.MOVE, "origin": pos, "pos": pos}
 	else:
 		_fingers[index] = {"kind": Kind.LOOK, "origin": pos, "pos": pos}
 	queue_redraw()
+
+
+## Weapon panel taps: switch weapon or reload. True if the tap was used.
+func _hud_tap(pos: Vector2) -> bool:
+	var target: String = hud_target.call(pos) if hud_target.is_valid() else ""
+	if target == "reload":
+		input.press(PlayerCommand.Action.RELOAD)
+	elif target.begins_with("slot:"):
+		input.select_slot(target.get_slice(":", 1).to_int())
+	return not target.is_empty()
 
 
 func _on_drag(index: int, pos: Vector2, relative: Vector2) -> void:
@@ -218,7 +249,7 @@ func _on_drag(index: int, pos: Vector2, relative: Vector2) -> void:
 			else:
 				input.touch_held &= ~PlayerCommand.Held.SPRINT
 		Kind.LOOK, Kind.FIRE:
-			var sens: float = Settings.get_value("input", "touch_sensitivity") * assist_scale
+			var sens: float = Settings.get_value("input", "touch_sensitivity") * assist_scale * input.look_scale
 			input.add_look(-relative.x * LOOK_RADIANS_PER_PIXEL * sens,
 					-relative.y * LOOK_RADIANS_PER_PIXEL * sens)
 	queue_redraw()
@@ -272,7 +303,7 @@ func _draw() -> void:
 			continue
 		var center := _center(b)
 		var r: float = b.radius * screen.y
-		var pressed := _is_pressed(b)
+		var pressed: bool = _is_pressed(b) or (b.has("toggle") and scope_on)
 		var accent: Color = UiStyle.WARN if b.id == "fire" else UiStyle.ACCENT
 		if b.get("contextual", false):
 			accent = UiStyle.GOOD
@@ -318,42 +349,32 @@ func _icon(id: String, c: Vector2, s: float, col: Color) -> void:
 			for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 				draw_line(c + d * s * 0.42, c + d * s * 1.05, col, w * 1.2)
 			draw_circle(c, s * 0.13, col)
+		"scope":  # a rifle scope from the side: tube, bells at both ends, mounts
+			draw_line(c + Vector2(-0.55, 0.0) * s, c + Vector2(0.45, 0.0) * s, col, s * 0.32)
+			_poly(c, s, [[0.3, -0.2], [0.95, -0.42], [0.95, 0.42], [0.3, 0.2]], col)
+			_poly(c, s, [[-0.95, -0.3], [-0.5, -0.18], [-0.5, 0.18], [-0.95, 0.3]], col)
+			draw_line(c + Vector2(-0.18, 0.16) * s, c + Vector2(-0.18, 0.62) * s, col, w * 1.3)
+			draw_line(c + Vector2(0.12, 0.16) * s, c + Vector2(0.12, 0.62) * s, col, w * 1.3)
+			draw_line(c + Vector2(-0.4, 0.62) * s, c + Vector2(0.34, 0.62) * s, col, w)
 		"jump":  # up arrow leaving the ground
 			_poly(c, s, [[-0.17, 0.5], [0.17, 0.5], [0.17, -0.15], [-0.17, -0.15]], col)
 			_poly(c, s, [[-0.58, -0.1], [0.0, -0.85], [0.58, -0.1]], col)
 			draw_line(c + Vector2(-0.7, 0.82) * s, c + Vector2(0.7, 0.82) * s, col, w)
-		"crouch":  # squatting figure
-			draw_circle(c + Vector2(0.12, -0.6) * s, s * 0.2, col)
-			draw_polyline(_pts(c, s, [[0.02, -0.36], [-0.22, 0.18], [0.35, 0.22], [0.22, 0.72]]), col, w * 1.3)
-			draw_line(c + Vector2(-0.06, -0.14) * s, c + Vector2(0.45, -0.02) * s, col, w * 1.1)
-			draw_line(c + Vector2(-0.7, 0.82) * s, c + Vector2(0.7, 0.82) * s, col, w)
-		"reload":  # magazine inside a circular arrow
-			draw_arc(c, s * 0.88, -PI * 0.35, PI * 1.25, 32, col, w)
-			var tip := c + Vector2.from_angle(-PI * 0.35) * s * 0.88
-			draw_colored_polygon(PackedVector2Array([tip + Vector2(-0.38, -0.08) * s, tip + Vector2(0.1, -0.4) * s,
-					tip + Vector2(0.22, 0.18) * s]), col)
-			_poly(c, s, [[-0.3, -0.3], [0.1, -0.3], [0.32, 0.45], [-0.1, 0.45]], col)
-			_poly(c, s, [[-0.22, -0.36], [-0.12, -0.52], [0.0, -0.36]], col)  # a round on top
-		"swap":  # rifle with a two-way arrow
-			_poly(c, s, [[-0.95, -0.55], [-0.55, -0.62], [0.55, -0.62], [0.55, -0.68], [0.98, -0.68], [0.98, -0.5],
-					[0.55, -0.5], [0.4, -0.3], [-0.95, -0.3]], col)
-			_poly(c, s, [[0.12, -0.3], [0.3, -0.3], [0.36, -0.05], [0.18, -0.05]], col)
-			_poly(c, s, [[-0.42, -0.3], [-0.2, -0.3], [-0.32, -0.02], [-0.52, -0.02]], col)
-			draw_line(c + Vector2(-0.7, 0.5) * s, c + Vector2(0.7, 0.5) * s, col, w)
-			_poly(c, s, [[-0.95, 0.5], [-0.6, 0.25], [-0.6, 0.75]], col)
-			_poly(c, s, [[0.95, 0.5], [0.6, 0.25], [0.6, 0.75]], col)
+		"crouch":  # a figure down on one knee, with a down arrow
+			draw_circle(c + Vector2(0.2, -0.68) * s, s * 0.17, col)
+			draw_polyline(_pts(c, s, [[0.14, -0.46], [-0.08, 0.1]]), col, w * 1.4)  # back
+			draw_polyline(_pts(c, s, [[-0.08, 0.1], [0.36, 0.14], [0.38, 0.74]]), col, w * 1.3)  # front leg
+			draw_polyline(_pts(c, s, [[-0.08, 0.1], [-0.12, 0.72], [-0.5, 0.72]]), col, w * 1.3)  # knee down
+			draw_polyline(_pts(c, s, [[0.1, -0.36], [0.38, -0.08]]), col, w * 1.1)  # arm
+			_poly(c, s, [[-0.88, -0.2], [-0.48, -0.2], [-0.68, 0.12]], col)  # down arrow head
+			draw_line(c + Vector2(-0.68, -0.72) * s, c + Vector2(-0.68, -0.2) * s, col, w * 1.1)
+			draw_line(c + Vector2(-0.95, 0.86) * s, c + Vector2(0.75, 0.86) * s, col, w)
 		"grenade":  # body, lever and pin ring
 			draw_circle(c + Vector2(0, 0.22) * s, s * 0.58, col)
 			draw_line(c + Vector2(-0.5, 0.22) * s, c + Vector2(0.5, 0.22) * s, Color(0, 0, 0, 0.45), w * 0.8)
 			_poly(c, s, [[-0.22, -0.55], [0.22, -0.55], [0.22, -0.32], [-0.22, -0.32]], col)
 			draw_polyline(_pts(c, s, [[0.15, -0.55], [0.55, -0.82], [0.62, -0.1]]), col, w)
 			draw_arc(c + Vector2(-0.45, -0.68) * s, s * 0.2, 0.0, TAU, 20, col, w)
-		"melee":  # knife, drawn along the diagonal
-			draw_set_transform(c, -PI * 0.25)
-			_poly(Vector2.ZERO, s, [[-1.0, -0.15], [-0.35, -0.15], [-0.35, 0.15], [-1.0, 0.15]], col)
-			_poly(Vector2.ZERO, s, [[-0.32, -0.3], [-0.22, -0.3], [-0.22, 0.3], [-0.32, 0.3]], col)
-			_poly(Vector2.ZERO, s, [[-0.18, -0.14], [0.55, -0.14], [1.0, 0.1], [-0.18, 0.16]], col)
-			draw_set_transform(Vector2.ZERO)
 		"interact":  # arrow dropping into a tray: pick up
 			_poly(c, s, [[-0.15, -0.85], [0.15, -0.85], [0.15, -0.05], [-0.15, -0.05]], col)
 			_poly(c, s, [[-0.45, -0.12], [0.0, 0.38], [0.45, -0.12]], col)

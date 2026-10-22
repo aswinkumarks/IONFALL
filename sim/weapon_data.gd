@@ -30,6 +30,17 @@ enum FireMode { AUTO, SEMI, BURST, PROJECTILE }
 ## Pellet weapons (Scatter Gun): rays per shot, each with its own spread.
 @export var pellets: int = 1
 
+@export_group("Scope")
+## Aiming (right mouse button / the touch scope button) zooms the view by
+## this factor and tightens the spread; 1 = the weapon has no scope.
+@export var scope_zoom: float = 1.0
+## Spread while scoped, as a fraction of `spread_degrees`.
+@export_range(0.0, 1.0) var scope_spread: float = 0.4
+## Ground speed while scoped, as a fraction of walking speed (no sprint).
+@export_range(0.0, 1.0) var scope_move_speed: float = 0.7
+## A full-screen scope overlay instead of the crosshair (sniper).
+@export var scope_overlay: bool = false
+
 @export_group("Ammo")
 @export var mag_size: int = 36
 @export var reserve: int = 180

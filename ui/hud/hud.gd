@@ -43,6 +43,13 @@ var _team: int = GameMode.NO_TEAM
 var _team_scores := PackedInt32Array()
 var _pickup_timers: String = ""
 var _reload: float = 0.0  ## 0 = not reloading, else progress 0..1
+## Where the weapon chips and the ammo counter were drawn, for touch taps.
+var _slot_rects: Array[Rect2] = []
+var _ammo_rect := Rect2()
+var _fps: int = 0
+var _rtt_ms: int = -1  ## -1: no latency to show (offline, hosting)
+var _scope: float = 0.0  ## 0 = hip, 1 = fully scoped
+var _scope_overlay: bool = false
 var _score: int = 0
 var _respawn_ticks: int = 0
 var _timer_seconds: int = 0
@@ -174,6 +181,37 @@ func set_slots(names: PackedStringArray, current: int) -> void:
 	_slot = current
 
 
+## Touch: what a tap at `pos` on the weapon panel does: "slot:N" (switch),
+## "reload", or "" (not on the panel). Slightly generous hit areas.
+func touch_target(pos: Vector2) -> String:
+	if not _alive:
+		return ""
+	for i in _slot_rects.size():
+		if _slot_rects[i].grow(10.0 * _scale).has_point(pos):
+			return "slot:%d" % i
+	if _ammo_rect.has_point(pos):
+		return "reload"
+	return ""
+
+
+## FPS and latency for the top-left readout (settings hud/show_stats);
+## `rtt_ms` < 0 shows FPS only.
+func set_stats(fps: int, rtt_ms: int) -> void:
+	if fps != _fps or rtt_ms != _rtt_ms:
+		_fps = fps
+		_rtt_ms = rtt_ms
+		queue_redraw()
+
+
+## Scoped amount (FirstPersonView.scope_amount); `overlay` swaps the
+## crosshair for a full-screen scope (sniper).
+func set_scope(amount: float, overlay: bool) -> void:
+	if amount != _scope or overlay != _scope_overlay:
+		_scope = amount
+		_scope_overlay = overlay
+		queue_redraw()
+
+
 func update_state(s: PlayerSimState, weapon: WeaponData, score: int, ticks_to_respawn: int) -> void:
 	_shield_rising = s.shield > _shield + 0.01
 	_shield = s.shield
@@ -262,10 +300,13 @@ func _draw() -> void:
 	if _shield_flash > 0.0 and Settings.get_value("accessibility", "reduce_flashes") != true:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(UiStyle.SHIELD, _shield_flash * 0.16))
 	_draw_top()
+	_draw_stats()
 	if not _alive:
 		_draw_respawn(c)
 		_draw_caption()
 		return
+	if _scope_overlay:
+		_draw_scope(c)
 	_draw_indicators(c)
 	_draw_crosshair(c)
 	_draw_vitals()
@@ -308,14 +349,34 @@ func _draw_top() -> void:
 		_text(Vector2(x, y + 42 * s), _pickup_timers, 15, Color(1.0, 0.65, 0.3, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
 
 
+## Top-left: "60 FPS  42 ms", latency green / amber / red. On touch screens
+## it sits right of the menu and scores buttons.
+func _draw_stats() -> void:
+	if Settings.get_value("hud", "show_stats") != true or _fps <= 0:
+		return
+	var s := _scale
+	var at := Vector2(270.0, 50.0) if _touch else Vector2(16.0 * s, 26.0 * s)
+	var fps := tr("HUD_STATS_FPS") % _fps
+	var fps_col := UiStyle.TEXT if _fps >= 50 else (UiStyle.WARN if _fps >= 30 else UiStyle.DANGER)
+	_text(at, fps, 16, fps_col)
+	if _rtt_ms >= 0:
+		var x := at.x + UiStyle.font_display.get_string_size(fps, HORIZONTAL_ALIGNMENT_LEFT, -1, roundi(16 * s)).x + 14.0 * s
+		var col := UiStyle.GOOD if _rtt_ms < 80 else (UiStyle.WARN if _rtt_ms < 150 else UiStyle.DANGER)
+		_text(Vector2(x, at.y), tr("HUD_STATS_PING") % _rtt_ms, 16, col)
+
+
 func _draw_crosshair(c: Vector2) -> void:
 	var s := _scale
-	var gap := (7.0 + 12.0 * _bloom) * s
+	# Scoped: the lines close in (the spread is tighter); the scope overlay
+	# has its own reticle.
+	var tight := 1.0 - 0.6 * _scope
+	var gap := (7.0 + 12.0 * _bloom) * s * tight
 	var l := 9.0 * s
-	for d in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
-		draw_line(c + d * gap, c + d * (gap + l), Color(0, 0, 0, 0.45), 4.0 * s)
-		draw_line(c + d * gap, c + d * (gap + l), Color(1, 1, 1, 0.92), 2.0 * s)
-	draw_circle(c, 1.6 * s, Color(1, 1, 1, 0.9))
+	if not _scope_overlay:
+		for d in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+			draw_line(c + d * gap, c + d * (gap + l), Color(0, 0, 0, 0.45), 4.0 * s)
+			draw_line(c + d * gap, c + d * (gap + l), Color(1, 1, 1, 0.92), 2.0 * s)
+		draw_circle(c, 1.6 * s, Color(1, 1, 1, 0.9))
 	if _reload > 0.0:
 		draw_arc(c, 26 * s, -PI * 0.5, -PI * 0.5 + TAU, 40, Color(1, 1, 1, 0.15), 3.0 * s)
 		draw_arc(c, 26 * s, -PI * 0.5, -PI * 0.5 + TAU * _reload, 40, UiStyle.ACCENT, 3.0 * s)
@@ -328,6 +389,36 @@ func _draw_crosshair(c: Vector2) -> void:
 		var r1 := r0 + (12.0 if _hit_kill else 8.0) * s
 		for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
 			draw_line(c + d.normalized() * r0, c + d.normalized() * r1, hc, width)
+
+
+## Sniper scope: dark outside a round lens, a fine reticle with range
+## ticks, and a red centre dot.
+func _draw_scope(c: Vector2) -> void:
+	var s := _scale
+	var r := minf(size.x, size.y) * 0.46
+	var far := size.length()
+	var dark := Color(0.0, 0.0, 0.0, 0.94)
+	var n := 64
+	for i in n:
+		var a0 := TAU * i / n
+		var a1 := TAU * (i + 1) / n
+		var d0 := Vector2(cos(a0), sin(a0))
+		var d1 := Vector2(cos(a1), sin(a1))
+		draw_colored_polygon(PackedVector2Array([c + d0 * r, c + d0 * far, c + d1 * far, c + d1 * r]), dark)
+	# Lens edge: a soft dark rim.
+	for i in 4:
+		draw_arc(c, r - i * 5.0 * s, 0.0, TAU, 96, Color(0, 0, 0, 0.35 - i * 0.08), 6.0 * s)
+	var line := Color(0, 0, 0, 0.85)
+	var gap := 18.0 * s
+	for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+		draw_line(c + d * gap, c + d * r, line, 1.5 * s)
+		# Thick posts on the outer part of each line.
+		draw_line(c + d * r * 0.55, c + d * r, line, 6.0 * s)
+		for k in range(1, 5):
+			var at := c + d * (gap + k * r * 0.08)
+			var side := Vector2(d.y, d.x) * (6.0 if k % 2 == 0 else 3.5) * s
+			draw_line(at - side, at + side, line, 1.5 * s)
+	draw_circle(c, 2.2 * s, Color(UiStyle.DANGER, 0.95))
 
 
 func _draw_indicators(c: Vector2) -> void:
@@ -377,8 +468,11 @@ func _draw_weapon() -> void:
 	var chip_h := 24.0 * s
 	var x := right - _slots.size() * (chip_w + 6 * s) + 6 * s
 	var top := base - 132.0 * s
+	_slot_rects.clear()
+	_ammo_rect = Rect2(Vector2(right - 230 * s, base - 80 * s), Vector2(230 * s, 80 * s))
 	for i in _slots.size():
 		var r := Rect2(Vector2(x, top), Vector2(chip_w, chip_h))
+		_slot_rects.append(r)
 		var active := i == _slot
 		_skew_rect(r, Color(UiStyle.ACCENT, 0.85) if active else Color(0.02, 0.04, 0.07, 0.55))
 		_text(r.position + Vector2(10 * s, 18 * s), "%d  %s" % [i + 1, _slots[i]], 15,

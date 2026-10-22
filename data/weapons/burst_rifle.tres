@@ -19,4 +19,6 @@ precision = false
 spread_degrees = 0.25
 mag_size = 36
 reserve = 144
-
+scope_zoom = 1.8
+scope_spread = 0.3
+scope_move_speed = 0.65

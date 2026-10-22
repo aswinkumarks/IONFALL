@@ -20,6 +20,7 @@ TOUCH_JUMP,Jump
 TOUCH_CROUCH,Crouch
 TOUCH_RELOAD,Reload
 TOUCH_SWAP,Swap
+TOUCH_SCOPE,Scope
 MENU_NAME_PLACEHOLDER,Your name
 MENU_ADDRESS_PLACEHOLDER,Host address (e.g. 192.168.0.10) or invite code
 MENU_CONNECT,Connect
@@ -110,6 +111,9 @@ SETTING_HUD_SCALE,HUD and text scale
 SETTING_VIGNETTE,Low-health vignette
 SETTING_REDUCE_SHAKE,Reduce screen shake
 SETTING_CAPTIONS,Captions for important sounds
+SETTING_SHOW_STATS,Show FPS and latency
+HUD_STATS_FPS,%d FPS
+HUD_STATS_PING,%d ms
 ACTION_MOVE_FORWARD,Move forward
 ACTION_MOVE_BACK,Move back
 ACTION_MOVE_LEFT,Move left

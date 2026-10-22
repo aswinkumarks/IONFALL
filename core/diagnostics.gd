@@ -112,6 +112,7 @@ func toggle_overlay() -> void:
 ## "wait:3,click:MENU_JOIN,type:KFS7WQ,click:MENU_CONNECT,shot:/tmp/a.png"`.
 ## `click` presses the visible, enabled button whose label, key or `ui_key` meta
 ## matches, at its on-screen centre (`click:~text`: label contains text); `type` sends key events to the focused control;
+## `mouse:right:down` presses or releases a mouse button (in-game: aim, fire);
 ## `shot` saves the screen. Every step is logged ("UI ...").
 func _run_ui_steps(spec: String) -> void:
 	for step in spec.split(",", false):
@@ -155,6 +156,15 @@ func _run_ui_steps(spec: String) -> void:
 						k.pressed = pressed
 						Input.parse_input_event(k)
 						await get_tree().process_frame
+			"mouse":  # mouse:left|right:down|up at the screen centre (in-game buttons)
+				var parts := arg.split(":")
+				var e := InputEventMouseButton.new()
+				e.button_index = MOUSE_BUTTON_RIGHT if parts[0] == "right" else MOUSE_BUTTON_LEFT
+				e.pressed = parts.size() < 2 or parts[1] == "down"
+				e.position = get_viewport().get_visible_rect().size * 0.5
+				e.global_position = e.position
+				Input.parse_input_event(e)
+				Platform.perf_log("UI mouse %s" % arg)
 			"shot":
 				await RenderingServer.frame_post_draw
 				get_viewport().get_texture().get_image().save_png(arg)

@@ -25,3 +25,6 @@ pellets = 10
 mag_size = 6
 reserve = 24
 reload_per_round = true
+scope_zoom = 1.2
+scope_spread = 0.7
+scope_move_speed = 0.8

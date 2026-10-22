@@ -14,6 +14,9 @@ var look_pitch: float = 0.0
 var touch_move := Vector2.ZERO
 var touch_held: int = 0
 var enabled: bool = true
+## Mouse and touch look speed multiplier; the match lowers it while scoped
+## so the zoomed view turns at the same on-screen speed.
+var look_scale: float = 1.0
 ## Touch auto-fire (AimAssist) holds the trigger; a burst weapon needs a
 ## press, so the rising edge presses too.
 var assist_fire: bool = false:
@@ -57,6 +60,16 @@ func reset_held() -> void:
 	touch_move = Vector2.ZERO
 	touch_held = 0
 	assist_fire = false
+
+
+## Switches to weapon `slot` on the next command (touch: tapping its chip).
+func select_slot(slot: int) -> void:
+	_slot_request = slot
+
+
+## Aim (scope) is held: right mouse button or the touch scope toggle.
+func aim_held() -> bool:
+	return enabled and (_mouse_aim or (touch_held & Held.AIM) != 0)
 
 
 ## Lets go of a held mouse button (all of them with the default), e.g. when
@@ -110,8 +123,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		var sens_x: float = Settings.get_value("input", "sensitivity_x")
 		var sens_y: float = Settings.get_value("input", "sensitivity_y")
 		var invert: float = -1.0 if Settings.get_value("input", "invert_y") else 1.0
-		add_look(-event.relative.x * MOUSE_RADIANS_PER_PIXEL * sens_x,
-				-event.relative.y * MOUSE_RADIANS_PER_PIXEL * sens_y * invert)
+		add_look(-event.relative.x * MOUSE_RADIANS_PER_PIXEL * sens_x * look_scale,
+				-event.relative.y * MOUSE_RADIANS_PER_PIXEL * sens_y * invert * look_scale)
 	elif event is InputEventMouseButton:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			if event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not Platform.is_mobile():

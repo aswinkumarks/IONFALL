@@ -28,6 +28,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int) -> void:
 	var wish_len := wish.length()
 	var wish_dir := wish / wish_len if wish_len > 0.001 else Vector3.ZERO
 	var crouch_held := cmd.is_held(Held.CROUCH)
+	var scoped := WeaponSim.is_scoped(s, cmd)
 	var jump_pressed := ActionInput.has(executed, PlayerCommand.Action.JUMP)
 
 	if jump_pressed:
@@ -36,7 +37,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int) -> void:
 		s.jump_buffer_ticks -= 1
 
 	if s.is_on_floor():
-		s.sprinting = cmd.is_held(Held.SPRINT) and mv.y > 0.5 and not crouch_held
+		s.sprinting = cmd.is_held(Held.SPRINT) and mv.y > 0.5 and not crouch_held and not scoped
 	elif mv.y <= 0.5:
 		s.sprinting = false
 
@@ -93,6 +94,8 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int) -> void:
 				max_speed = cfg.sprint_speed
 			elif s.stance == Stance.CROUCH:
 				max_speed = cfg.crouch_speed
+			if scoped:
+				max_speed = minf(max_speed, cfg.walk_speed * s.weapon().scope_move_speed)
 			_accelerate(s, wish_dir, max_speed * wish_len, cfg.ground_accel, dt)
 		Move.SLIDE:
 			s.velocity.y = 0.0

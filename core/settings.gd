@@ -43,6 +43,9 @@ const DEFAULTS := {
 		"touch_opacity": 0.8,
 		"keymap": {},  ## action -> physical keycode overrides
 	},
+	"hud": {
+		"show_stats": true,  ## FPS and latency in the top-left corner
+	},
 	"accessibility": {
 		"hud_scale": 1.0,
 		"reduce_screen_shake": false,

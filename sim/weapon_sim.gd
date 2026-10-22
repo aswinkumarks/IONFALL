@@ -83,7 +83,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 		s.burst_timer[w] -= 1
 		if s.burst_timer[w] <= 0:
 			if s.mag[w] > 0 and s.reload[w] == 0:
-				shots.append(_fire(p, w, data, match_seed))
+				shots.append(_fire(p, w, data, match_seed, is_scoped(s, cmd)))
 				s.burst_left[w] -= 1
 				s.burst_timer[w] = data.burst_spacing_ticks
 			else:
@@ -108,7 +108,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 		_start_reload(s, w, data)
 		return shots
 
-	shots.append(_fire(p, w, data, match_seed))
+	shots.append(_fire(p, w, data, match_seed, is_scoped(s, cmd)))
 	s.cooldown[w] = data.ticks_between_shots
 	if data.fire_mode == FireMode.BURST and data.burst_count > 1:
 		s.burst_left[w] = data.burst_count - 1
@@ -122,16 +122,30 @@ static func _start_reload(s: PlayerSimState, w: int, data: WeaponData) -> void:
 		s.burst_left[w] = 0
 
 
-static func _fire(p: SimPlayer, w: int, data: WeaponData, match_seed: int) -> Shot:
+## Scoped (PLAN §2.3): aim held with a scoped weapon that's up and not
+## reloading. Tighter spread, slower movement, no sprint.
+static func is_scoped(s: PlayerSimState, cmd: PlayerCommand) -> bool:
+	return cmd.is_held(PlayerCommand.Held.AIM) and can_scope(s)
+
+
+## Whether aiming would scope right now (also used by the view).
+static func can_scope(s: PlayerSimState) -> bool:
+	var data := s.weapon()
+	return s.alive and data != null and data.scope_zoom > 1.0 and s.switch_ticks == 0 \
+			and s.reload[s.weapon_slot] == 0 and s.move_state != PlayerSimState.Move.MANTLE
+
+
+static func _fire(p: SimPlayer, w: int, data: WeaponData, match_seed: int, scoped: bool = false) -> Shot:
 	var s := p.state
 	s.mag[w] -= 1
 	var aim := aim_direction(s.yaw, s.pitch)
 	var shot := _shot(p, data, aim)
+	var spread := data.spread_degrees * (data.scope_spread if scoped else 1.0)
 	for i in maxi(data.pellets, 1):
 		var seed_value := Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq, i])
 		if data.pellets <= 1:
 			seed_value = Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq])
-		shot.pellets.append(spread_direction(aim, data.spread_degrees, seed_value))
+		shot.pellets.append(spread_direction(aim, spread, seed_value))
 	shot.direction = shot.pellets[0]
 	return shot
 

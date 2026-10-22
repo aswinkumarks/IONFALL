@@ -13,6 +13,8 @@ const LOBBY := "res://ui/lobby/lobby.tscn"
 ## connection (the server times it out after 10 s).
 const RECONNECT_AFTER_MS := 5000
 const DEATH_CAM_SECONDS := 3.0
+## Touch auto-melee reach (the melee weapon reaches 2.2 m from the eye).
+const TOUCH_MELEE_RANGE := 2.0
 ## Clients from a lobby wait this long for the host's match to listen.
 const LOBBY_HANDOVER_SECONDS := 1.5
 ## Joining the match from the lobby is retried this often (the host's socket
@@ -22,6 +24,8 @@ const HANDOVER_ATTEMPTS := 5
 var config: MatchConfig
 var server: ServerSession  ## offline and host
 var client: ClientSession  ## client
+var _stats_at: float = 0.0  ## _time of the next FPS/latency refresh
+var _touch_melee_at: float = 0.0  ## no touch auto-melee press before this _time
 var input := InputAdapter.new()
 var view := FirstPersonView.new()
 var effects := Effects.new()
@@ -441,6 +445,8 @@ func _process(delta: float) -> void:
 	Diagnostics.time_section("visuals", t0)
 	t0 = Time.get_ticks_usec()
 	_update_aim_assist(delta)
+	_touch_melee()
+	_update_stats()
 	_update_banner()
 	_update_match_ui(delta)
 	Diagnostics.time_section("ui", t0)
@@ -497,6 +503,7 @@ func _render_host(delta: float) -> void:
 	var prev: PlayerSimState = _prev.get(me.net_id)
 	var from := prev if prev != null and prev.discontinuity_gen == s.discontinuity_gen else s
 	_ensure_arms()
+	_update_scope(s)
 	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw,
 			input.look_pitch, s, me.current_weapon(), delta)
 	var seen := {}
@@ -545,6 +552,49 @@ func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32
 	hud.set_pickup_timers(" · ".join(timers))
 
 
+## Touch has no melee button: holding fire on an enemy within arm's reach,
+## in front of us, melees instead.
+func _touch_melee() -> void:
+	var me := _local_player()
+	if not touch.visible or me == null or not me.state.alive or me.state.melee_cooldown > 0 \
+			or (input.touch_held & PlayerCommand.Held.FIRE) == 0 or _time < _touch_melee_at:
+		return
+	var eye := view.camera.global_position
+	var ahead := -view.camera.global_basis.z
+	var my_team := _team_of(local_id())
+	for id: int in _visuals:
+		var v: PlayerVisual = _visuals[id]
+		if not v.visible or (my_team != GameMode.NO_TEAM and _team_of(id) == my_team):
+			continue
+		var to := v.global_position + Vector3(0.0, 1.0, 0.0) - eye
+		if to.length() <= TOUCH_MELEE_RANGE and ahead.dot(to.normalized()) > 0.6:
+			input.press(PlayerCommand.Action.MELEE)
+			_touch_melee_at = _time + 0.3
+			return
+
+
+## The HUD's FPS and latency readout, refreshed twice a second.
+func _update_stats() -> void:
+	if _time < _stats_at:
+		return
+	_stats_at = _time + 0.5
+	var rtt := roundi(client.clock.rtt_ms) if client != null else -1
+	hud.set_stats(roundi(Engine.get_frames_per_second()), rtt)
+
+
+## Scope (PLAN §2.3): the sim tightens the spread while aim is held; the view
+## zooms, the HUD shows the scope and look slows down to match the zoom.
+func _update_scope(s: PlayerSimState) -> void:
+	if not s.alive:
+		touch.scope_on = false
+	var scoped := input.aim_held() and WeaponSim.can_scope(s)
+	view.set_scope(s.weapon() if scoped else null)
+	hud.set_scope(view.scope_amount, view.scope_overlay_visible())
+	var weapon := s.weapon()
+	var zoom := lerpf(1.0, weapon.scope_zoom, view.scope_amount) if weapon != null else 1.0
+	input.look_scale = 1.0 / maxf(zoom, 1.0)
+
+
 func _render_client(delta: float) -> void:
 	var me := client.pred
 	var s := me.state
@@ -552,6 +602,7 @@ func _render_client(delta: float) -> void:
 	var from := prev if prev != null and prev.discontinuity_gen == s.discontinuity_gen else s
 	var feet := from.position.lerp(s.position, client.alpha()) + client.correction_offset
 	_ensure_arms()
+	_update_scope(s)
 	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw, input.look_pitch, s, me.current_weapon(), delta)
 	var names := {}
 	for p in client.roster:
@@ -1021,6 +1072,7 @@ func _build_ui() -> void:
 	_results = MatchPanel.new()
 	layer.add_child(_results)
 	touch.input = input
+	touch.hud_target = hud.touch_target
 	layer.add_child(touch)
 	# Touch: hold to see the scoreboard (Tab on keyboards).
 	_scores_button = Button.new()

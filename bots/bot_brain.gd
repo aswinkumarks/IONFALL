@@ -37,6 +37,8 @@ const STUCK_CHECK_TICKS := 90
 const SPLASH_RANGE := Vector2(6.0, 30.0)
 const GRENADE_RANGE := Vector2(7.0, 18.0)
 const MELEE_RANGE := 1.8
+## Bots scope in (hold aim) at targets this far away or more.
+const SCOPE_RANGE := 10.0
 ## Out of combat, bots fetch power weapons and grenades this close.
 const POWER_FETCH_RANGE := 35.0
 const GRENADE_FETCH_RANGE := 15.0
@@ -181,6 +183,9 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 	_pitch += clampf(want_pitch - _pitch, -_max_turn, _max_turn)
 	if goal == Goal.ATTACK and target != null:
 		held = (held & ~Held.SPRINT) | _trigger(tick, p, target, want_yaw, want_pitch)
+		# Scope in for longer shots, like players do.
+		if p.state.position.distance_to(target.state.position) >= SCOPE_RANGE:
+			held |= Held.AIM
 	else:
 		_manage_weapons_out_of_combat(p)
 	c.set_look(_yaw, _pitch)

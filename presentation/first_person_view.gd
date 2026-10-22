@@ -8,7 +8,8 @@ extends Node3D
 ## walk bob, sprint pose, crouch/slide tilt, jump lift and landing dip,
 ## spring recoil, reload and switch animations, muzzle flash with a short
 ## light, and camera FOV kicks for sprint and slide. "Reduce screen shake"
-## scales the camera-side effects down.
+## scales the camera-side effects down. Scoping zooms the camera and brings
+## the weapon to the centre (sniper: hidden behind the HUD's scope overlay).
 ##
 ## Arms: the player's own character cut down to its arms
 ## (CharacterRig.make_first_person), its head just behind the camera; every
@@ -30,6 +31,8 @@ const WEAPON_SCALE := 1.5
 const SUPPORT_ALONG := 0.55
 const SUPPORT_DROP := 0.035
 ## Melee bash and grenade throw motions (seconds).
+## Seconds to scope fully in or out.
+const SCOPE_TIME := 0.14
 const MELEE_TIME := 0.32
 const THROW_TIME := 0.45
 
@@ -60,6 +63,11 @@ var _pose := Vector3.ZERO  ## smoothed [sprint, crouch/slide, reload/switch] ble
 var _cam_dip: float = 0.0
 var _melee_t: float = 0.0  ## time left in the melee bash
 var _throw_t: float = 0.0  ## time left in the throw dip
+## 0 = hip, 1 = fully scoped; eases with SCOPE_TIME.
+var scope_amount: float = 0.0
+var _scope_target: bool = false
+var _scope_zoom: float = 1.0
+var _scope_overlay: bool = false
 
 
 func _ready() -> void:
@@ -170,6 +178,19 @@ func _show_weapon(id: StringName) -> void:
 	_muzzle.add_child(_flash)
 
 
+## Scoped this frame with `weapon` (null: not scoped). Call before update_view.
+func set_scope(weapon: WeaponData) -> void:
+	_scope_target = weapon != null
+	if weapon != null:
+		_scope_zoom = weapon.scope_zoom
+		_scope_overlay = weapon.scope_overlay
+
+
+## Whether the full-screen scope overlay should show (sniper, mostly in).
+func scope_overlay_visible() -> bool:
+	return _scope_overlay and scope_amount > 0.6
+
+
 func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: PlayerSimState, weapon: WeaponData, delta: float) -> void:
 	var shake: float = 0.3 if Settings.get_value("accessibility", "reduce_screen_shake") else 1.0
 	_eye_height = lerpf(_eye_height, eye_height, minf(1.0, delta * 14.0))
@@ -200,7 +221,9 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	elif s.sprinting:
 		fov_target = SPRINT_FOV
 	_fov_extra = lerpf(_fov_extra, fov_target * (0.5 + 0.5 * shake), minf(1.0, delta * 6.0))
-	camera.fov = _base_fov + _fov_extra
+	scope_amount = move_toward(scope_amount, 1.0 if _scope_target and s.alive else 0.0, delta / SCOPE_TIME)
+	var zoom := lerpf(1.0, _scope_zoom, scope_amount)
+	camera.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(_base_fov + _fov_extra) * 0.5) / zoom))
 
 	# Sway from look speed (the weapon lags the view).
 	var look_delta := Vector2(angle_difference(_last_yaw, yaw), pitch - _last_pitch)
@@ -232,6 +255,8 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	pos += Vector3(0.0, -0.16, 0.05) * _pose.z
 	pos += Vector3(0.0, -_land_dip * 0.4, 0.0)
 	pos.z += _recoil * 0.05
+	# Scoped: the weapon comes up to the centre, steadier.
+	pos = pos.lerp(Vector3(0.0, hip.y + 0.02, hip.z + 0.05), scope_amount * 0.85)
 	_melee_t = maxf(_melee_t - delta, 0.0)
 	_throw_t = maxf(_throw_t - delta, 0.0)
 	var bash := sin(PI * _melee_t / MELEE_TIME) if _melee_t > 0.0 else 0.0
@@ -250,9 +275,10 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	_flash_light.visible = _flash_time > 0.0 and Settings.video("lights") == true
 	if _muzzle != null:
 		_flash_light.global_position = _muzzle.global_position
-	_viewmodel.visible = s.alive
+	var behind_scope := scope_overlay_visible()
+	_viewmodel.visible = s.alive and not behind_scope
 	if _arms != null:
-		_arms.visible = s.alive and _models.has(_current_id)
+		_arms.visible = s.alive and _models.has(_current_id) and not behind_scope
 		if _arms.visible:
 			var weapon_node: Node3D = _models[_current_id]
 			var to_rig := _arms.global_transform.affine_inverse()
@@ -264,6 +290,7 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 
 ## Death cam (PLAN §2.6): from where we died, looking at the killer.
 func death_cam(from: Vector3, target: Vector3, delta: float) -> void:
+	scope_amount = 0.0
 	global_position = from
 	camera.position = Vector3.ZERO
 	camera.fov = _base_fov
