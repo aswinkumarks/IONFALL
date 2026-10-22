@@ -27,7 +27,7 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 | Min-spec Android phone | 👤 none on hand → no min-spec claims in the store listing (PLAN §3.10) |
 | Dedicated-GPU PC | 👤 none on hand → no high-refresh claims |
 | Version 1.0.0 (versionCode 1000000 + build) | ✅ `project.godot`; tag `v1.0.0-rc1` |
-| Desktop release builds (Linux, Windows) | ✅ CI builds and uploads them for `v*` tags (artifact `ionfall-<run>`); 👤 add the EOS secrets first so they include online play; 👤 decide on publishing a GitHub release |
+| Desktop release builds (Linux, Windows) | ✅ `tools/package_release.sh` → `build/release/ionfall-1.0.0-{linux,windows,server-linux,server-windows}.zip` + `SHA256SUMS`, with online play; Linux package smoke-tested. CI built everything for `v1.0.0-rc1` but its upload hit the Actions storage quota. 👤 decide where to publish (GitHub release, itch.io, …) |
 | Signed release AAB with all 16 KB checks | ✅ `tools/android_release.sh`: 1.0.0 (code 1000000), 56 MB, ELF + ZIP 16 KB checks pass, upload-key signature verified. Runtime check on a 16 KB device/emulator not repeated for this build |
 | App icon, adaptive icons, feature graphic, screenshots | ✅ `docs/release/art/`: icon 512, feature graphic 1024×500, four 1920×1080 screenshots (home, single player, match, lobby) |
 | Store listing text, content-rating answers | ✅ draft: `docs/release/store-listing.md` |
