@@ -20,14 +20,30 @@ func after_each() -> void:
 func test_layout_overrides_and_clamps() -> void:
 	var tc := TouchControls.new()
 	add_child_autofree(tc)
-	tc.apply_layout({"fire": [0.5, 0.5, 1.5], "jump": [2.0, -1.0, 9.0]})
+	tc.apply_layout({"v": TouchControls.LAYOUT_VERSION, "fire": [0.5, 0.5, 1.5], "jump": [2.0, -1.0, 9.0]})
 	var l := tc.layout()
 	assert_eq(l.fire, [0.5, 0.5, 1.5])
-	assert_almost_eq(l.jump[0], 0.97, 0.001, "kept on screen")
+	assert_almost_eq(l.jump[0], 1.7, 0.001, "kept on screen")
+	assert_almost_eq(l.jump[1], 0.04, 0.001, "kept on screen")
 	assert_almost_eq(l.jump[2], TouchControls.MAX_SCALE, 0.001, "size clamped")
 	assert_eq(l.reload[0], TouchControls.DEFAULT_BUTTONS[3].pos.x, "others keep their defaults")
 	tc.apply_layout({})
 	assert_eq(tc.layout().fire[2], 1.0, "reset")
+
+
+func test_old_layouts_are_replaced_by_the_cluster() -> void:
+	var tc := TouchControls.new()
+	add_child_autofree(tc)
+	tc.apply_layout({"fire": [0.86, 0.62, 1.2]})  # version 1: screen fractions
+	assert_eq(tc.layout().fire, [TouchControls.DEFAULT_BUTTONS[0].pos.x, TouchControls.DEFAULT_BUTTONS[0].pos.y, 1.0])
+
+
+func test_cluster_buttons_dont_overlap() -> void:
+	var b := TouchControls.DEFAULT_BUTTONS
+	for i in b.size():
+		for j in range(i + 1, b.size()):
+			var gap: float = (b[i].pos as Vector2).distance_to(b[j].pos) - b[i].radius - b[j].radius
+			assert_gt(gap, 0.02, "%s and %s apart" % [b[i].id, b[j].id])
 
 
 func test_editor_saves() -> void:
