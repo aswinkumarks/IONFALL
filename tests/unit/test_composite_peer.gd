@@ -139,3 +139,27 @@ func test_backed_up_stream_coalesces_then_resyncs_then_drops() -> void:
 	assert_eq(c.backlog_since_ms, 0)
 	t.free()
 	s.free()
+
+
+## Under TCP loss (PLAN §3.20 rule 4). Run inside a network namespace with
+## netem on loopback, e.g.:
+##   unshare -rn sh -c 'ip link set lo up; tc qdisc add dev lo root netem delay 40ms loss 2%;
+##       IONFALL_NETEM=1 godot --headless -s addons/gut/gut_cmdln.gd -gconfig=.gutconfig.json \
+##       -gselect=test_composite_peer.gd -gunit_test_name=tcp_loss -gexit'
+func test_browser_stays_playable_under_tcp_loss() -> void:
+	if OS.get_environment("IONFALL_NETEM") != "1":
+		pass_test("needs netem (see the comment above)")
+		return
+	var browser := _join(true, "Browser")
+	await wait_until(func() -> bool: return browser.is_predicting(), 10.0)
+	assert_true(browser.is_predicting())
+	await wait_seconds(1.0)
+	browser.reset_metrics()
+	await wait_seconds(10.0)
+	var c: ServerSession.Client = server.clients.values()[0] if not server.clients.is_empty() else null
+	assert_not_null(c, "still connected after 10 s of loss")
+	if c != null:
+		gut.p("corrections=%d visible=%d snaps=%d coalesced=%d synthesized=%d stalled=%d rtt=%.0f" % [
+				browser.corrections, browser.visible_corrections, browser.snaps, c.coalesced, c.synthesized, c.stalled,
+				browser.clock.rtt_ms])
+		assert_lt(browser.snaps, 3, "no more than the odd snap correction")
