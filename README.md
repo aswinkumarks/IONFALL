@@ -42,8 +42,10 @@ Everyone in a match needs the same version.
 | Keyboard & mouse | ✅ | ✅ | — | ✅ |
 | Touch controls | — | — | ✅ | — |
 
-Browsers can't open the network connections LAN and internet play use, so the web build is
-single player only. Browser multiplayer is planned after v1.0.
+Browsers can't open the UDP connections LAN and internet play use, so the hosted web build is
+single player. A prototype lets a browser join a desktop host on the same network: start the host
+with `--web-port 47711`, serve the web build over plain HTTP from your network (an HTTPS page such
+as GitHub Pages can't open `ws://`), then use Join Game in the browser with the host's address.
 
 ## The game
 

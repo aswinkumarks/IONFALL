@@ -196,7 +196,8 @@ func _build_home() -> void:
 	var solo := _card(cards, "MENU_SINGLE_PLAYER", "MENU_SINGLE_PLAYER_SUB", "solo", _show.bind(Page.SOLO))
 	_opener[Page.SOLO] = solo
 	_first[Page.HOME] = solo
-	# Web builds can't host or use ENet (PLAN §3.20); they get a WebSocket transport later.
+	# Web builds can't host (PLAN §3.20); they join a native host that also
+	# serves browsers over WebSocket.
 	if not Platform.is_web():
 		# Internet play (decision 0005) only where the EOS backend is
 		# available; elsewhere Host opens a LAN lobby directly.
@@ -204,9 +205,10 @@ func _build_home() -> void:
 				"host", _show.bind(Page.HOST) if Online.available() else _host_lobby.bind(false))
 		host.accent = UiStyle.GOOD
 		_opener[Page.HOST] = host
-		var join := _card(cards, "MENU_JOIN", "MENU_JOIN_SUB", "join", _show.bind(Page.JOIN))
-		join.accent = UiStyle.WARN
-		_opener[Page.JOIN] = join
+	var join := _card(cards, "MENU_JOIN", "MENU_JOIN_SUB_WEB" if Platform.is_web() else "MENU_JOIN_SUB", "join",
+			_show.bind(Page.JOIN))
+	join.accent = UiStyle.WARN
+	_opener[Page.JOIN] = join
 
 
 func _card(row: HBoxContainer, title: String, subtitle: String, icon: String, action: Callable) -> MenuTile:
@@ -373,7 +375,8 @@ func _build_join() -> void:
 	box.add_theme_constant_override("separation", 12)
 	direct.add_child(box)
 	box.add_child(MenuKit.section("MENU_JOIN_DIRECT"))
-	var hint := UiStyle.label("MENU_JOIN_DIRECT_HINT" if Online.available() else "MENU_JOIN_DIRECT_HINT_LAN", &"DimLabel")
+	var hint_key := "MENU_JOIN_DIRECT_HINT" if Online.available() else "MENU_JOIN_DIRECT_HINT_LAN"
+	var hint := UiStyle.label("MENU_JOIN_DIRECT_HINT_WEB" if Platform.is_web() else hint_key, &"DimLabel")
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(hint)
 	_address_edit = LineEdit.new()
@@ -383,6 +386,10 @@ func _build_join() -> void:
 	_address_edit.custom_minimum_size.y = 52
 	var last: Variant = Settings.get_value("profile", "last_address")
 	_address_edit.text = last if last is String else ""
+	if Platform.is_web() and _address_edit.text.is_empty():
+		# The page usually comes from the host itself.
+		var page_host: Variant = JavaScriptBridge.eval("location.hostname")
+		_address_edit.text = page_host if page_host is String else ""
 	_address_edit.text_submitted.connect(func(_t: String) -> void: _join_manual())
 	box.add_child(_address_edit)
 	var connect := UiStyle.menu_button("MENU_CONNECT", &"PrimaryButton")
@@ -567,6 +574,9 @@ func _try_join_link() -> bool:
 ## While the join screen is open, LAN beacons are heard and online games are
 ## listed every few seconds (PLAN §3.6).
 func _set_browsing(on: bool) -> void:
+	if Platform.is_web():
+		_games_label.text = tr("MENU_LAN_UNAVAILABLE_WEB")  # no UDP broadcast in browsers
+		return
 	if on and _browser == null:
 		_browser = Discovery.Browser.new()
 		_browser.changed.connect(_refresh_games)
@@ -678,7 +688,9 @@ func _join_manual() -> void:
 		if colon > 0 and address.count(":") == 1 and address.substr(colon + 1).is_valid_int():
 			config.port = clampi(address.substr(colon + 1).to_int(), 1, 65535)
 			address = address.left(colon)
-		if not address.is_valid_ip_address():
+		# Browsers resolve names themselves (the page's own host is prefilled).
+		var web_name := Platform.is_web() and not address.is_empty() and not " " in address
+		if not address.is_valid_ip_address() and not web_name:
 			_show_status(tr("MENU_BAD_ADDRESS"))
 			return
 		config.address = address

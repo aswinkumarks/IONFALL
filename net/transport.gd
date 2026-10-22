@@ -51,7 +51,12 @@ func _exit_tree() -> void:
 	get_tree().set_multiplayer(null, get_path())
 
 
-## LAN and dedicated servers: ENet over UDP.
+## LAN and dedicated servers: ENet over UDP and, when `web_port` > 0, also
+## WebSocket for browser clients on that TCP port (CompositePeer). -1: from
+## the `--web-port` argument (a prototype, off by default; PLAN §3.20).
+var web_port: int = -1
+
+
 func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_peers, CHANNELS)
@@ -62,10 +67,26 @@ func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 	# packets to ~1/32 once per second. Remove the bogus limit before anyone
 	# connects.
 	peer.host.bandwidth_limit(0, 0)
+	var ws_port := web_port if web_port >= 0 else Platform.get_user_arg("--web-port", "0").to_int()
+	if ws_port > 0:
+		var ws := WebSocketMultiplayerPeer.new()
+		err = ws.create_server(ws_port)
+		if err != OK:
+			peer.close()
+			return err
+		var adapters: Array[MultiplayerPeer] = [peer, ws]
+		return host_peer(CompositePeer.new(adapters))
 	return host_peer(peer)
 
 
+## Browsers have no UDP: they join a host's WebSocket port instead (the
+## default game port means its default web port).
 func join(address: String, port: int, hello: PackedByteArray) -> Error:
+	if OS.has_feature("web"):
+		var ws := WebSocketMultiplayerPeer.new()
+		var url := "ws://%s:%d" % [address, Protocol.DEFAULT_WEB_PORT if port == Protocol.DEFAULT_PORT else port]
+		var werr := ws.create_client(url)
+		return werr if werr != OK else join_peer(ws, hello)
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(address, port, CHANNELS)
 	if err != OK:
@@ -145,7 +166,10 @@ func _on_peer_authenticating(id: int) -> void:
 ## must not drop commands or snapshots. The config is also sent to the remote.
 ## Peers time out after 10 s of silence (PLAN §3.5.1).
 func _configure_peer(id: int) -> void:
-	var enet := api.multiplayer_peer as ENetMultiplayerPeer
+	var mp := api.multiplayer_peer
+	if mp is CompositePeer:
+		mp = (mp as CompositePeer).adapter_of(id)
+	var enet := mp as ENetMultiplayerPeer
 	if enet == null or enet.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 		return
 	var peer := enet.get_peer(id)

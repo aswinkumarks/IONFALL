@@ -49,6 +49,7 @@ NET_GAME_OF,%s's game
 MENU_GAMES_SEARCHING,Looking for games on this network and online…
 MENU_GAMES,Games found: %d
 MENU_LAN_UNAVAILABLE,"Can't search this network, enter an address or invite code"
+MENU_LAN_UNAVAILABLE_WEB,"Browsers can't search the network, enter the host's address"
 MENU_LAN_OTHER_VERSION,different version (%s)
 NET_UNREACHABLE,"Couldn't reach the host. Both devices must be on the same network; guest Wi-Fi and access-point isolation block LAN games."
 SCOREBOARD_TITLE,Scoreboard
@@ -138,7 +139,7 @@ MAP_SPIRE,Halcyon Spire
 MENU_MAP,"Map: %s  ›"
 MAP_TEST_ARENA,Test Arena
 MENU_TAGLINE,Arena combat · LAN & online · Cross-play
-MENU_TAGLINE_WEB,Arena combat · Practice against bots · Get the desktop or Android app for LAN and online play
+MENU_TAGLINE_WEB,Arena combat · Practice against bots · Join LAN games · Get the desktop or Android app to host and play online
 MENU_XP_PROGRESS,Level %d · %d / %d XP
 HUD_RESPAWN_LABEL,Respawning in
 PROFILE_TILE_VS_PLAYERS,Vs players K / D / A
@@ -241,6 +242,7 @@ MENU_HOST_SUB,Open a LAN or online lobby
 MENU_HOST_LAN_SUB,Players on the same Wi-Fi join you
 MENU_HOST_ONLINE_SUB,Friends anywhere join with an invite code
 MENU_JOIN_SUB,Find games nearby and online
+MENU_JOIN_SUB_WEB,Join a game hosted on your network
 MENU_HOST_HINT,You pick the map and mode in the lobby once players have joined.
 MENU_SECTION_MAP,Map
 MENU_SECTION_MODE,Mode
@@ -250,6 +252,7 @@ MENU_SOLO_HINT,You against %d bots
 MENU_JOIN_DIRECT,Join directly
 MENU_JOIN_DIRECT_HINT,"Enter the host's IP address (192.168.0.10) or a 6-letter invite code."
 MENU_JOIN_DIRECT_HINT_LAN,"Enter the host's IP address, e.g. 192.168.0.10."
+MENU_JOIN_DIRECT_HINT_WEB,"Enter the host's IP address, e.g. 192.168.0.10. The host must allow browser players."
 LOBBY_SHARE_CODE,Share the invite code with friends. They find the game under Join Game or type the code.
 LOBBY_LAN_HINT,Players on this network see the game under Join Game.
 LOBBY_LAN_CAPTION,Local network
