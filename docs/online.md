@@ -117,6 +117,20 @@ HOME=/tmp/eos-b XDG_DATA_HOME=/tmp/eos-b/data godot --path . -- --ui "wait:6,cli
 
 | Lobby match ends (`--time-limit 20`), LAN and online | results, then host and player back in the same lobby (online: same code); two LAN cycles in a row |
 
+**Phone (Mi 11X, release-template APK) with the laptop**, 2026-10-22, both
+on home Wi-Fi, driven by `--ui` through `launch_args.txt`:
+
+| Check | Result |
+|---|---|
+| Phone hosts online (cap 4), laptop joins from the online list | lobby → match → results → same lobby (code kept) |
+| Laptop hosts online, phone joins from its online list | lobby → match → results → same lobby |
+| Laptop host quits mid-match | phone: "Host disconnected", back to the menu |
+| Laptop host leaves the lobby | phone: "The host closed the lobby" |
+| Menu, lobby and game list at 2400×1080 | large cards fit; lobby lists only joined players |
+
+A 0–0 (or tied TDM) result at the time limit goes to sudden death for up
+to 2 minutes before the lobby returns; that is the normal tie rule.
+
 Dev flags: `--lobby [--online]` opens a hosted lobby, `--autostart N`
 starts it once N players are in; `--host` still goes straight to a match.
 

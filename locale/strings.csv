@@ -248,6 +248,5 @@ MENU_JOIN_DIRECT_HINT_LAN,"Enter the host's IP address, e.g. 192.168.0.10."
 LOBBY_SHARE_CODE,Share the invite code with friends. They find the game under Join Game or type the code.
 LOBBY_LAN_HINT,Players on this network see the game under Join Game.
 LOBBY_LAN_CAPTION,Local network
-LOBBY_OPEN_SLOT,Open slot
-LOBBY_HOST_BOTS_HINT,Bots fill the open slots. Start when everyone is in.
+LOBBY_HOST_BOTS_HINT,Bots fill the empty places. Start when everyone is in.
 MENU_GAMES_EMPTY,"No games yet. Ask a friend to host, or enter their address or invite code."

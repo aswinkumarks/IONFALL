@@ -137,7 +137,9 @@ func _refresh() -> void:
 	MenuKit.select_chip(_mode_chips, session.game_mode)
 	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(session.minutes))
 	_fill_slots()
-	_count.text = tr("LOBBY_PLAYERS") % [session.members.size(), session.max_players]
+	# Unknown until the host's first update arrives.
+	_count.text = tr("LOBBY_PLAYERS") % [session.members.size(), session.max_players] \
+			if not session.members.is_empty() else ""
 	_start_button.disabled = session.members.is_empty() or _starting
 	if _host and config.online:
 		Online.update_info(_online_info())
@@ -146,24 +148,19 @@ func _refresh() -> void:
 		_start.call_deferred()
 
 
-## One row per place: who is in it, then open places.
+## One row per player who has joined.
 func _fill_slots() -> void:
 	for child in _slots.get_children():
 		child.queue_free()
 	var me_seen := false
-	for i in session.max_players:
+	for i in session.members.size():
 		var slot := PanelContainer.new()
-		var filled := i < session.members.size()
-		slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85 if filled else 0.35),
-				Color(UiStyle.ACCENT, 0.25 if filled else 0.08), 1, UiStyle.SKEW, 12, 4))
+		slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85),
+				Color(UiStyle.ACCENT, 0.25), 1, UiStyle.SKEW, 12, 4))
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		slot.add_child(row)
 		_slots.add_child(slot)
-		if not filled:
-			row.add_child(UiStyle.label("LOBBY_OPEN_SLOT", &"DimLabel"))
-			slot.modulate.a = 0.6
-			continue
 		var m: Dictionary = session.members[i]
 		# Names aren't unique; the host is us when hosting, else our first match.
 		var me: bool = (_host and m.host) or (not _host and not m.host and not me_seen and m.name == config.player_name)
