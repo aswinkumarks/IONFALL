@@ -9,11 +9,19 @@ var port: int
 func before_each() -> void:
 	add_child_autofree(SimHarness.make_arena())
 	await wait_physics_frames(2)
-	port = 41000 + randi() % 8000
-	server = ServerSession.new()
-	server.transport.web_port = port + 1
-	add_child_autofree(server)
-	assert_eq(server.start(port, SimHarness.MOVEMENT, SimHarness.loadout(), TestArenaLayout.spawn_points()), OK)
+	# Random ports can still be taken (a TCP port in TIME_WAIT from an
+	# earlier test): try a few.
+	var err := FAILED
+	for attempt in 5:
+		port = 41000 + randi() % 8000
+		server = ServerSession.new()
+		server.transport.web_port = port + 1
+		add_child_autofree(server)
+		err = server.start(port, SimHarness.MOVEMENT, SimHarness.loadout(), TestArenaLayout.spawn_points())
+		if err == OK:
+			break
+		server.queue_free()
+	assert_eq(err, OK)
 	assert_true(server.transport.api.multiplayer_peer is CompositePeer)
 
 

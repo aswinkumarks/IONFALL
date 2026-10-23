@@ -141,15 +141,53 @@ func test_bots_fetch_power_weapons() -> void:
 func test_difficulty_changes_accuracy() -> void:
 	var acc := []
 	for level: int in [BotBrain.Difficulty.EASY, BotBrain.Difficulty.INSANE]:
-		for id in brains.keys():
-			world.remove_player(id)
+		# A fresh world per level, so one level's leftovers (respawn timers,
+		# items, projectiles) can't stall the next; run until there's a sample.
+		world.queue_free()
+		world = SimHarness.make_world(5)
+		world.lag_compensation = true
+		add_child_autofree(world)
+		await wait_physics_frames(1)
 		brains = {}
 		for i in 2:
 			var id := 2000 + level * 10 + i
 			world.add_player(id, Loadouts.ffa(), "Bot %d" % i, true)
 			brains[id] = BotBrain.new(world, nav, id, 31 + i, level)
-		var r := _run(3600)
-		acc.append(float(r.hits) / maxf(r.shots, 1))
-		gut.p("difficulty %d: shots %d hits %d accuracy %.0f%%" % [level, r.shots, r.hits, 100.0 * acc[-1]])
+		var shots := 0
+		var hits := 0
+		for attempt in 3:
+			var r := _run(3600)
+			shots += r.shots
+			hits += r.hits
+			if shots >= 40:
+				break
+		assert_gt(shots, 0, "difficulty %d bots fought (alive: %s)" % [level,
+				brains.keys().map(func(id: int) -> bool: return world.get_player(id).state.alive)])
+		acc.append(float(hits) / maxf(shots, 1))
+		gut.p("difficulty %d: shots %d hits %d accuracy %.0f%%" % [level, shots, hits, 100.0 * acc[-1]])
 	assert_gt(acc[1], acc[0], "Insane hits more often than Easy")
 	assert_lt(acc[1], 0.9, "Insane still misses")
+
+
+## Regression: a roaming bot that finished its path picked a new target but
+## kept the finished path, so it never re-pathed and stood still for good.
+func test_roaming_bots_keep_moving() -> void:
+	for round in 4:
+		for id in brains.keys():
+			world.remove_player(id)
+		brains = {}
+		for i in 2:
+			var id := 3000 + round * 10 + i
+			world.add_player(id, Loadouts.ffa(), "Bot %d" % i, true)
+			brains[id] = BotBrain.new(world, nav, id, 51 + round * 7 + i)
+		var last := {}
+		for id in brains:
+			last[id] = world.get_player(id).state.position
+		for window in 6:  # 6 × 10 s
+			_run(600)
+			for id in brains:
+				var p := world.get_player(id)
+				if p.state.alive and brains[id].goal == BotBrain.Goal.ROAM:
+					assert_gt(p.state.position.distance_to(last[id]), 1.0,
+							"bot %d moved in 10 s of roaming (at %s)" % [id, p.state.position])
+				last[id] = p.state.position

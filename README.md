@@ -24,12 +24,12 @@ or play with friends over the local network or the internet. Phones and PCs play
 | Platform | How |
 |---|---|
 | **Web browser** | Open **https://aswinkumarks.github.io/IONFALL/play/**, click **Single Player → Start**, then click into the game to aim with the mouse. Desktop Chrome, Edge or Firefox recommended. |
-| **Windows 10/11** (64-bit) | Download [`ionfall-0.9.1-windows.zip`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9.1/ionfall-0.9.1-windows.zip), unzip, run `IONFALL.exe`. The build isn't code-signed, so SmartScreen may warn: **More info → Run anyway**. |
-| **Linux** (x86_64) | Download [`ionfall-0.9.1-linux.zip`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9.1/ionfall-0.9.1-linux.zip), unzip, run `./ionfall.x86_64`. |
-| **Android 10+** (64-bit) | Download [`ionfall-0.9.1-android-arm64.apk`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9.1/ionfall-0.9.1-android-arm64.apk) on the phone and open it (allow installs from your browser or file manager). A Google Play release is coming with v1.0. |
-| **Dedicated server** | [Linux](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9.1/ionfall-0.9.1-server-linux.zip) or [Windows](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9.1/ionfall-0.9.1-server-windows.zip) server for LAN matches of up to 16 players; see [docs/server.md](docs/server.md). |
+| **Windows 10/11** (64-bit) | From the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest), download `ionfall-<version>-windows.zip`, unzip, run `IONFALL.exe`. The build isn't code-signed, so SmartScreen may warn: **More info → Run anyway**. |
+| **Linux** (x86_64) | From the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest), download `ionfall-<version>-linux.zip`, unzip, run `./ionfall.x86_64`. |
+| **Android 10+** (64-bit) | On the phone, download `ionfall-<version>-android-arm64.apk` from the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest) and open it (allow installs from your browser or file manager). A Google Play release is coming with v1.0. |
+| **Dedicated server** | Linux or Windows server (`ionfall-<version>-server-*.zip` on the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest)) for LAN matches of up to 16 players; see [docs/server.md](docs/server.md). |
 
-Checksums are in [`SHA256SUMS`](https://github.com/aswinkumarks/IONFALL/releases/download/v0.9.1/SHA256SUMS).
+Checksums are in each release's `SHA256SUMS`.
 Everyone in a match needs the same version.
 
 ### What works where

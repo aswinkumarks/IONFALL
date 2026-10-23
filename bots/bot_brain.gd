@@ -165,7 +165,11 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 					_destination = Vector3.INF  # arrived
 			else:
 				if _path_goal == Vector3.INF or _path.is_empty() or _path_i >= _path.size():
+					# A new wander target: drop the finished path so _follow
+					# plans one (it re-paths only for an empty path or a goal
+					# that moved, and _path_goal is the goal it compares with).
 					_path_goal = _nav.random_point()
+					_path = []
 					_last_repath = -100000
 				move = _follow(tick, p, _path_goal)
 			held |= Held.SPRINT if move.length() > 0.5 else 0
