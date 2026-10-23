@@ -192,6 +192,9 @@ func scope_overlay_visible() -> bool:
 
 
 func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: PlayerSimState, weapon: WeaponData, delta: float) -> void:
+	# After a long frame (a hitch, the app resuming) the springs below would
+	# overshoot and blow up: step them at most 0.1 s at a time.
+	delta = minf(delta, 0.1)
 	var shake: float = 0.3 if Settings.get_value("accessibility", "reduce_screen_shake") else 1.0
 	_eye_height = lerpf(_eye_height, eye_height, minf(1.0, delta * 14.0))
 	# Landing: a dip proportional to the fall speed.
