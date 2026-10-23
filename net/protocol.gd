@@ -4,8 +4,10 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 7
+const VERSION := 8
 const MAGIC := 0x464E4F49  ## "IONF"
+## HELLO flags.
+const HELLO_SPECTATE := 1
 const DEFAULT_PORT := 47710
 const MAX_PEERS := 16
 
@@ -41,11 +43,12 @@ static func weapon_id(index: int) -> StringName:
 ## `token`: the reconnect token from an earlier WELCOME, or 0 for a new join.
 ## `character`, `color`: the player's cosmetic picks (CharacterRig.SELECTABLE,
 ## PlayerVisual.PALETTE indices).
+## `spectate`: watch the match without playing (no player, no commands).
 static func encode_hello(compat: String, build: String, uuid: String, player_name: String, token: int = 0,
-		character: int = 0, color: int = 0, primary: int = 0) -> PackedByteArray:
+		character: int = 0, color: int = 0, primary: int = 0, spectate: bool = false) -> PackedByteArray:
 	return Wire.Writer.new().u32(MAGIC).u16(VERSION).str8(compat).str8(build).str8(uuid) \
 			.str8(player_name.left(MAX_NAME_BYTES)).u32(token >> 32).u32(token & 0xFFFFFFFF).u8(character & 0xFF) \
-			.u8(color & 0xFF).u8(primary & 0xFF).data()
+			.u8(color & 0xFF).u8(primary & 0xFF).u8(HELLO_SPECTATE if spectate else 0).data()
 
 
 ## Returns {} if malformed.
@@ -59,6 +62,7 @@ static func decode_hello(data: PackedByteArray) -> Dictionary:
 	out["character"] = r.u8()
 	out["color"] = r.u8()
 	out["primary"] = r.u8()
+	out["spectate"] = (r.u8() & HELLO_SPECTATE) != 0
 	return out if r.ok and r.remaining() == 0 else {}
 
 

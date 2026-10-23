@@ -47,6 +47,7 @@ var _mode_chips: HBoxContainer
 var _solo_hint: Label
 var _duration_chips: HBoxContainer
 var _address_edit: LineEdit
+var _watch_toggle: CheckButton
 var _games_label: Label
 var _game_list: VBoxContainer
 var _join_status: Label
@@ -398,6 +399,12 @@ func _build_join() -> void:
 	connect.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	connect.pressed.connect(_join_manual)
 	box.add_child(connect)
+	# Spectate: games already playing are joined as a watcher.
+	_watch_toggle = CheckButton.new()
+	_watch_toggle.text = "MENU_JOIN_WATCH"
+	_watch_toggle.button_pressed = Platform.user_args.has("--spectate")
+	_watch_toggle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_watch_toggle)
 	_join_status = UiStyle.label("")
 	_join_status.add_theme_color_override("font_color", UiStyle.DANGER)
 	_join_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -634,6 +641,7 @@ func _refresh_games() -> void:
 			var config := _config(MatchConfig.Mode.JOIN)
 			config.address = address
 			config.port = port
+			config.spectate = _watch_toggle.button_pressed and not lobby
 			if Maps.has(map):
 				config.map = map
 			_go(LOBBY if lobby else MATCH, config))
@@ -649,6 +657,7 @@ func _refresh_games() -> void:
 			config.online = true
 			config.online_code = code
 			config.online_host = host_id
+			config.spectate = _watch_toggle.button_pressed and not lobby
 			if Maps.has(map):
 				config.map = map
 			_go(LOBBY if lobby else MATCH, config))
@@ -677,6 +686,7 @@ func _game_row(kind: String, title: String, mode: String, map: String, players: 
 ## host's lobby (or its match, if it already started).
 func _join_manual() -> void:
 	var config := _config(MatchConfig.Mode.JOIN)
+	config.spectate = _watch_toggle.button_pressed
 	var code := Online.parse_code(_address_edit.text)
 	if not code.is_empty() and Online.available():
 		config.online = true

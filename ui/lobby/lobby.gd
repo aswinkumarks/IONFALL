@@ -240,6 +240,7 @@ func _on_started(settings: Dictionary) -> void:
 	config.game_mode = settings.mode
 	config.minutes = settings.minutes
 	config.from_lobby = true
+	config.spectate = false  # lobby members play; spectating is for games already playing
 	_starting = true
 	_waiting.text = tr("LOADING")
 	if _host:

@@ -65,6 +65,7 @@ var _loadout_bar: HBoxContainer  ## primary choice while respawning (PLAN §2.6)
 var _pause_scores: MatchPanel
 ## Spectator mode: the player we watch (0 until one is picked).
 var _spec_target: int = 0
+var _spec_dead_since: Dictionary = {}  ## networked spectator: id -> server tick its death was seen
 var _results_until: float = 0.0
 ## Death cam (PLAN §2.6): {pos, killer, until} while active.
 var _death_cam: Dictionary = {}
@@ -137,6 +138,9 @@ func _ready() -> void:
 	_loadout = loadout
 	_spawns = spawns
 	if config.mode == MatchConfig.Mode.JOIN:
+		if config.spectate:
+			input.enabled = false
+			touch.visible = false
 		if config.online:
 			_info.text = tr("NET_ONLINE_JOINING") % config.online_code
 		if not await _start_client(config.reconnect_token):
@@ -230,6 +234,7 @@ func _start_client(token: int) -> bool:
 	client.character = config.character
 	client.color = config.color
 	client.primary = config.primary
+	client.spectate = config.spectate
 	client.uuid = MatchConfig.profile_uuid()
 	client.reconnect_token = token
 	client.input_source = _local_command
@@ -316,7 +321,7 @@ func _reconnect_step() -> void:
 	var token := client.reconnect_token
 	_start_client(token)
 	get_tree().create_timer(4.0).timeout.connect(func() -> void:
-		if _reconnect_until_ms != 0 and not _leaving and not client.is_predicting():
+		if _reconnect_until_ms != 0 and not _leaving and not client.is_live():
 			_reconnect_step())
 
 
@@ -368,10 +373,17 @@ func _apply_shadows(root: Node) -> void:
 func _ensure_arms() -> void:
 	var character := config.character
 	var pick := config.color
-	if spectating():  # the watched player's arms
+	if spectating() and server != null:  # the watched player's arms
 		var p: SimPlayer = server.world.players.get(_spec_target)
 		character = p.character if p != null else 0
 		pick = p.color if p != null else 0
+	elif spectating():
+		character = 0
+		pick = 0
+		for p in client.roster:
+			if p.id == _spec_target:
+				character = p.character
+				pick = p.color
 	var team := _team_of(local_id())
 	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(local_id(), pick)
 	if _arms_ready and color == _arms_color:
@@ -414,7 +426,7 @@ func local_id() -> int:
 
 
 func spectating() -> bool:
-	return server != null and server.local_spectating
+	return (server != null and server.local_spectating) or (client != null and client.spectate)
 
 
 # --- Simulation (host / offline) ---
@@ -469,6 +481,8 @@ func _process(delta: float) -> void:
 		_watch_connection()
 		if client.is_predicting():
 			_render_client(delta)
+		elif client.spectate and client.latest_snapshot != null:
+			_render_client_spectator(delta)
 	Diagnostics.time_section("visuals", t0)
 	t0 = Time.get_ticks_usec()
 	_update_aim_assist(delta)
@@ -505,7 +519,7 @@ func _update_aim_assist(delta: float) -> void:
 ## a warning, 10 s goes back to the menu. Not while reconnecting.
 func _watch_connection() -> void:
 	if _reconnect_until_ms != 0:
-		if client.is_predicting():
+		if client.is_live():
 			_reconnect_until_ms = 0
 			_info.text = ""
 		else:
@@ -518,7 +532,7 @@ func _watch_connection() -> void:
 		_fail("NET_HOST_LOST")
 	elif silent >= 3.0:
 		_info.text = tr("NET_HOST_PAUSED") if client.host_paused else tr("NET_HOST_NOT_RESPONDING")
-	elif client.is_predicting():
+	elif client.is_live() and not spectating():
 		_info.text = ""
 
 
@@ -600,9 +614,64 @@ func _render_spectator(delta: float) -> void:
 			"SPECTATE_HINT_TOUCH" if DisplayServer.is_touchscreen_available() else "SPECTATE_HINT")
 
 
+## A networked spectator (PLAN §2.7): the watched player as the server sent
+## them (interpolated like every remote player), seen from their eyes.
+func _render_client_spectator(delta: float) -> void:
+	var states := client.remote_states()
+	_remote_cache = states
+	if not states.has(_spec_target):
+		_cycle_spectator(1)
+		if not states.has(_spec_target):
+			return  # no one to watch yet
+	var s: PlayerSimState = states[_spec_target].copy()
+	var weapon: WeaponData = Weapons.at(s.weapons[0]) if Weapons.at(s.weapons[0]) != null else _loadout[0]
+	# Snapshots carry the held weapon but not its ammo: show a full magazine.
+	s.mag = PackedInt32Array([weapon.mag_size])
+	s.reserve = PackedInt32Array([0])
+	s.reload = PackedInt32Array([0])
+	_ensure_arms()
+	view.set_scope(null)
+	hud.set_scope(0.0, false)
+	view.update_view(s.position, MOVEMENT.eye_for(s.stance), s.yaw, s.pitch, s, weapon, delta)
+	var names := {}
+	for p in client.roster:
+		names[p.id] = p
+	var seen := {}
+	for id in states:
+		if id == _spec_target:
+			continue
+		var info: Dictionary = names.get(id, {"name": "?", "bot": false, "character": 0, "color": 0})
+		seen[id] = true
+		_visual_for(id, info.name, info.bot, info.character, info.color).update_from(null, states[id], 1.0, _time)
+		audio.update_player(id, states[id], false, _is_ally(id))
+	audio.update_player(_spec_target, s, true)
+	_prune_visuals(seen)
+	var ahead := (client.clock.server_time() - client.latest_snapshot.id) * Sim.TICK_DT
+	var rockets := []
+	for proj in client.projectiles:
+		rockets.append({"id": proj.id, "weapon": proj.weapon, "position": proj.position + proj.velocity * ahead,
+				"velocity": proj.velocity})
+	effects.sync_projectiles(rockets, 1.0)
+	pickups.sync(client.items, client.spot_ticks)
+	hud.set_slots(PackedStringArray([KillFeed.weapon_tag(weapon.id) if KillFeed.WEAPON_TAGS.has(weapon.id) \
+			else tr(weapon.display_name)]), 0)
+	# The respawn timer isn't sent: count from when the death was seen.
+	var now := client.clock.server_time()
+	var respawn := 0
+	if s.alive:
+		_spec_dead_since.erase(_spec_target)
+	else:
+		var since: float = _spec_dead_since.get_or_add(_spec_target, now)
+		respawn = ceili(GameMode.respawn_ticks(_game_mode()) - (now - since))
+	hud.update_state(s, weapon, client.score_of(_spec_target), respawn)
+	_info.text = tr("SPECTATE_WATCHING") % _display_name(_spec_target) + "\n" + tr(
+			"SPECTATE_HINT_TOUCH" if DisplayServer.is_touchscreen_available() else "SPECTATE_HINT")
+
+
 ## Spectator mode: watch the next (`step` 1) or previous (-1) combatant.
 func _cycle_spectator(step: int) -> void:
-	var ids: Array = server.world.players.keys()
+	var ids: Array = server.world.players.keys() if server != null else \
+			(client.latest_snapshot.entities.keys() if client.latest_snapshot != null else [])
 	if ids.is_empty():
 		return
 	ids.sort()
