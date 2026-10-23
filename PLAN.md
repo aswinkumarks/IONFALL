@@ -2,7 +2,7 @@
 
 **Premise:** in orbit above a ruined Earth, the Ion Trials pit soldiers against each other in hard-light arenas aboard a research station. Combatants "fall" into each round as ion-charged teleports, which is also the in-game respawn effect.
 
-**Plan status:** revision 5 (2026-10-23): the owner dropped all further dedicated-server work (M7: `server.cfg`, rotation, admin console, Manager, systemd/Docker), our own hosted servers (O1–O4) and gamepad support; the existing LAN dedicated server ships as is. Revision 4 (2026-10-22): M0–M4 done; internet play (player-hosted over Epic Online Services), the multiplayer lobby and the menu and touch-control redesigns were added after M4 (§6 "Post-M4"); M5 slimmed to what v1.0 needs (§3.5.2, §6). Revision 3 addressed both Codex reviews: the original findings (C1–C2, H1–H19, M1–M17, L1–L3) and the re-review findings (NH1–NH14, NM1–NM10, NL1–NL2). Numbers marked *(provisional)* are starting points that get measured and fixed during the vertical slice (M1). Milestones have no time estimates until M1 is finished (§6).
+**Plan status:** revision 5 (2026-10-23): the owner dropped all further dedicated-server work (M7: `server.cfg`, rotation, admin console, Manager, systemd/Docker), our own hosted servers (O1–O4), gamepad support and wall-run; the existing LAN dedicated server ships as is. Revision 4 (2026-10-22): M0–M4 done; internet play (player-hosted over Epic Online Services), the multiplayer lobby and the menu and touch-control redesigns were added after M4 (§6 "Post-M4"); M5 slimmed to what v1.0 needs (§3.5.2, §6). Revision 3 addressed both Codex reviews: the original findings (C1–C2, H1–H19, M1–M17, L1–L3) and the re-review findings (NH1–NH14, NM1–NM10, NL1–NL2). Numbers marked *(provisional)* are starting points that get measured and fixed during the vertical slice (M1). Milestones have no time estimates until M1 is finished (§6).
 
 **Conventions:** all gameplay timings are defined in **integer ticks at 60 Hz**. Seconds shown next to them are derived for readability. Network conditions are always given as **RTT** (round-trip time).
 
@@ -19,7 +19,7 @@
 | Modes | FFA (internal MVP) → TDM (v1.0) → CTF, Co-op Waves (post-v1.0) |
 | Hosting | **Listen host**: PC up to 8 combatants, phone up to 4 *(provisional, raised only after the phone-host test passes)*. **Dedicated server** (Linux/Windows headless): 8 by default, up to 16 combatants. "Combatants" counts humans + bots |
 | Simulation | Authoritative **forward-simulated server** (the server never rolls back the world) + client prediction for the local player (§3.3). Changing this needs a formal architecture revision |
-| Movement | Sprint, slide, double-jump, mantle (wall-run post-v1.0). No portals/abilities. **Players pass through each other** (no player-player collision or separation push in v1.0, §3.2) |
+| Movement | Sprint, slide, double-jump, mantle (wall-run was dropped in revision 5). No portals/abilities. **Players pass through each other** (no player-player collision or separation push in v1.0, §3.2) |
 | Health | Shield + health, both regenerate (§2.2) |
 | Weapons | Loadout (primary + sidearm + grenades) + power weapons at fixed map spots (§2.3) |
 | Art | Stylized low-poly sci-fi with baked lighting; CC0-first assets under a written license policy (§4) |
@@ -42,7 +42,7 @@ Quake/Titanfall-inspired acceleration model. All values live in a `MovementConfi
 - **Mantle**: automatically climbs ledges up to ~1.8 m when holding forward + jump. Runs as a fixed-duration, tick-counted state with a server-validated target
 - Limited air control, coyote time 6 ticks (100 ms), jump buffer 6 ticks
 - Players don't collide with each other. The spawn system (§2.5) prevents stacking at spawn
-- Post-v1.0: wall-run, maybe grapple
+- No wall-run or grapple (wall-run was dropped in revision 5)
 
 ### 2.2 Health / shield
 | Stat | Value *(provisional)* |
@@ -698,7 +698,7 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 | ~~**M7**~~ | ~~Central server (LAN)~~ **Dropped in revision 5** | The deferred dedicated-server features (§3.5.2: `server.cfg`, rotation, standalone/managed modes, local admin console, log rotation, single-match capacity measurement); Manager, match list/create/join UI, port allocator, playlists, lifecycle protocol, restart backoff, admission by headroom; Manager capacity benchmark (§5) published in `docs/perf/` |
 | **Web** | Web browser client (post-v1.0, separately budgeted) | As in §3.20, starting with the composite-peer prototype with a real browser client (moved from M5). Internet play for web players over **WebRTC** (decision 0005); a native host then serves EOS and WebRTC peers at once |
 | ~~**O1–O4**~~ | ~~Internet play on hosted servers~~ **Dropped in revision 5** | Player-hosted internet play over EOS (Post-M4) covers internet play; §3.8 keeps the old design as a record |
-| Post-v1.0 | Expansion | CTF, Co-op Waves, wall-run, spectator mode, map 3+, Compatibility preset for non-Vulkan Android, more weapons/cosmetics |
+| Post-v1.0 | Expansion | Done: CTF, Co-op Waves, spectator mode (offline and network), map 3 (Vesper Foundry), Compatibility fallback for non-Vulkan Android, Flux SMG, Spacer character and colours. Wall-run was dropped |
 
 **Cut lines if the estimate after M1 is too large** (cut in this order): 4 bot difficulties → 2; touch layout editor; QR join code; map 2 (ship TDM on map 1); M7. *(Revision 4: all of these shipped except M7. Revision 5: M7 is dropped.)* The internal MVP (M2) is never cut. Browser work never blocks v1.0.
 
