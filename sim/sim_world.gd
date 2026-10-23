@@ -53,6 +53,12 @@ var items: Array[Item] = []
 var _held_spot: Dictionary = {}  ## net_id -> spot of the power weapon it holds
 var _next_item_id: int = 1
 
+## Capture the flag (PLAN §2.4), server only like pickups. One flag per team
+## at its base; kills then score for the killer only, captures for the team.
+var flags: Array[Flag] = []
+## TDM: a kill also scores for the killer's team. Off in CTF and co-op.
+var kills_score_for_team: bool = true
+
 var _events: Array[Dictionary] = []
 var _recent_deaths: Array = []  ## [Vector3, tick]
 var _damage_log: Dictionary = {}  ## victim id -> Array of [attacker id, amount, tick]
@@ -69,6 +75,19 @@ class Item:
 	var mag: int = 0
 	var reserve: int = 0
 	var despawn_tick: int = 0  ## 0 = stays until taken (spot items)
+
+
+## A team's flag: at its base, carried, or dropped (returns on its own at
+## `return_tick`).
+class Flag:
+	var team: int = 0
+	var base := Vector3.ZERO
+	var position := Vector3.ZERO
+	var carrier: int = 0  ## net id, 0 = none
+	var return_tick: int = 0  ## dropped: when it goes home by itself; 0 = at base or carried
+
+	func at_base() -> bool:
+		return carrier == 0 and return_tick == 0
 
 
 class Projectile:
@@ -127,6 +146,8 @@ func reset_match(seed_value: int) -> void:
 	_recent_deaths.clear()
 	team_scores = PackedInt32Array([0, 0])
 	_reset_pickups()
+	for f in flags:
+		_flag_home(f)
 	var ids := players.keys()
 	ids.sort()
 	for id in ids:
@@ -145,6 +166,7 @@ func remove_player(net_id: int) -> void:
 		return
 	if p.state.alive:
 		_drop_power_weapon(p)
+	_drop_flag(p)
 	players.erase(net_id)
 	scores.erase(net_id)
 	history.erase(net_id)
@@ -200,6 +222,8 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 	_step_projectiles()
 	if pickups_enabled:
 		_step_pickups(ids, interacting)
+	if not flags.is_empty():
+		_step_flags(ids)
 	for id in ids:
 		var fallen: SimPlayer = players[id]
 		if fallen.state.alive and fallen.state.position.y < KILL_Y:
@@ -448,6 +472,7 @@ func _damage(target: SimPlayer, attacker_id: int, amount: float, headshot: bool,
 func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -> void:
 	var s := victim.state
 	_drop_power_weapon(victim)
+	_drop_flag(victim)
 	s.alive = false
 	s.move_state = PlayerSimState.Move.DEAD
 	s.velocity = Vector3.ZERO
@@ -472,10 +497,11 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 		scores[victim.net_id] -= 1  # personal only; the team score is unchanged
 	elif team_kill:
 		scores[killer] -= 1
-		team_scores[killer_p.team] -= 1
+		if kills_score_for_team:
+			team_scores[killer_p.team] -= 1
 	elif scores.has(killer):
 		scores[killer] += 1
-		if teams_enabled and killer_p != null:
+		if teams_enabled and kills_score_for_team and killer_p != null:
 			team_scores[killer_p.team] += 1
 	var assists: Array[int] = []
 	var dealt := {}
@@ -629,6 +655,102 @@ func _drop_power_weapon(p: SimPlayer) -> void:
 	var held := p.state.weapon(0)
 	if held != null and held.is_power_weapon:
 		_drop_slot(p, 0)
+
+
+# --- Capture the flag (PLAN §2.4) ---
+
+const FLAG_RADIUS := 1.2  ## touching a flag: as close as a pickup
+const FLAG_RETURN_TICKS := 1800  ## a dropped flag goes home after 30 s
+const CAPTURE_POINTS := 5  ## personal score for a capture
+const RETURN_POINTS := 1
+
+
+## Puts team 0's flag at `bases[0]` and team 1's at `bases[1]`; [] for none.
+func configure_flags(bases: Array) -> void:
+	flags.clear()
+	for i in mini(bases.size(), 2):
+		var f := Flag.new()
+		f.team = i
+		f.base = bases[i]
+		_flag_home(f)
+		flags.append(f)
+
+
+func _flag_home(f: Flag) -> void:
+	f.position = f.base
+	f.carrier = 0
+	f.return_tick = 0
+
+
+## The flag `p` carries, or null.
+func flag_of(p_id: int) -> Flag:
+	for f in flags:
+		if f.carrier == p_id:
+			return f
+	return null
+
+
+## Touch rules, in flag order: the enemy takes a flag at its base or on the
+## ground; its own team returns it from the ground; a carrier at its own base
+## captures while its own flag is home.
+func _step_flags(ids: Array) -> void:
+	for f in flags:
+		if f.carrier != 0:
+			var c: SimPlayer = players.get(f.carrier)
+			if c == null:
+				_flag_home(f)
+				continue
+			if not c.state.alive:
+				_drop_flag(c)
+				continue
+			f.position = c.state.position
+			var home := flags[c.team] if c.team < flags.size() else null
+			if home != null and home.at_base() and _touching(c, home.base):
+				team_scores[c.team] += 1
+				scores[c.net_id] += CAPTURE_POINTS
+				_flag_home(f)
+				_emit("fc:%d:%d" % [f.team, tick], "flag", {"action": "capture", "team": f.team, "player": c.net_id,
+						"position": c.state.position})
+			continue
+		if f.return_tick > 0 and tick >= f.return_tick:
+			_flag_home(f)
+			_emit("fr:%d:%d" % [f.team, tick], "flag", {"action": "return", "team": f.team, "player": 0, "position": f.base})
+			continue
+		for id in ids:
+			var p: SimPlayer = players[id]
+			if not p.state.alive or not _touching(p, f.position):
+				continue
+			if p.team == f.team:
+				if not f.at_base():
+					_flag_home(f)
+					scores[id] += RETURN_POINTS
+					_emit("fr:%d:%d" % [f.team, tick], "flag", {"action": "return", "team": f.team, "player": id,
+							"position": f.base})
+					break
+			elif flag_of(id) == null:
+				f.carrier = id
+				f.return_tick = 0
+				p.state.spawn_protection_ticks = 0
+				_emit("ft:%d:%d" % [f.team, tick], "flag", {"action": "take", "team": f.team, "player": id,
+						"position": f.position})
+				break
+
+
+func _touching(p: SimPlayer, at: Vector3) -> bool:
+	var d := p.state.position - at
+	return Vector2(d.x, d.z).length() <= FLAG_RADIUS and absf(d.y) <= PICKUP_HEIGHT
+
+
+## Death or leaving: a carried flag falls where the carrier was.
+func _drop_flag(p: SimPlayer) -> void:
+	var f := flag_of(p.net_id)
+	if f == null:
+		return
+	var floor_hit := _ray(p.state.position + Vector3.UP * 0.5, p.state.position + Vector3.DOWN * 20.0)
+	f.carrier = 0
+	f.position = floor_hit.position if not floor_hit.is_empty() else f.base
+	f.return_tick = tick + FLAG_RETURN_TICKS
+	_emit("fd:%d:%d" % [f.team, tick], "flag", {"action": "drop", "team": f.team, "player": p.net_id, "position": f.position})
 
 
 ## Ticks until spot `i`'s next instance (0 while one exists).

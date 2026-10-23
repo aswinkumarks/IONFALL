@@ -5,9 +5,9 @@ extends RefCounted
 ## shows something it hasn't earned.
 
 ## Level needed for each PlayerVisual.PALETTE index (0 = auto).
-const COLOR_LEVELS := [1, 1, 1, 1, 1, 2, 4, 6, 8]
+const COLOR_LEVELS := [1, 1, 1, 1, 1, 2, 4, 6, 8, 10, 12, 15]
 ## Level needed for each CharacterRig.SELECTABLE entry.
-const CHARACTER_LEVELS := {"sentinel": 1, "armored": 2, "skinned": 3}
+const CHARACTER_LEVELS := {"sentinel": 1, "armored": 2, "skinned": 3, "astronaut": 5}
 
 
 static func level() -> int:

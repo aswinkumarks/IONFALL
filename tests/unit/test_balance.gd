@@ -64,3 +64,14 @@ func test_scatter_gun() -> void:
 	assert_false(Health.apply(s, w.pellets * w.damage, false, 1.0, false).killed)
 	assert_true(Health.apply(s, w.pellets * w.damage, false, 1.0, false).killed, "2 point-blank shots = 0.80 s")
 	assert_eq(w.ticks_between_shots, 48)
+
+
+func test_flux_smg() -> void:
+	var w: WeaponData = load("res://data/weapons/flux_smg.tres")
+	assert_eq(_ttk(w, false), 60, "16 body shots = 1.00 s up close")
+	assert_eq(_ttk(w, true), 48, "8 body + 5 head = 0.80 s")
+	assert_almost_eq(w.damage_at(12.0), 13.0, 0.01, "full damage to 12 m")
+	assert_almost_eq(w.damage_at(30.0), 13.0 * 0.45, 0.01, "45% from 30 m: a close-range gun")
+	assert_true(Loadouts.PRIMARIES.has(w), "a loadout primary")
+	assert_true(WeaponModels.has(w.id), "has a model")
+	assert_eq(Weapons.index_of(w.id), Weapons.SMG, "appended to the wire order")

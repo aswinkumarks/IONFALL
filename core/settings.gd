@@ -294,8 +294,10 @@ var _applying_preset: bool = false
 
 
 ## Phones start on Medium (Mi 11X budget), browsers on Low, desktops on High.
+## The Compatibility (OpenGL) renderer, used in browsers and as the fallback
+## on devices without Vulkan (usually older or low-end), starts on Low.
 func default_quality() -> String:
-	if Platform.is_web():
+	if Platform.is_web() or RenderingServer.get_current_rendering_method() == "gl_compatibility":
 		return "low"
 	return "medium" if Platform.is_mobile() else "high"
 

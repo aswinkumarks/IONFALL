@@ -30,6 +30,8 @@ var input := InputAdapter.new()
 var view := FirstPersonView.new()
 var effects := Effects.new()
 var pickups := PickupVisuals.new()
+var flag_visuals := FlagVisuals.new()
+var _flag_bases: Array = []  ## CTF: the map's flag bases
 var _aim_assist := AimAssist.new()
 var audio := GameAudio.new()
 var hud: Hud
@@ -105,6 +107,7 @@ func _ready() -> void:
 	var gameplay := Maps.gameplay(config.map)
 	add_child(gameplay)
 	pickups.spots = gameplay.pickup_spots()
+	_flag_bases = gameplay.flag_bases() if gameplay.has_method("flag_bases") else []
 	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
@@ -117,6 +120,7 @@ func _ready() -> void:
 	add_child(view)
 	add_child(effects)
 	add_child(pickups)
+	add_child(flag_visuals)
 	add_child(audio)
 	audio.listener = view.camera
 	_build_ui()
@@ -172,7 +176,8 @@ func _ready() -> void:
 			online_peer = hosted.peer
 			_online_code = Online.hosting_code
 			Online.update_info(info)
-		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots(), online_peer)
+		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots(), online_peer,
+				gameplay.flag_bases())
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
 			return
@@ -400,7 +405,7 @@ func _is_ally(id: int) -> bool:
 
 
 func _team_of(id: int) -> int:
-	if _game_mode() != GameMode.TDM:
+	if not GameMode.is_team_mode(_game_mode()):
 		return GameMode.NO_TEAM
 	if server != null:
 		var p: SimPlayer = server.world.players.get(id)
@@ -560,6 +565,8 @@ func _render_host(delta: float) -> void:
 	for i in world.pickup_spots.size():
 		spot_ticks.append(world.spot_ticks_left(i))
 	pickups.sync(world.items, spot_ticks)
+	if _game_mode() == GameMode.CTF:
+		flag_visuals.sync(world.flags, _flag_bases, _flag_carrier_at)
 	_update_pickup_hud(s, world.items, spot_ticks)
 	hud.update_state(s, me.current_weapon(), world.scores.get(me.net_id, 0), s.respawn_tick - world.tick)
 
@@ -774,6 +781,8 @@ func _render_client(delta: float) -> void:
 				"velocity": proj.velocity})
 	effects.sync_projectiles(rockets, 1.0)
 	pickups.sync(client.items, client.spot_ticks)
+	if _game_mode() == GameMode.CTF:
+		flag_visuals.sync(client.flags, _flag_bases, _flag_carrier_at)
 	_update_pickup_hud(s, client.items, client.spot_ticks)
 	var server_state := client.server_state if client.server_state != null else s
 	# Health, shield and death come from the server; movement and ammo are predicted.
@@ -912,15 +921,73 @@ func _vitals_of(id: int) -> Vector2:
 	return Vector2(st.shield, st.health) if st != null else Vector2.ZERO
 
 
+## Where a flag carrier is drawn: us at our view, others as rendered.
+func _flag_carrier_at(id: int) -> Vector3:
+	if id == local_id():
+		var me := _local_player()
+		return me.state.position if me != null else Vector3.INF
+	var v: PlayerVisual = _visuals.get(id)
+	return v.global_position if v != null else _position_of(id)
+
+
+## The mode's objective line (PLAN §2.4): CTF flag status, co-op wave.
+func _update_objective() -> void:
+	var mode := _game_mode()
+	if mode == GameMode.CTF:
+		var flags: Array = server.world.flags if server != null else client.flags
+		var my_team := _team_of(local_id())
+		if flags.size() < 2 or my_team > 1:
+			hud.set_objective("")
+			return
+		var own: Variant = flags[my_team]
+		var enemy: Variant = flags[1 - my_team]
+		if enemy.carrier == local_id():
+			hud.set_objective(tr("CTF_CARRYING"), GameMode.TEAM_COLORS[1 - my_team])
+		elif own.carrier != 0:
+			hud.set_objective(tr("CTF_OUR_FLAG_TAKEN") % _display_name(own.carrier), UiStyle.WARN)
+		elif _flag_dropped(own):
+			hud.set_objective(tr("CTF_OUR_FLAG_DROPPED") % ceili(_flag_return_ticks(own) / float(Sim.TICK_RATE)), UiStyle.WARN)
+		elif enemy.carrier != 0:
+			hud.set_objective(tr("CTF_WE_HAVE_FLAG") % _display_name(enemy.carrier), GameMode.TEAM_COLORS[my_team])
+		else:
+			hud.set_objective(tr("CTF_GOAL"), UiStyle.TEXT_DIM)
+	elif mode == GameMode.WAVES:
+		var w: Dictionary = {}
+		if server != null and server.waves != null:
+			w = {"wave": server.waves.wave, "fighting": server.waves.fighting, "left": server.waves.enemies_left(),
+					"next": server.waves.ticks_to_next()}
+		elif client != null:
+			w = client.wave
+		if w.is_empty():
+			hud.set_objective("")
+		elif w.fighting:
+			hud.set_objective(tr("WAVES_FIGHTING") % [w.wave, GameMode.WAVE_COUNT, w.left], UiStyle.WARN)
+		else:
+			hud.set_objective(tr("WAVES_NEXT") % [w.wave + 1, ceili(w.next / float(Sim.TICK_RATE))], UiStyle.ACCENT)
+	else:
+		hud.set_objective("")
+
+
+func _flag_dropped(f: Variant) -> bool:
+	return f.carrier == 0 and (f.return_tick > 0 if f is SimWorld.Flag else f.return_ticks > 0)
+
+
+func _flag_return_ticks(f: Variant) -> int:
+	return maxi(f.return_tick - server.world.tick, 0) if f is SimWorld.Flag else int(f.return_ticks)
+
+
 func _update_match_ui(delta: float) -> void:
 	hud.set_view(view.global_position, input.look_yaw)
 	var phase := server.phase if server != null else client.phase
 	var ends := server.phase_ends_tick if server != null else client.phase_ends_tick
 	var now := float(server.world.tick) if server != null else client.clock.server_time()
 	var playing := phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH
-	hud.set_timer(maxi(ceili((ends - now) / Sim.TICK_RATE), 0), playing)
+	# Co-op has no clock: the waves end it.
+	hud.set_timer(maxi(ceili((ends - now) / Sim.TICK_RATE), 0), playing and _game_mode() != GameMode.WAVES)
+	_update_objective()
 	var my_team := _team_of(local_id())
-	hud.set_teams(my_team, _team_scores() if my_team < 2 else PackedInt32Array())
+	# Co-op shows the wave instead (_update_objective).
+	hud.set_teams(my_team, _team_scores() if my_team < 2 and _game_mode() != GameMode.WAVES else PackedInt32Array())
 	var me := _local_player()
 	if me != null:
 		var names := PackedStringArray()
@@ -961,7 +1028,7 @@ func _update_match_ui(delta: float) -> void:
 			_results.footer.text = (_results.footer_extra + "\n" if not _results.footer_extra.is_empty() else "") \
 					+ tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
 	var subtitle := tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else ""
-	var team_scores := _team_scores() if _game_mode() == GameMode.TDM else PackedInt32Array()
+	var team_scores := _team_scores() if GameMode.is_team_mode(_game_mode()) else PackedInt32Array()
 	if Input.is_action_pressed("scoreboard") and not _results.visible and not _paused:
 		_scoreboard.show_scoreboard(_roster(), local_id(), subtitle, team_scores)
 	else:
@@ -1135,12 +1202,39 @@ func _handle_event(e: Dictionary) -> void:
 			elif _visuals.has(e.player):
 				effects.spawn_in(e.position, (_visuals[e.player] as PlayerVisual).color)
 				audio.play_at("spawn", e.position, "World", 1, -4.0)
+		"flag":
+			_on_flag_event(e, me)
+		"wave":
+			if e.action == "start":
+				_kill_feed.add_note(tr("WAVES_WAVE") % e.wave, tr("WAVES_INCOMING") % e.enemies, UiStyle.WARN)
+				audio.cue("countdown", tr("CAPTION_WAVE_START") % e.wave)
+			else:
+				_kill_feed.add_note(tr("WAVES_WAVE") % e.wave, tr("WAVES_CLEARED"), UiStyle.GOOD)
+				audio.cue("go", "CAPTION_WAVE_CLEARED")
 		"pickup":
 			effects.pickup_burst(e.position + Vector3(0.0, 0.6, 0.0), PickupVisuals.color_of(e.weapon))
 			if e.player == me:
 				audio.play_ui("pickup", -4.0)
 			else:
 				audio.play_at("pickup", e.position, "World", 1, -6.0)
+
+
+## CTF events: a kill-feed line, a caption and a cue for the ones about us.
+func _on_flag_event(e: Dictionary, me: int) -> void:
+	var team: int = e.team
+	var who := _display_name(e.player) if e.player != 0 else tr("CTF_NOBODY")
+	var mine := team == _team_of(me)
+	var keys := {"take": "CTF_FEED_TAKE", "drop": "CTF_FEED_DROP", "return": "CTF_FEED_RETURN", "capture": "CTF_FEED_CAPTURE"}
+	var what: String = tr(keys[e.action]) % tr(GameMode.TEAM_KEYS[team])
+	var carrier_team: int = 1 - team if e.action in ["take", "drop", "capture"] else team
+	_kill_feed.add_note(who, what, GameMode.TEAM_COLORS[carrier_team], e.player == me)
+	if e.action == "take":
+		audio.cue("shield_break", "CAPTION_OUR_FLAG_TAKEN" if mine else "CAPTION_FLAG_TAKEN")
+	elif e.action == "capture":
+		audio.cue("kill_confirm", "CAPTION_FLAG_LOST" if mine else "CAPTION_FLAG_CAPTURED")
+	elif e.action == "return":
+		audio.cue("pickup", "CAPTION_FLAG_RETURNED")
+	effects.pickup_burst(e.position + Vector3(0.0, 0.8, 0.0), GameMode.TEAM_COLORS[team])
 
 
 func _net_info() -> String:

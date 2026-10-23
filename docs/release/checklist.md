@@ -1,6 +1,6 @@
 # v1.0 release checklist (M5 + M6)
 
-Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
+Status as of 2026-10-23. ✅ done · ⏳ in progress · 👤 needs the owner
 (accounts, hardware or decisions only the owner can make).
 
 ## M5: server & online readiness
@@ -32,7 +32,8 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 | App icon, adaptive icons, feature graphic, screenshots | ✅ `docs/release/art/`: icon 512, feature graphic 1024×500, four 1920×1080 screenshots (home, single player, match, lobby) |
 | Store listing text, content-rating answers | ✅ draft: `docs/release/store-listing.md` |
 | Data flows review (Data Safety) | ✅ `docs/release/data-safety.md` |
-| Privacy policy | ✅ text: `docs/release/privacy-policy.md`; 👤 publish at a public URL (the repo is private) and fill in publisher/contact |
+| Privacy policy | ✅ text: `docs/release/privacy-policy.md`; 👤 fill in publisher/contact; the repo is public now, so it can then be published on the GitHub Pages site |
+| Credits for third-party assets (CC BY icons need visible credit) | ✅ Settings → About lists every asset group with its license |
 | Epic: developer terms reviewed, Epic named as processor | 👤 review Epic's terms; privacy policy and Data Safety already name Epic |
 | Name/trademark check for "IONFALL" (PLAN §8) | 👤 |
 | Play Console: app created, closed testing track (12 testers × 14 days if required), Data Safety form, content rating, listing | 👤 |
@@ -41,7 +42,7 @@ Status as of 2026-10-22. ✅ done · ⏳ in progress · 👤 needs the owner
 
 1. **Windows test:** the CI Windows build hosts and joins an internet game.
 2. **Privacy policy:** fill in publisher and contact in
-   `docs/release/privacy-policy.md` and publish it at a public URL.
+   `docs/release/privacy-policy.md`; it can then go on the public GitHub Pages site.
 3. **Epic terms** and a **name check** for "IONFALL".
 4. **Play Console:** create the app (`io.github.aswinkumarks.ionfall`),
    upload `build/android/ionfall.aab` to **closed testing**, fill in the

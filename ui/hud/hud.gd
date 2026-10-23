@@ -52,6 +52,8 @@ var _scope: float = 0.0  ## 0 = hip, 1 = fully scoped
 var _scope_overlay: bool = false
 var _score: int = 0
 var _respawn_ticks: int = 0
+var _objective: String = ""
+var _objective_color := Color.WHITE
 var _timer_seconds: int = 0
 var _timer_shown: bool = false
 var _caption_text: String = ""
@@ -174,6 +176,12 @@ func set_prompt(text: String) -> void:
 ## Power weapon spawn timers, one line.
 func set_pickup_timers(text: String) -> void:
 	_pickup_timers = text
+
+
+## The mode's objective line under the scores (CTF flags, co-op waves), or "".
+func set_objective(text: String, color: Color = UiStyle.TEXT) -> void:
+	_objective = text
+	_objective_color = color
 
 
 func set_slots(names: PackedStringArray, current: int) -> void:
@@ -347,6 +355,9 @@ func _draw_top() -> void:
 			HORIZONTAL_ALIGNMENT_CENTER)
 	if not _pickup_timers.is_empty():
 		_text(Vector2(x, y + 42 * s), _pickup_timers, 15, Color(1.0, 0.65, 0.3, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
+		y += 20 * s
+	if not _objective.is_empty():
+		_text(Vector2(x, y + 44 * s), _objective, 18, _objective_color, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 
 
 ## Top-left: "60 FPS  42 ms", latency green / amber / red. On touch screens
@@ -508,6 +519,9 @@ func _draw_weapon() -> void:
 func _draw_respawn(c: Vector2) -> void:
 	var s := _scale
 	var secs := ceili(_respawn_ticks / float(Sim.TICK_RATE))
+	if secs > 3600:  # co-op: back when the wave is cleared, not on a timer
+		_text(c + Vector2(0, 90 * s), tr("HUD_WAVE_WAIT").to_upper(), 20, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		return
 	_text(c + Vector2(0, 90 * s), tr("HUD_RESPAWN_LABEL").to_upper(), 20, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 	_text(c + Vector2(0, 150 * s), str(maxi(secs, 0)), 64, UiStyle.TEXT, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 
