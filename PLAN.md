@@ -19,7 +19,7 @@
 | Modes | FFA (internal MVP) → TDM (v1.0) → CTF, Co-op Waves (post-v1.0) |
 | Hosting | **Listen host**: PC up to 8 combatants, phone up to 4 *(provisional, raised only after the phone-host test passes)*. **Dedicated server** (Linux/Windows headless): 8 by default, up to 16 combatants. "Combatants" counts humans + bots |
 | Simulation | Authoritative **forward-simulated server** (the server never rolls back the world) + client prediction for the local player (§3.3). Changing this needs a formal architecture revision |
-| Movement | Sprint, slide, double-jump, mantle (wall-run was dropped in revision 5). No portals/abilities. **Players pass through each other** (no player-player collision or separation push in v1.0, §3.2) |
+| Movement | Sprint, slide, double-jump, mantle (wall-run was dropped in revision 5). No portals/abilities. **Players block each other** (added after 0.9.1, §3.2: the server pushes overlapping players apart; clients predict it against the players they see) |
 | Health | Shield + health, both regenerate (§2.2) |
 | Weapons | Loadout (primary + sidearm + grenades) + power weapons at fixed map spots (§2.3) |
 | Art | Stylized low-poly sci-fi with baked lighting; CC0-first assets under a written license policy (§4) |
@@ -41,7 +41,7 @@ Quake/Titanfall-inspired acceleration model. All values live in a `MovementConfi
 - **Double jump**: second jump in the air with a small directional redirect
 - **Mantle**: automatically climbs ledges up to ~1.8 m when holding forward + jump. Runs as a fixed-duration, tick-counted state with a server-validated target
 - Limited air control, coyote time 6 ticks (100 ms), jump buffer 6 ticks
-- Players don't collide with each other. The spawn system (§2.5) prevents stacking at spawn
+- Players block each other: each tick the server pushes overlapping living players apart, the one moving into the other taking the push (`SimWorld._separate_players`); a client predicts it against the remote players as rendered (`SimWorld.push_out_of`), so walking into someone standing still isn't corrected. The spawn system (§2.5) prevents stacking at spawn
 - No wall-run or grapple (wall-run was dropped in revision 5)
 
 ### 2.2 Health / shield
@@ -162,7 +162,7 @@ Two layers, separated from **M0** onward (not retrofitted later):
 
 ### 3.2 Simulation contract (what makes prediction replayable)
 - **Fixed tick** of 60 Hz. Tick IDs are `uint32`. No simulation code reads frame delta time
-- **Physics backend** (Godot Physics or Jolt) is chosen and pinned in M0. It is part of the compatibility hash (§3.14). Player movement only collides with **static world geometry** (players pass through each other), so replays depend only on the local player's own commands
+- **Physics backend** (Godot Physics or Jolt) is chosen and pinned in M0. It is part of the compatibility hash (§3.14). Player movement collides with **static world geometry**; player-player collision is a separate server step, which a client predicts only approximately (against remote players as rendered), so a replay of the local player alone matches exactly only when nobody is bumped
 - **`PlayerCommand`** (one per tick):
   - `tick`
   - `move` (2 × int8)

@@ -29,6 +29,14 @@ var _presses := PackedByteArray([0, 0, 0, 0, 0, 0, 0])
 var _mouse_fire: bool = false
 var _mouse_aim: bool = false
 var _slot_request: int = -1
+## The match wants the cursor free (choosing a gun while respawning): a
+## click doesn't recapture the mouse.
+var keep_cursor: bool = false
+## A slot request is sent with every command until the player holds that
+## slot (confirm_slot) or this time passes: one command alone was lost while
+## dead or respawning, or behind a melee.
+const SLOT_REQUEST_MS := 3000
+var _slot_request_until: int = 0
 ## Toggle modes (PLAN §3.16): the held state flips on each press.
 var _crouch_on: bool = false
 var _sprint_on: bool = false
@@ -44,6 +52,8 @@ func _ready() -> void:
 
 func press(action: int) -> void:
 	_presses[action] = (_presses[action] + 1) & 0xFF
+	if action == Action.SWITCH:
+		_slot_request = -1  # cycling overrides a pending slot request
 
 
 ## Adds a look delta in radians (used by touch look and fire fingers).
@@ -65,6 +75,13 @@ func reset_held() -> void:
 ## Switches to weapon `slot` on the next command (touch: tapping its chip).
 func select_slot(slot: int) -> void:
 	_slot_request = slot
+	_slot_request_until = Time.get_ticks_msec() + SLOT_REQUEST_MS
+
+
+## The weapon slot the player holds now: a pending request for it is done.
+func confirm_slot(slot: int) -> void:
+	if slot == _slot_request:
+		_slot_request = -1
 
 
 ## Aim (scope) is held: right mouse button or the touch scope toggle.
@@ -107,8 +124,9 @@ func build_command(tick: int) -> PlayerCommand:
 	if Input.is_action_pressed("jump"):
 		held |= Held.JUMP
 	c.held = held
+	if _slot_request >= 0 and Time.get_ticks_msec() > _slot_request_until:
+		_slot_request = -1
 	c.weapon_slot = _slot_request
-	_slot_request = -1
 	return c
 
 
@@ -127,7 +145,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				-event.relative.y * MOUSE_RADIANS_PER_PIXEL * sens_y * invert * look_scale)
 	elif event is InputEventMouseButton:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-			if event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not Platform.is_mobile():
+			if event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not Platform.is_mobile() and not keep_cursor:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			elif not event.pressed:
 				# The cursor was freed while a button was held (death, a
@@ -163,9 +181,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("switch_weapon"):
 		press(Action.SWITCH)
 	elif event.is_action_pressed("weapon_1"):
-		_slot_request = 0
+		select_slot(0)
 	elif event.is_action_pressed("weapon_2"):
-		_slot_request = 1
+		select_slot(1)
 	elif event.is_action_pressed("grenade"):
 		press(Action.GRENADE)
 	elif event.is_action_pressed("melee"):

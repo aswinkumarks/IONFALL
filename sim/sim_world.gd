@@ -8,7 +8,9 @@ extends Node3D
 ## the events returned by `drain_events()`; it never changes simulation state.
 
 const RESPAWN_TICKS := 180
-const SPAWN_PROTECTION_TICKS := 120
+const SPAWN_PROTECTION_TICKS := 150
+## Spawns this close to the best score are picked at random (PLAN §2.5).
+const SPAWN_SCORE_MARGIN := 6.0
 const RECENT_DEATH_TICKS := 300
 const ENVIRONMENT_CREDIT_TICKS := 300
 ## Assist (PLAN §2.4): at least this much damage within ASSIST_TICKS before
@@ -33,6 +35,9 @@ var scores: Dictionary = {}  ## net_id -> int
 ## TDM (PLAN §2.4): team scores; kills score for the killer's team.
 var team_scores := PackedInt32Array([0, 0])
 var respawn_ticks: int = RESPAWN_TICKS
+## Players block each other (PLAN §2.2): overlapping living players are
+## pushed apart every tick (_separate_players).
+var player_collision: bool = true
 ## Off outside the PLAYING phase (PLAN §3.4: no damage in countdown/lobby).
 var damage_enabled: bool = true
 ## Lag compensation (PLAN §3.3.4). Off in offline play.
@@ -219,6 +224,8 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 		for shot in PlayerSimulation.step(p, cmd, executed, match_seed):
 			p.state.spawn_protection_ticks = 0
 			_resolve_shot(p, shot)
+	if player_collision:
+		_separate_players(ids)
 	_step_projectiles()
 	if pickups_enabled:
 		_step_pickups(ids, interacting)
@@ -238,6 +245,81 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 				history[id] = HitboxHistory.new()
 			history[id].record(tick, s)
 	tick += 1
+
+
+## Player collision: two living players closer than their radii (and
+## overlapping in height) are pushed apart horizontally, mostly the one
+## moving into the other (half each when neither is), through
+## the world collision, and lose the velocity that pushed them together, so
+## walking into someone stops you. In id order, twice, so a crowd settles.
+## Clients don't predict it (they don't simulate other players): bumping
+## someone gives a small, smoothed correction.
+func _separate_players(ids: Array) -> void:
+	for sweep in 2:
+		for i in ids.size():
+			var a: SimPlayer = players[ids[i]]
+			if not _blocks(a):
+				continue
+			for j in range(i + 1, ids.size()):
+				var b: SimPlayer = players[ids[j]]
+				if not _blocks(b):
+					continue
+				var sa := a.state
+				var sb := b.state
+				var min_dist := a.config.capsule_radius + b.config.capsule_radius
+				var d := Vector3(sb.position.x - sa.position.x, 0.0, sb.position.z - sa.position.z)
+				var dist := d.length()
+				if dist >= min_dist:
+					continue
+				if sa.position.y >= sb.position.y + b.config.height_for(sb.stance) - 0.1 \
+						or sb.position.y >= sa.position.y + a.config.height_for(sa.stance) - 0.1:
+					continue  # one is on top of the other
+				var n := d / dist if dist > 0.0001 else Vector3.RIGHT
+				# Whoever moves into the other takes the push: walking into a
+				# player standing still doesn't shove them along.
+				var va := maxf(sa.velocity.dot(n), 0.0)
+				var vb := maxf(-sb.velocity.dot(n), 0.0)
+				var share_a := va / (va + vb) if va + vb > 0.01 else 0.5
+				var overlap := min_dist - dist
+				_shove(a, -n * overlap * share_a)
+				_shove(b, n * overlap * (1.0 - share_a))
+				sa.velocity -= n * va
+				sb.velocity += n * vb
+
+
+## Client prediction of player collision: push our player `p` out of
+## another player standing at `other` (a render state), all of the push on
+## us, and drop our velocity into them. Matches the server when the other
+## player isn't moving into us (it then puts the whole push on the mover).
+static func push_out_of(p: SimPlayer, other: PlayerSimState) -> void:
+	var s := p.state
+	if not s.alive or not other.alive or s.move_state == PlayerSimState.Move.MANTLE:
+		return
+	var min_dist := p.config.capsule_radius * 2.0
+	var d := Vector3(s.position.x - other.position.x, 0.0, s.position.z - other.position.z)
+	var dist := d.length()
+	if dist >= min_dist or dist < 0.0001:
+		return
+	if s.position.y >= other.position.y + p.config.height_for(other.stance) - 0.1 \
+			or other.position.y >= s.position.y + p.config.height_for(s.stance) - 0.1:
+		return
+	var n := d / dist
+	p.global_position = s.position
+	p.move_and_collide(n * (min_dist - dist))
+	s.position = p.global_position
+	var into := -s.velocity.dot(n)
+	if into > 0.0:
+		s.velocity += n * into
+
+
+func _blocks(p: SimPlayer) -> bool:
+	return p.state.alive and p.state.move_state != PlayerSimState.Move.MANTLE
+
+
+func _shove(p: SimPlayer, motion: Vector3) -> void:
+	p.global_position = p.state.position
+	p.move_and_collide(motion)
+	p.state.position = p.global_position
 
 
 func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
@@ -798,6 +880,7 @@ func _choose_spawn(for_id: int) -> Transform3D:
 		var pos := spawn_points[i].origin
 		var nearest := 50.0
 		var visible := 0
+		var close_visible := 0  ## enemies in sight within 20 m: an almost certain spawn kill
 		var occupied := false
 		for other: SimPlayer in players.values():
 			if other.net_id == for_id or not other.state.alive:
@@ -809,17 +892,29 @@ func _choose_spawn(for_id: int) -> Transform3D:
 			nearest = minf(nearest, d)
 			if _ray(pos + Vector3(0.0, 1.6, 0.0), other.eye_position()).is_empty():
 				visible += 1
+				close_visible += 1 if d < 20.0 else 0
 		var recent := 0
 		for d in _recent_deaths:
 			if pos.distance_to(d[0]) < 8.0:
 				recent += 1
-		var score := nearest - visible * 15.0 - recent * 10.0 - (100.0 if occupied else 0.0)
+		# Grenades and rockets in flight near the spot.
+		var danger := 0
+		for proj in projectiles:
+			if proj.owner_id != for_id and pos.distance_to(proj.position) < 8.0:
+				danger += 1
+		var score := nearest - visible * 15.0 - close_visible * 20.0 - recent * 10.0 - danger * 25.0 \
+				- (100.0 if occupied else 0.0)
 		if teams_enabled and me != null:
 			score += _team_spawn_bonus(me, pos)
 		scored.append([score, i])
 	scored.sort_custom(func(a: Array, b: Array) -> bool:
 		return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
-	var pick: int = scored[_rng.randi_range(0, mini(3, scored.size()) - 1)][1]
+	# Random among the best few, but only those nearly as good as the best:
+	# a much worse third choice (in an enemy's sight) caused spawn kills.
+	var pool := 1
+	while pool < mini(3, scored.size()) and scored[pool][0] >= scored[0][0] - SPAWN_SCORE_MARGIN:
+		pool += 1
+	var pick: int = scored[_rng.randi_range(0, pool - 1)][1]
 	return spawn_points[pick]
 
 

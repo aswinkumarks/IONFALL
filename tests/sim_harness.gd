@@ -50,3 +50,18 @@ static func place(p: SimPlayer, feet: Vector3, yaw: float) -> void:
 	s.move_state = PlayerSimState.Move.AIR
 	s.spawn_protection_ticks = 0
 	p.restore(s)
+
+
+## A UDP port in [lo, hi) that is free right now (checked by binding it), not
+## the LAN discovery port: random test ports used to collide now and then.
+static func free_udp_port(lo: int = 43000, hi: int = 48000) -> int:
+	for attempt in 50:
+		var port := lo + randi() % (hi - lo)
+		if port == Discovery.PORT:
+			continue
+		var probe := PacketPeerUDP.new()
+		var ok := probe.bind(port) == OK
+		probe.close()
+		if ok:
+			return port
+	return lo

@@ -121,3 +121,48 @@ func test_mantle_onto_1_8m_ledge() -> void:
 func test_3_2m_ledge_needs_double_jump() -> void:
 	assert_lt(_mantle_attempt(-5.0, false), 0.5, "single jump + mantle can't reach 3.2 m")
 	assert_almost_eq(_mantle_attempt(-5.0, true), 3.2, 0.1, "double jump + mantle can")
+
+
+## Walking up a ramp keeps (almost) the flat-ground horizontal speed; it
+## used to lose a slice of speed to the slope every tick.
+func test_ramps_are_as_fast_as_flat_ground() -> void:
+	_place_open(Vector3(0, 0.05, 16.5))
+	var speeds := {}
+	var t_flat := -1
+	var z_flat := 0.0
+	var t_ramp := -1
+	var z_ramp := 0.0
+	for i in 240:
+		_run(1, Vector2(0, 1))
+		var z := p.state.position.z
+		if t_flat < 0 and z < 15.5:
+			t_flat = world.tick
+			z_flat = z
+		if t_flat >= 0 and not speeds.has("flat") and z < 13.0:
+			speeds["flat"] = (z_flat - z) / ((world.tick - t_flat) * Sim.TICK_DT)
+		if t_ramp < 0 and z < 10.5:
+			t_ramp = world.tick
+			z_ramp = z
+		if t_ramp >= 0 and not speeds.has("ramp") and z < 6.5:
+			speeds["ramp"] = (z_ramp - z) / ((world.tick - t_ramp) * Sim.TICK_DT)
+			assert_gt(p.state.position.y, 0.5, "climbed onto the ramp")
+	gut.p("horizontal speed m/s: %s" % [speeds])
+	assert_true(speeds.has("flat") and speeds.has("ramp"), "walked both stretches")
+	if speeds.has("ramp"):
+		assert_gt(speeds.ramp, speeds.flat * 0.95, "ramp speed close to flat speed")
+
+
+## Players block each other: walking into a standing player stops at
+## their capsule instead of passing through.
+func test_players_cannot_walk_through_each_other() -> void:
+	var other := world.add_player(2, SimHarness.loadout(), "other", false)
+	var still := SimHarness.CommandScript.new()
+	input.yaw = 0.0
+	SimHarness.place(p, Vector3(0, 0.05, 16.5), 0.0)
+	SimHarness.place(other, Vector3(0, 0.05, 14.0), 0.0)
+	for i in 120:  # 2 s walking north (-Z) into the other player
+		world.step({1: input.cmd(world.tick, Vector2(0, 1)), 2: still.cmd(world.tick)})
+	var gap := Vector2(p.state.position.x - other.state.position.x, p.state.position.z - other.state.position.z).length()
+	assert_gt(p.state.position.z, other.state.position.z, "still on the near side")
+	assert_gt(gap, 0.75, "kept apart by their capsules (%.2f m)" % gap)
+	assert_almost_eq(other.state.position.z, 14.0, 0.05, "the player standing still isn't shoved along")

@@ -64,7 +64,7 @@ func _ready() -> void:
 	var music := AudioStreamPlayer.new()
 	music.stream = load("res://audio/generated/menu_theme.wav")
 	music.bus = "Music"
-	music.volume_db = -8.0
+	music.volume_db = -14.0  # a quiet bed under the menu
 	add_child(music)
 	music.play()
 	_version_label.text = BuildInfo.display_string()

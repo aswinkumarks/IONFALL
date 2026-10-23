@@ -548,6 +548,8 @@ func _render_host(delta: float) -> void:
 	var from := prev if prev != null and prev.discontinuity_gen == s.discontinuity_gen else s
 	_ensure_arms()
 	_update_scope(s)
+	if s.alive:
+		input.confirm_slot(s.weapon_slot)
 	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw,
 			input.look_pitch, s, me.current_weapon(), delta)
 	var seen := {}
@@ -759,6 +761,8 @@ func _render_client(delta: float) -> void:
 	var feet := from.position.lerp(s.position, client.alpha()) + client.correction_offset
 	_ensure_arms()
 	_update_scope(s)
+	if s.alive:
+		input.confirm_slot(s.weapon_slot)
 	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw, input.look_pitch, s, me.current_weapon(), delta)
 	var names := {}
 	for p in client.roster:
@@ -1012,6 +1016,7 @@ func _update_match_ui(delta: float) -> void:
 	else:
 		_death_label.visible = false
 	var choosing := dead and not _results.visible
+	input.keep_cursor = choosing
 	if choosing != _loadout_bar.visible:
 		_loadout_bar.visible = choosing
 		if not Platform.is_mobile() and not _paused:
@@ -1166,6 +1171,9 @@ func _handle_event(e: Dictionary) -> void:
 			if e.attacker == me and e.target != me:
 				hud.on_hit_marker(true, e.killed)
 				audio.play_ui("kill_confirm" if e.killed else "hit_marker", -2.0)
+				if view.meleeing():  # hits don't name the weapon; our bash is in flight
+					view.melee_impact()
+					audio.play_ui("melee_hit", 0.0)
 				_life_dealt += e.amount
 			if e.target == me:
 				_life_taken += e.amount

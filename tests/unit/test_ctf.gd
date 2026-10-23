@@ -191,7 +191,7 @@ func test_map_flag_bases_stand_on_the_floor() -> void:
 func test_a_joined_client_sees_the_flags() -> void:
 	var host_cfg := MatchConfig.make(MatchConfig.Mode.HOST, "Hoster", 1)
 	host_cfg.game_mode = GameMode.CTF
-	host_cfg.port = 43000 + randi() % 5000
+	host_cfg.port = SimHarness.free_udp_port()
 	MatchConfig.pending = host_cfg
 	var host: Node = preload("res://game/match.tscn").instantiate()
 	add_child_autofree(host)
