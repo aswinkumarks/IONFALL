@@ -21,6 +21,10 @@ var owner_state: PlayerSimState  ## null if the client has no player entity
 var projectiles: Array = []  ## of {id, owner, position, velocity}
 var items: Array = []  ## of {id, weapon (Weapons index, -1 grenade), position}
 var spot_ticks := PackedInt32Array()  ## per pickup spot: ticks until it respawns (0 = present)
+## CTF: per flag {team, carrier (0 = none), position, return_ticks (dropped: until it goes home)}.
+var flags: Array = []
+## Co-op waves: {wave, fighting, left (bots standing), next (ticks to the next wave)}; {} otherwise.
+var wave: Dictionary = {}
 var events: Array[Dictionary] = []
 
 
@@ -43,6 +47,13 @@ func encode(baseline: Dictionary, events_bytes: Array[PackedByteArray]) -> Packe
 	w.u8(spot_ticks.size())
 	for t in spot_ticks:
 		w.u16(mini(t, 65535))
+	w.u8(mini(flags.size(), 2))
+	for i in mini(flags.size(), 2):
+		var f: Dictionary = flags[i]
+		w.u8(f.team).u16(f.carrier).pos(f.position).u16(mini(f.return_ticks, 65535))
+	w.u8(1 if not wave.is_empty() else 0)
+	if not wave.is_empty():
+		w.u8(mini(wave.wave, 255)).u8(1 if wave.fighting else 0).u8(mini(wave.left, 255)).u16(mini(wave.next, 65535))
 	w.u8(events_bytes.size())
 	for b in events_bytes:
 		w.bytes(b)
@@ -97,6 +108,13 @@ static func decode(data: PackedByteArray, baselines: Dictionary) -> Snapshot:
 	s.spot_ticks.resize(ns)
 	for i in ns:
 		s.spot_ticks[i] = r.u16()
+	var nf := r.u8()
+	if nf > 2:
+		return null
+	for i in nf:
+		s.flags.append({"team": r.u8(), "carrier": r.u16(), "position": r.pos(), "return_ticks": r.u16()})
+	if r.u8() == 1:
+		s.wave = {"wave": r.u8(), "fighting": r.u8() == 1, "left": r.u8(), "next": r.u16()}
 	var ne := r.u8()
 	if ne > MAX_EVENTS:
 		return null

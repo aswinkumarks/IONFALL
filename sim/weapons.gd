@@ -13,6 +13,7 @@ const ALL: Array[WeaponData] = [
 	preload("res://data/weapons/scatter_gun.tres"),
 	preload("res://data/weapons/frag_grenade.tres"),
 	preload("res://data/weapons/melee.tres"),
+	preload("res://data/weapons/flux_smg.tres"),
 ]
 const PULSE := 0
 const ARC := 1
@@ -22,6 +23,7 @@ const RAIL := 4
 const SCATTER := 5
 const FRAG := 6
 const MELEE := 7
+const SMG := 8
 
 
 static func at(index: int) -> WeaponData:

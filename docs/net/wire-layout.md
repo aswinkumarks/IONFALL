@@ -17,6 +17,10 @@ diagnostics overlay, the dedicated server's status line and the test clients.
 | Projectile | owner 2, gen 1, action 4, pos 9, vel 6 | 22 |
 | Fire event (hitscan) | type 1, shooter 2, gen 1, action 4, weapon 1, flags 1, origin 9, end 9 | 28 |
 | Command packet (4 commands) | type, match_id, ack, interp, count + 4 × command | 91 |
+| Flag block (protocol 7, after the pickup spots) | count 1 + per flag (CTF: 2): team 1, carrier 2, pos 9, return ticks 2 | 1 (+28 in CTF) |
+| Wave block (protocol 7) | present 1 (+ co-op: wave 1, fighting 1, left 1, next 2) | 1 (+5 in co-op) |
+| Flag event (reliable) | type 1, action 1, team 1, player 2, tick 4, pos 9 | 18 |
+| Wave event (reliable) | type 1, action 1, wave 1, tick 4, enemies 1 | 8 |
 
 Deviations from the PLAN worksheet:
 - The owner block is 98 bytes, not ~48: positions, velocity and floor normal

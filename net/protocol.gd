@@ -4,8 +4,10 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 5
+const VERSION := 8
 const MAGIC := 0x464E4F49  ## "IONF"
+## HELLO flags.
+const HELLO_SPECTATE := 1
 const DEFAULT_PORT := 47710
 ## Browser clients (WebSocket, TCP) when a native host also serves them (§3.20).
 const DEFAULT_WEB_PORT := 47711
@@ -26,7 +28,7 @@ const CMD_REDUNDANCY := 4
 const MAX_NAME_BYTES := 48
 
 
-enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5, PICKUP = 6 }
+enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5, PICKUP = 6, FLAG = 7, WAVE = 8 }
 
 
 ## Weapon wire index (Weapons.ALL order).
@@ -43,11 +45,12 @@ static func weapon_id(index: int) -> StringName:
 ## `token`: the reconnect token from an earlier WELCOME, or 0 for a new join.
 ## `character`, `color`: the player's cosmetic picks (CharacterRig.SELECTABLE,
 ## PlayerVisual.PALETTE indices).
+## `spectate`: watch the match without playing (no player, no commands).
 static func encode_hello(compat: String, build: String, uuid: String, player_name: String, token: int = 0,
-		character: int = 0, color: int = 0, primary: int = 0) -> PackedByteArray:
+		character: int = 0, color: int = 0, primary: int = 0, spectate: bool = false) -> PackedByteArray:
 	return Wire.Writer.new().u32(MAGIC).u16(VERSION).str8(compat).str8(build).str8(uuid) \
 			.str8(player_name.left(MAX_NAME_BYTES)).u32(token >> 32).u32(token & 0xFFFFFFFF).u8(character & 0xFF) \
-			.u8(color & 0xFF).u8(primary & 0xFF).data()
+			.u8(color & 0xFF).u8(primary & 0xFF).u8(HELLO_SPECTATE if spectate else 0).data()
 
 
 ## Returns {} if malformed.
@@ -61,6 +64,7 @@ static func decode_hello(data: PackedByteArray) -> Dictionary:
 	out["character"] = r.u8()
 	out["color"] = r.u8()
 	out["primary"] = r.u8()
+	out["spectate"] = (r.u8() & HELLO_SPECTATE) != 0
 	return out if r.ok and r.remaining() == 0 else {}
 
 
@@ -185,7 +189,7 @@ static func decode_roster(data: PackedByteArray) -> Dictionary:
 	for i in n:
 		out.players.append({"id": r.u16(), "bot": r.u8() == 1, "character": r.u8(), "color": r.u8(), "score": r.i16(),
 				"team": r.u8(), "kills": r.u16(), "deaths": r.u16(), "assists": r.u16(), "name": r.str8()})
-	return out if r.ok and out.mode <= GameMode.TDM else {}
+	return out if r.ok and out.mode < GameMode.IDS.size() else {}
 
 
 ## End-of-match results (PLAN §2.6, §3.13). `result_id` makes applying them
@@ -291,6 +295,10 @@ static func decode_event_message(data: PackedByteArray) -> Dictionary:
 
 # --- Events: sim event dictionaries <-> wire ---
 
+## CTF flag events (SimWorld._step_flags) and their event id prefixes.
+const FLAG_ACTIONS := ["take", "drop", "return", "capture"]
+const FLAG_ID_PREFIXES := ["ft", "fd", "fr", "fc"]
+
 ## Writes a SimWorld event. Returns false for event types that aren't sent.
 static func write_event(w: Wire.Writer, e: Dictionary) -> bool:
 	match e.type:
@@ -324,6 +332,11 @@ static func write_event(w: Wire.Writer, e: Dictionary) -> bool:
 					.u8(255 if e.weapon == &"grenade" else weapon_index(e.weapon)).pos(e.position)
 		"spawn":
 			w.u8(Event.SPAWN).u16(e.player).u8(int(e.id.split(":")[2])).pos(e.position).u16(PlayerCommand.quantize_yaw(e.yaw))
+		"flag":
+			w.u8(Event.FLAG).u8(FLAG_ACTIONS.find(e.action)).u8(e.team).u16(e.player).u32(e.tick).pos(e.position)
+		"wave":
+			w.u8(Event.WAVE).u8(0 if e.action == "start" else 1).u8(mini(e.wave, 255)).u32(e.tick) \
+					.u8(mini(e.get("enemies", 0), 255))
 		_:
 			return false
 	return true
@@ -395,6 +408,22 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 			var life := r.u8()
 			return {"type": "spawn", "id": "s:%d:%d" % [player, life], "player": player, "position": r.pos(),
 					"yaw": r.u16() * TAU / 65536.0}
+		Event.FLAG:
+			var action := r.u8()
+			var team := r.u8()
+			var player := r.u16()
+			var tick := r.u32()
+			if action >= FLAG_ACTIONS.size() or team > 1:
+				r.ok = false
+				return {}
+			return {"type": "flag", "id": "%s:%d:%d" % [FLAG_ID_PREFIXES[action], team, tick], "action": FLAG_ACTIONS[action],
+					"team": team, "player": player, "tick": tick, "position": r.pos()}
+		Event.WAVE:
+			var cleared := r.u8() == 1
+			var wave := r.u8()
+			var tick := r.u32()
+			return {"type": "wave", "id": "w:%d:%d" % [wave, tick], "action": "cleared" if cleared else "start",
+					"wave": wave, "tick": tick, "enemies": r.u8()}
 	r.ok = false
 	return {}
 
@@ -419,7 +448,7 @@ static func decode_lobby(data: PackedByteArray) -> Dictionary:
 		return {}
 	for i in n:
 		out.members.append({"host": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES)})
-	return out if r.ok and r.remaining() == 0 and out.mode <= GameMode.TDM else {}
+	return out if r.ok and r.remaining() == 0 and out.mode < GameMode.IDS.size() else {}
 
 
 ## The host started the match: everyone loads `map_id` and joins it.
@@ -431,7 +460,7 @@ static func decode_start(data: PackedByteArray) -> Dictionary:
 	var r := Wire.Reader.new(data)
 	r.u8()
 	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8()}
-	return out if r.ok and r.remaining() == 0 and out.mode <= GameMode.TDM else {}
+	return out if r.ok and r.remaining() == 0 and out.mode < GameMode.IDS.size() else {}
 
 
 static func message_type(data: PackedByteArray) -> int:

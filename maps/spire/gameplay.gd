@@ -25,3 +25,7 @@ func spawn_points() -> Array[Transform3D]:
 
 func pickup_spots() -> Array:
 	return SpireLayout.pickup_spots()
+
+
+func flag_bases() -> Array:
+	return SpireLayout.flag_bases()

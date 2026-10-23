@@ -243,6 +243,7 @@ func _on_started(settings: Dictionary) -> void:
 	config.game_mode = settings.mode
 	config.minutes = settings.minutes
 	config.from_lobby = true
+	config.spectate = false  # lobby members play; spectating is for games already playing
 	_starting = true
 	_waiting.text = tr("LOADING")
 	if _host:
@@ -374,7 +375,7 @@ func _build_ui() -> void:
 	var options := VBoxContainer.new()
 	options.add_theme_constant_override("separation", 10)
 	settings.add_child(options)
-	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.NAME_KEYS,
+	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.CHIP_KEYS,
 			func(i: int) -> void: _apply(session.map_id, i, session.minutes))
 	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
 			func(i: int) -> void: _apply(session.map_id, session.game_mode, LobbySession.DURATIONS[i]))

@@ -78,12 +78,19 @@ tools/check_16kb.sh build/android/ionfall.aab
   Visual checks need a real device (Mi 11X), or possibly `-gpu host` from a local (non-VNC) desktop session.
 - Release builds ignore the `command_line_params` launch extra, so renderer overrides can't be passed at launch.
 
+## Compatibility (OpenGL) fallback on Android
+
+- `rendering/rendering_device/fallback_to_opengl3=true`: on a device without usable Vulkan, Godot switches the Mobile renderer to Compatibility (OpenGL ES 3.0) instead of failing to start. `Settings.default_quality()` then starts on **Low**, as in browsers.
+- Verified 2026-10-23 on the emulator with Vulkan disabled (`-feature -Vulkan -gpu swiftshader_indirect`): logcat shows "Your device does not seem to support Vulkan, switching to OpenGL 3" and the game runs on OpenGL ES 3.0. SwiftShader's uniform limits (261 fragment / 256 vertex vectors, close to the ES 3.0 minimum) are below what Godot's own scene, sky, canvas and particle shaders need, so the picture stays white there; lowering `limits/opengl/max_lights_per_object` doesn't change that.
+- The same renderer is exercised by the web build and by desktop runs with `--rendering-method gl_compatibility --rendering-driver opengl3` (both maps render at 60 fps on Iris Xe). A real non-Vulkan phone is still untested (no such device on hand).
+
 ## Known engine quirks
 
 - **Dedicated-server exports and CSV translations:** with the `customized` / `strip` export mode, Godot 4.7.2 logs "Failed loading resource: res://locale/strings.csv" (multi-locale CSV imports have no single import path). Server presets therefore exclude `locale/*`, and `project.godot` sets `locale/translations.dedicated_server` to an empty list.
 - **First import on a fresh checkout** logs `Cannot open file 'res://locale/strings.en.translation'`. `project.godot` references the translation that the CSV import generates (it's gitignored as a build artifact), so the very first project load can't find it yet. It's harmless: the import creates it, and every later load is clean.
 - **ENet server bandwidth bug:** `ENetMultiplayerPeer.create_server(port, peers, channels)` passes `channels` as the incoming bandwidth limit, so clients throttle their unreliable packets. `Transport.host()` calls `peer.host.bandwidth_limit(0, 0)` right after creating the server. See decision 0002.
 - **New `class_name` scripts** aren't visible to command-line runs until the global class cache is refreshed: run `godot --headless --import` after adding one.
+- **Automated runs over VNC with a free cursor** (spectator mode, menus): when the Godot window doesn't hold the pointer, Vulkan's vsync present can block for good and the game stops at 0% CPU. Pass `--disable-vsync` for such `--ui`/`--shot` runs; captured-mouse gameplay runs aren't affected. Also, stdout is block-buffered when redirected and lost when `timeout` kills Godot: print debug lines with `printerr`.
 - **Android launch arguments:** exported activities drop intent command-line extras, so device-only checks are started from the diagnostics overlay (F3 / three-finger tap), e.g. the replay check. Results go to `adb logcat -s godot`.
 
 ## Multiplayer testing

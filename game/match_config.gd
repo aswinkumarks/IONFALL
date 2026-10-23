@@ -37,6 +37,9 @@ var minutes: int = 0  ## match length; 0: the mode's default
 ## Started from a lobby (LobbySession): the host serves the lobby's online
 ## game again; clients give the host a moment to open the match.
 var from_lobby: bool = false
+## Watch instead of playing (spectator mode): OFFLINE, the bots only; JOIN,
+## as a network spectator (no player, every combatant seen remotely).
+var spectate: bool = false
 
 
 ## The rejoin offer if it is still open, else {}.

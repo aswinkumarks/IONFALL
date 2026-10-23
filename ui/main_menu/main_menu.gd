@@ -44,8 +44,10 @@ var _xp_bar: ProgressBar
 var _xp_label: Label
 var _map_tiles: Array[MenuTile] = []
 var _mode_chips: HBoxContainer
+var _solo_hint: Label
 var _duration_chips: HBoxContainer
 var _address_edit: LineEdit
+var _watch_toggle: CheckButton
 var _games_label: Label
 var _game_list: VBoxContainer
 var _join_status: Label
@@ -284,23 +286,31 @@ func _build_solo() -> void:
 	var options := HBoxContainer.new()
 	options.add_theme_constant_override("separation", 40)
 	column.add_child(options)
-	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.NAME_KEYS, c.game_mode,
+	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.CHIP_KEYS, c.game_mode,
 			func(i: int) -> void: _save_choice("mode", GameMode.IDS[i]))
 	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
 			LobbySession.DURATIONS.find(c.minutes),
 			func(i: int) -> void: _save_choice("minutes", LobbySession.DURATIONS[i]))
 	var bottom := HBoxContainer.new()
 	column.add_child(bottom)
-	var hint := UiStyle.label(tr("MENU_SOLO_HINT") % OFFLINE_DUMMIES, &"DimLabel")
+	var hint := UiStyle.label("", &"DimLabel")
+	_solo_hint = hint
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(hint)
+	# Spectator mode: the same match with bots only, watched from their eyes.
+	var watch := UiStyle.menu_button("MENU_WATCH", &"GhostButton")
+	watch.custom_minimum_size = Vector2(220, 64)
+	watch.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	watch.pressed.connect(_start_solo.bind(true))
+	bottom.add_child(watch)
 	var start := UiStyle.menu_button("MENU_START", &"PrimaryButton")
 	start.custom_minimum_size = Vector2(320, 64)
 	start.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	start.pressed.connect(_start_solo)
 	bottom.add_child(start)
 	_first[Page.SOLO] = start
+	_update_solo()
 
 
 ## A captioned chip row in `parent`.
@@ -396,6 +406,12 @@ func _build_join() -> void:
 	connect.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	connect.pressed.connect(_join_manual)
 	box.add_child(connect)
+	# Spectate: games already playing are joined as a watcher.
+	_watch_toggle = CheckButton.new()
+	_watch_toggle.text = "MENU_JOIN_WATCH"
+	_watch_toggle.button_pressed = Platform.user_args.has("--spectate")
+	_watch_toggle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_watch_toggle)
 	_join_status = UiStyle.label("")
 	_join_status.add_theme_color_override("font_color", UiStyle.DANGER)
 	_join_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -524,6 +540,7 @@ func _update_solo() -> void:
 	for i in _map_tiles.size():
 		_map_tiles[i].selected = Maps.PLAYABLE[i] == c.map
 	MenuKit.select_chip(_mode_chips, c.game_mode)
+	_solo_hint.text = tr("MENU_SOLO_HINT_WAVES") if c.game_mode == GameMode.WAVES else tr("MENU_SOLO_HINT") % OFFLINE_DUMMIES
 	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(c.minutes))
 
 
@@ -634,6 +651,7 @@ func _refresh_games() -> void:
 			var config := _config(MatchConfig.Mode.JOIN)
 			config.address = address
 			config.port = port
+			config.spectate = _watch_toggle.button_pressed and not lobby
 			if Maps.has(map):
 				config.map = map
 			_go(LOBBY if lobby else MATCH, config))
@@ -649,6 +667,7 @@ func _refresh_games() -> void:
 			config.online = true
 			config.online_code = code
 			config.online_host = host_id
+			config.spectate = _watch_toggle.button_pressed and not lobby
 			if Maps.has(map):
 				config.map = map
 			_go(LOBBY if lobby else MATCH, config))
@@ -677,6 +696,7 @@ func _game_row(kind: String, title: String, mode: String, map: String, players: 
 ## host's lobby (or its match, if it already started).
 func _join_manual() -> void:
 	var config := _config(MatchConfig.Mode.JOIN)
+	config.spectate = _watch_toggle.button_pressed
 	var code := Online.parse_code(_address_edit.text)
 	if not code.is_empty() and Online.available():
 		config.online = true
@@ -701,8 +721,11 @@ func _join_manual() -> void:
 
 # --- Starting ---
 
-func _start_solo() -> void:
-	_go(MATCH, _config(MatchConfig.Mode.OFFLINE, OFFLINE_DUMMIES))
+## `watch`: spectator mode, bots only (a bot fills our place).
+func _start_solo(watch: bool = false) -> void:
+	var config := _config(MatchConfig.Mode.OFFLINE, OFFLINE_DUMMIES)
+	config.spectate = watch or Platform.user_args.has("--spectate")
+	_go(MATCH, config)
 
 
 func _host_lobby(online: bool) -> void:

@@ -89,6 +89,18 @@ SETTINGS_TAB_VIDEO,Video
 SETTINGS_TAB_AUDIO,Audio
 SETTINGS_TAB_ACCESSIBILITY,Accessibility
 SETTINGS_TAB_KEYS,Keys
+SETTINGS_TAB_ABOUT,About
+ABOUT_VERSION,Version %s
+ABOUT_CREDITS,Credits
+ABOUT_CREDIT_ICONS,"Touch icons: fire, jump, grenade, interact"
+ABOUT_CREDIT_CHARACTERS,Characters and weapons
+ABOUT_CREDIT_ENVIRONMENT,"Station environment, astronauts, animations"
+ABOUT_CREDIT_SENTINEL,Cybernetic Sentinel character
+ABOUT_CREDIT_FONTS,Fonts
+ABOUT_CREDIT_ENGINE,Engine
+ABOUT_CREDIT_ONLINE,Online play
+ABOUT_LICENSE,"IONFALL is open source under the MIT License. Third-party assets keep their own licenses; the full list and license texts are in the source repository (art/ASSETS.csv, licenses/)."
+ABOUT_SOURCE,Source code and licenses
 SETTINGS_PRESS_KEY,Press a key… (Esc cancels)
 SETTINGS_RESET_KEYS,Reset to defaults
 SETTING_SENS_X,Look sensitivity (horizontal)
@@ -170,6 +182,8 @@ CHAR_VANGUARD,Vanguard
 CHAR_VANGUARD_DESC,"Heavy plated trooper with a gold visor, armour in your colour."
 CHAR_OPERATIVE,Operative
 CHAR_OPERATIVE_DESC,"Light flight-suit pilot, quick and low-profile."
+CHAR_SPACER,Spacer
+CHAR_SPACER_DESC,"A cheerful crew of station astronauts: frog, red panda, bee or flamingo."
 HUD_GRENADES,Frag ×%d
 TOUCH_GRENADE,Grenade
 TOUCH_MELEE,Melee
@@ -180,6 +194,35 @@ LOADOUT_PRIMARY,Next spawn:
 CUSTOMIZE_PRIMARY,Primary weapon
 MODE_FFA,Free-for-all
 MODE_TDM,Team Deathmatch
+MODE_CTF,Capture the Flag
+MODE_WAVES,Co-op Waves
+MODE_TDM_SHORT,Team DM
+MODE_CTF_SHORT,CTF
+CTF_GOAL,Take the enemy flag to your base
+CTF_CARRYING,You have the flag! Bring it to your base
+CTF_OUR_FLAG_TAKEN,%s has our flag
+CTF_OUR_FLAG_DROPPED,Our flag is down: returns in %d s
+CTF_WE_HAVE_FLAG,%s has their flag: escort them home
+CTF_NOBODY,The flag
+CTF_FEED_TAKE,took the %s flag
+CTF_FEED_DROP,dropped the %s flag
+CTF_FEED_RETURN,returned the %s flag
+CTF_FEED_CAPTURE,captured the %s flag
+CAPTION_FLAG_TAKEN,Enemy flag taken
+CAPTION_OUR_FLAG_TAKEN,Our flag was taken
+CAPTION_FLAG_CAPTURED,Flag captured
+CAPTION_FLAG_LOST,They captured our flag
+CAPTION_FLAG_RETURNED,Flag returned
+WAVES_WAVE,Wave %d
+WAVES_INCOMING,%d enemies incoming
+WAVES_CLEARED,cleared
+WAVES_FIGHTING,Wave %d of %d · %d enemies left
+WAVES_NEXT,Wave %d in %d s
+CAPTION_WAVE_START,Wave %d
+CAPTION_WAVE_CLEARED,Wave cleared
+HUD_WAVE_WAIT,Back when the wave is cleared
+WAVES_VICTORY,All %d waves cleared
+WAVES_DEFEAT,Overrun on wave %d
 TEAM_CYAN,Cyan
 TEAM_ORANGE,Orange
 RESULTS_TEAM_WINS,%s team wins
@@ -199,6 +242,9 @@ UNLOCK_COLOR_5,Crimson
 UNLOCK_COLOR_6,Gold
 UNLOCK_COLOR_7,Magenta
 UNLOCK_COLOR_8,Frost
+UNLOCK_COLOR_9,Ion teal
+UNLOCK_COLOR_10,Gunmetal
+UNLOCK_COLOR_11,Ember
 SETTING_AIM_ASSIST,Aim assist (touch)
 SETTING_AUTO_FIRE,Auto-fire (touch)
 SETTING_TOUCH_OPACITY,Touch button opacity
@@ -220,6 +266,11 @@ PAUSE_INVITE_CODE,Invite code
 NET_ONLINE_VERSION,That game runs a different version of IONFALL
 MENU_SINGLE_PLAYER,Single Player
 MENU_START,Start
+MENU_WATCH,Watch
+SPECTATE_WATCHING,Watching %s
+SPECTATE_HINT,"Click or Space: next player · Right click: previous · Esc: menu"
+SPECTATE_HINT_TOUCH,Tap to watch the next player
+MENU_JOIN_WATCH,Watch games already playing (spectate)
 MENU_HOST_LAN,Local network
 MENU_TAG_LAN,LAN
 MENU_TAG_ONLINE,Online
@@ -251,6 +302,7 @@ MENU_SECTION_MODE,Mode
 MENU_SECTION_DURATION,Match length
 MENU_MINUTES,%d min
 MENU_SOLO_HINT,You against %d bots
+MENU_SOLO_HINT_WAVES,"You against 10 waves of bots, each bigger and tougher"
 MENU_JOIN_DIRECT,Join directly
 MENU_JOIN_DIRECT_HINT,"Enter the host's IP address (192.168.0.10) or a 6-letter invite code."
 MENU_JOIN_DIRECT_HINT_LAN,"Enter the host's IP address, e.g. 192.168.0.10."
@@ -270,6 +322,7 @@ TAG_ARC,ARC
 TAG_BURST,BURST
 TAG_RAIL,RAIL
 TAG_SCATTER,SCATTER
+TAG_SMG,SMG
 TAG_FRAG,FRAG
 TAG_MELEE,MELEE
 TAG_FALL,FALL

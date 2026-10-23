@@ -10,7 +10,7 @@ static var style: String = "sentinel"
 ## AUTO_COLORS by player id. Sent as an index in the handshake and roster.
 const PALETTE := [Color(0, 0, 0, 0), Color(0.31, 0.89, 1.0), Color(1.0, 0.55, 0.2), Color(0.36, 0.95, 0.5),
 		Color(0.62, 0.45, 1.0), Color(1.0, 0.3, 0.35), Color(1.0, 0.85, 0.25), Color(1.0, 0.45, 0.8),
-		Color(0.92, 0.95, 1.0)]
+		Color(0.92, 0.95, 1.0), Color(0.2, 0.95, 0.8), Color(0.55, 0.6, 0.7), Color(1.0, 0.36, 0.1)]
 const AUTO_COLORS := [Color(0.55, 0.45, 1.0), Color(0.3, 0.85, 0.5), Color(0.95, 0.4, 0.6), Color(0.9, 0.85, 0.3)]
 const BOT_COLOR := Color(0.95, 0.5, 0.2)
 

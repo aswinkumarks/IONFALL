@@ -2,7 +2,7 @@
 
 **Premise:** in orbit above a ruined Earth, the Ion Trials pit soldiers against each other in hard-light arenas aboard a research station. Combatants "fall" into each round as ion-charged teleports, which is also the in-game respawn effect.
 
-**Plan status:** revision 4 (2026-10-22): M0–M4 done; internet play (player-hosted over Epic Online Services), the multiplayer lobby and the menu and touch-control redesigns were added after M4 (§6 "Post-M4"); M5 slimmed to what v1.0 needs (§3.5.2, §6). Revision 3 addressed both Codex reviews: the original findings (C1–C2, H1–H19, M1–M17, L1–L3) and the re-review findings (NH1–NH14, NM1–NM10, NL1–NL2). Numbers marked *(provisional)* are starting points that get measured and fixed during the vertical slice (M1). Milestones have no time estimates until M1 is finished (§6).
+**Plan status:** revision 5 (2026-10-23): the owner dropped all further dedicated-server work (M7: `server.cfg`, rotation, admin console, Manager, systemd/Docker), our own hosted servers (O1–O4) and gamepad support; the existing LAN dedicated server ships as is. Revision 4 (2026-10-22): M0–M4 done; internet play (player-hosted over Epic Online Services), the multiplayer lobby and the menu and touch-control redesigns were added after M4 (§6 "Post-M4"); M5 slimmed to what v1.0 needs (§3.5.2, §6). Revision 3 addressed both Codex reviews: the original findings (C1–C2, H1–H19, M1–M17, L1–L3) and the re-review findings (NH1–NH14, NM1–NM10, NL1–NL2). Numbers marked *(provisional)* are starting points that get measured and fixed during the vertical slice (M1). Milestones have no time estimates until M1 is finished (§6).
 
 **Conventions:** all gameplay timings are defined in **integer ticks at 60 Hz**. Seconds shown next to them are derived for readability. Network conditions are always given as **RTT** (round-trip time).
 
@@ -26,7 +26,7 @@
 | Test devices | **For now: the devices already on hand**: Xiaomi Mi 11X (Snapdragon 870 / Adreno 650, 120 Hz) + the dev Linux PC (+ a second device if available). A min-spec phone and an iGPU laptop are required before the public Play release (§3.10) |
 | Distribution | PC builds + Android now; Google Play later (signed AAB built from M0 onward) |
 | Persistence | Local profile: name, settings, stats, XP, cosmetic unlocks (§3.13) |
-| Controls | Keyboard/mouse and touch (with aim assist). Gamepad is deferred, with no cost promise; the input abstraction keeps it possible |
+| Controls | Keyboard/mouse and touch (with aim assist). Gamepad is not planned (dropped in revision 5) |
 | Language support | English at launch; localization-ready from the first UI (§3.16) |
 | Perf targets | Defined per device, preset and combatant count as frame-time percentiles (§3.10) |
 
@@ -62,6 +62,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 | Pulse Rifle | Primary | Auto, 6 between shots (600 RPM) | 18 | ×1.5 (health only) | 36 / 180 | 120 | 12 | 66 t = **1.10 s** / 54 t = **0.90 s** (6 body + 4 head) |
 | Burst Rifle | Primary | 3-round burst, 3 between rounds, 20-tick cycle | 18 per round | ×2 (health only) | 36 / 144 | 132 | 4 bursts | 66 t = **1.10 s** / 46 t = **0.77 s** (2 body bursts + 3 head rounds) |
 | Scatter Gun | Primary | Pump, 48 between shots | 10 pellets × 12 (≤ 5 m), falls off to 30% at 15 m | ×1 | 6 / 24 | 30 per shell | 2 point-blank | 48 t = **0.80 s** |
+| Flux SMG | Primary | Auto, 4 between shots (900 RPM) | 13; full to 12 m, 45% from 30 m | ×1.5 (health only) | 45 / 225 | 105 | 16 | 60 t = **1.00 s** / 48 t = **0.80 s** (8 body + 5 head) |
 | Mag Pistol | Sidearm | Semi, min 12 between shots | 25 | ×2 (health only) | 12 / 60 | 90 | 8 | 84 t = **1.40 s** / 60 t = **1.00 s** (4 body + 2 head) |
 | Rail Sniper | Power | Bolt, 72 between shots | 110 | ×2 (**precision**, through shield) | 4 / 8 | 150 | 2 body / **1 head** | 72 t = **1.20 s** / instant |
 | Arc Launcher | Power | Projectile 40 m/s, 60 between shots | 200 direct; splash ≤ 120, falls off to 0 at 4 m | — | 2 / 4 | 150 | 1 direct | — |
@@ -80,7 +81,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 - **Extensibility**: new *variants* of existing firing types (hitscan auto/burst/semi, pellet, projectile) need only data plus a model. A genuinely new mechanic needs a checklist: sim state, prediction, replication, hit validation, presentation, audio, bot usage, balance-table entry
 
 ### 2.4 Scoring & modes
-Victory is decided by an explicit **score** value (a player's score in FFA, a team's in TDM), not by a kill count.
+Victory is decided by an explicit **score** value (a player's score in FFA, a team's in the team modes), not by a kill count.
 
 | Rule | FFA (player score) | TDM (team score) |
 |---|---|---|
@@ -98,7 +99,24 @@ Victory is decided by an explicit **score** value (a player's score in FFA, a te
 
 **Assist**: ≥ 40 damage within 300 ticks before an enemy's death, by someone other than the killer → assist (stat + XP only, no score).
 
-Post-v1.0: **CTF** (map 2 is built symmetric and CTF-ready) and **Co-op Waves**.
+**Capture the flag** (both maps; each has a base per team, `flag_bases()`):
+
+| Rule | CTF |
+|---|---|
+| Win | **3 captures**, or the most at the time limit (ties: sudden death as above) |
+| Take | Touch the enemy flag (at its base or on the ground) |
+| Capture | Bring it to your own base **while your own flag is home**: +1 team, +5 personal |
+| Carrier dies or leaves | The flag drops where they were. The owners touching it return it (+1 personal); otherwise it goes home after 1800 ticks (30 s) |
+| Kills | +1 personal only (no team score) |
+
+**Co-op waves** (humans on team 0 against bot waves on team 1, no friendly fire, no clock):
+
+| Rule | Co-op waves |
+|---|---|
+| Waves | 10. The first comes after 8 s; wave *n* has 2 + (*n* − 1) bots, +1 per extra human, capped by the match size; one difficulty step harder every 3 waves |
+| Wave bots | Hunt the nearest human; don't respawn (they leave 2 s after dying) |
+| Falling | A fallen human waits for the end of the wave and comes back when it's cleared |
+| Win / lose | Clear wave 10 to win; everyone down at once loses. The team score is the waves cleared |
 
 ### 2.5 Spawn system
 - **Server-side spawn scoring** for each spawn point: + distance to nearest enemy, − enemy line of sight (1 raycast per enemy, cached per tick), − recent deaths nearby (last 5 s), − occupied (another player within 2 m). TDM adds a bonus near teammates and a penalty for the enemy half. Pick randomly among the top 3. **Fallback**: the least-bad point, never blocked
@@ -113,7 +131,7 @@ Post-v1.0: **CTF** (map 2 is built symmetric and CTF-ready) and **Co-op Waves**.
 - **Respawn countdown**, loadout change during the countdown
 - **Hit markers**: shown optimistically on the client, then confirmed by the server (unconfirmed markers fade differently); a distinct kill marker
 - **Scoreboard**, end-of-match results (stats, XP gained)
-- **Spectator mode**: deferred to post-v1.0 (needs slot rules, team restrictions and replication permissions; designed then)
+- **Spectator mode**: single player can **Watch** a bots-only match from any combatant's eyes (click/tap/Space for the next player). Network matches already playing can be joined as a spectator (Join Game → "Watch games already playing", or `--join ADDR --spectate`): the HELLO carries a spectate flag; the server gives the spectator an id but no player, ignores its commands, and sends it the usual snapshots, in which every combatant is a remote entity. Spectators don't take combatant slots (up to 4 on top, `MAX_SPECTATORS`) and don't start a match on their own; lobby members always play. Snapshots don't carry ammo, so a watched player's magazine shows full and the respawn timer counts from when the death was seen
 
 ### 2.7 Bots
 - Run **only on the server**. Each bot is a normal player entity driven by a `BotBrain` that **outputs the same `PlayerCommand` stream** a human produces (§3.2), so bots use the same movement, validation and replication code
@@ -298,7 +316,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 - **No host migration**
 
 #### 3.5.2 Dedicated server
-**v1.0 scope (revision 4):** players host their own matches on LAN and over the internet (§3.8), so the dedicated server ships in v1.0 as the **exported command-line server that exists today** (`server/server_main.gd`: `--port --name --map --mode --bots --bot-difficulty --friendly-fire --no-discovery`, status lines on stderr, LAN beacons), plus graceful shutdown. Each match restarts on the same map and mode. Everything else in this section (`server.cfg`, rotation, standalone/managed modes, admin console, rotating logs) moves to **M7**, where the Manager needs it.
+**v1.0 scope (revision 4):** players host their own matches on LAN and over the internet (§3.8), so the dedicated server ships in v1.0 as the **exported command-line server that exists today** (`server/server_main.gd`: `--port --name --map --mode --bots --bot-difficulty --friendly-fire --no-discovery`, status lines on stderr, LAN beacons), plus graceful shutdown. Each match restarts on the same map and mode. **Revision 5: no further dedicated-server work is planned.** The rest of this section (`server.cfg`, rotation, standalone/managed modes, admin console, rotating logs, systemd/Docker) is kept only as a record of the earlier design.
 
 - **Detection**: server mode starts when the build has the `dedicated_server` feature tag, or when the user argument `--server` is passed after `--`. `--headless` alone does not select server logic
 - **Launch**: `ionfall_server --headless -- --server --config server.cfg [--port N --name X --max-combatants N --map M --mode M]`
@@ -313,6 +331,8 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 - Operations: graceful shutdown on SIGTERM/Ctrl+C; Windows `.bat` launcher. systemd unit and Docker image come post-v1.0
 
 #### 3.5.3 Central multi-match server (Manager), LAN first
+*Dropped in revision 5 (with M7); kept as a record of the design.*
+
 - One **Manager** process (`--manager`) plus one `--managed` match process per match, each on its own port from the pool (§3.6)
 - **Client flow**: the server browser shows the Manager as one entry → its match list → *Join* or *Create* → the Manager returns an **endpoint description** `{server_id, match_id, transports: [{type: "enet", host, port}, …]}` → the client connects directly to the match. Gameplay traffic never goes through the Manager. (Browser transports add entries here later, §3.20)
 - **Port allocation**: from the pool, skipping reserved ports (§3.6). If binding fails, the port is marked bad for 10 min and the next one is tried. Allocator tests cover reserved-port exclusion and failed binds
@@ -356,7 +376,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 - **Fuzz tests** for all client entry points (§5)
 
 ### 3.8 Internet path (after LAN v1.0)
-**Update (2026-10-22, decision 0005):** internet play ships first as **player-hosted matches over Epic Online Services P2P** (invite codes, anonymous device-ID login, Epic relays; Linux, Windows, Android), with no game server of ours; see `docs/online.md`. WebRTC follows for the web build. The phases below remain the plan for hosted servers and trusted online progression.
+**Update (2026-10-22, decision 0005):** internet play ships first as **player-hosted matches over Epic Online Services P2P** (invite codes, anonymous device-ID login, Epic relays; Linux, Windows, Android), with no game server of ours; see `docs/online.md`. WebRTC follows for the web build. The phases below were the plan for hosted servers and trusted online progression; **revision 5 drops them**, since the owner doesn't plan to run game servers. They stay as a record.
 
 **Rule: no internet exposure until O1 is complete.** Accounts, encryption and baseline hardening ship together, so a login token is never sent over an unencrypted connection.
 
@@ -433,13 +453,13 @@ The Mi 11X at lower render scale only tests **scalable GPU settings**. It doesn'
 - **Thermals**: 20-minute sustained tests are mandatory. An automatic quality step-down when sustained frame time rises. Android thermal status and headroom are read through `AndroidRuntime` + `JavaClassWrapper` with no plugin; on the Mi 11X headroom is unsupported, the status stays 0 while MIUI throttles, and ADPF hint sessions are unsupported, so the step-down reacts to frame time (decision 0004)
 
 ### 3.11 Input, touch & aim assist
-- **Input adapter layer**: device events (mouse, keyboard, touch, later gamepad) → normalized **`PlayerCommand`**. Gameplay never reads devices
+- **Input adapter layer**: device events (mouse, keyboard, touch) → normalized **`PlayerCommand`**. Gameplay never reads devices
 - **Active input class** = the last-used device, which can switch live (e.g. a mouse plugged into an Android phone counts as KBM). It is reported to the server only as a label for the lobby
 - **Touch layout**: floating left joystick (push to edge = sprint), right-side drag to look, buttons for fire, jump, crouch/slide, reload, swap, grenade, melee
   - **Finger ownership classes**: (1) the **move finger** (joystick); (2) **look fingers** (started on empty right-side space); (3) the **fire finger**, an explicit **combined fire + look** class: touching the fire button starts firing, and dragging that same finger also turns the camera; (4) **button fingers** for all other buttons, which are exclusive and never turn into look fingers
   - Respects **safe areas** (notches, rounded corners). Move, look and fire work at the same time; touch cancellation releases held actions
   - Fixed layout in the internal MVP; layout editor (position/size/opacity) in v1.0
-- **Aim assist** (touch only; the gamepad later gets its own tuning):
+- **Aim assist** (touch only):
   - **Candidate selection** (10 Hz, cached): targets within a cone of 6° *(provisional)* and the weapon's effective range, nearest to the crosshair weighted by distance
   - **Visibility is rechecked at the moment assist is applied** (1 ray per assisted frame, only while assist is active), so the cache can never make it aim through walls
   - **Slowdown**: look sensitivity × 0.6 while the crosshair is over the target
@@ -548,7 +568,6 @@ game/
   sim/                    # simulation layer: tick loop, commands, player/weapon/projectile sim, damage, spawns
   net/                    # transport adapters, composite peer (later), clock sync, snapshots, lag comp, discovery
   server/                 # dedicated/standalone/managed bootstrap, config, local admin, rotation
-  manager/                # (M7) multi-match manager
   presentation/           # player visuals, viewmodels, VFX, audio emitters, interpolation
   bots/                   # BotBrain, perception, traversal actions
   modes/                  # match state machine, FFA, TDM (later CTF, Waves)
@@ -564,7 +583,7 @@ game/
 ```
 
 ### 3.20 Web client readiness (extensibility rules)
-**Goal:** a browser **client** that joins dedicated/Manager servers can be added later. The architecture is **designed to preserve this feasibility, subject to a transport prototype**. It is not a promise that nothing will need restructuring. **Browser hosting is intentionally unsupported** (technically a browser could act as an authoritative WebRTC endpoint after signaling, but that isn't worth its cost). LAN discovery isn't possible in a browser. Bot matches running locally in the tab are possible but optional.
+**Goal:** a browser **client** that joins matches hosted by native players (revision 5: no dedicated/Manager servers of ours) can be added later. The architecture is **designed to preserve this feasibility, subject to a transport prototype**. It is not a promise that nothing will need restructuring. **Browser hosting is intentionally unsupported** (technically a browser could act as an authoritative WebRTC endpoint after signaling, but that isn't worth its cost). LAN discovery isn't possible in a browser. Bot matches running locally in the tab are possible but optional.
 
 **Browser constraints the design accounts for:**
 - No raw UDP: only **WebSocket** (TCP-based) or **WebRTC data channels** (UDP-like, always encrypted, need signaling)
@@ -611,7 +630,7 @@ game/
 - **From M2, every milestone**: a browser smoke test in Chrome and Firefox that reaches the menu and runs a **local bot match** in the browser: move, fire, take shield/health damage, die and respawn (Compatibility preset). This checks single-threaded performance and renderer readability on real gameplay, not just a menu
 - **Web-milestone transport prototype** (first step of the web milestone, moved from M5 in revision 4): one dedicated server with the composite peer accepting an ENet client and a **real browser client** in the same match. It covers bidirectional RPCs, disconnect/reconnect, ID collisions, control-channel traffic and the WebSocket queue rules, plus WebRTC if `webrtc-native` works headless. Its findings feed the web milestone estimate
 
-**Web client milestone (post-v1.0, separately budgeted):** composite peer, WebRTC transport (WebSocket fallback), signaling via the dedicated server/Manager, endpoint descriptions with web transports, web UI flow (join by link/address), Compatibility visual preset, web audio and storage fallbacks, a page served by the dedicated server or Manager.
+**Web client milestone (post-v1.0, separately budgeted):** composite peer on the native player host, WebRTC transport (WebSocket fallback), signaling through a small third-party or serverless signaling service (revision 5: not our own game servers), endpoint descriptions with web transports, web UI flow (join by link/address), Compatibility visual preset, web audio and storage fallbacks, a page served by the dedicated server or Manager.
 
 ---
 
@@ -648,8 +667,8 @@ All assets are restyled with shared materials (team color, emissive trims, palet
 | **Bandwidth** | Measured bytes vs the worksheet (§3.3.5), typical and worst case | M1b, per milestone |
 | **Rendered cross-play** | Mixed Android/Linux/Windows **release** builds in one match | M1b, per milestone |
 | **Soak** | Mi 11X client and phone host 20 min (M1c); dedicated server 60 min with 8 test clients (M1b) → 16 test clients (M5) | M1b/M1c |
-| **Dedicated server capacity** | One match process: all-human (test clients), all-bot and mixed; tick percentiles, RAM | M7 (moved from M5) |
-| **Manager capacity benchmark** | Several matches on one machine; headroom-based admission | M7 |
+| **Dedicated server capacity** | One match process: all-human (test clients), all-bot and mixed; tick percentiles, RAM | Dropped (revision 5) |
+| **Manager capacity benchmark** | Several matches on one machine; headroom-based admission | Dropped (revision 5) |
 | **Cold start** | First match after install: shader stutter, load time | Per release |
 | **Human playtests** | Feel (movement, TTK), touch usability, UI clarity, accessibility options | Every milestone |
 | **Pseudolocalization** | Text expansion, missing keys | Per release |
@@ -676,12 +695,12 @@ Each milestone has exit criteria. **No durations are estimated until M1 is compl
 | **Post-M4** | **Done, off-plan** (2026-10-22) | **Internet play** over EOS P2P: anonymous device-ID login, invite codes, online game list, Epic relays; Linux, Windows, Android (decision 0005, `docs/online.md`). **Lobby**: host picks map, mode and length (5–20 min) and sees who joined; players read-only; Start sends everyone in; everyone returns to the lobby after each match. **Menus**: full-screen home with Single Player / Host / Join cards, map picture cards, a combined LAN + online game browser. **Touch controls**: one thumb cluster around Fire anchored to the bottom-right corner, picture icons. Verified laptop↔laptop and Mi 11X↔laptop in both directions; not yet on mobile data or Windows (M5) |
 | **M5** | **v1.0 server & online readiness** (slimmed in revision 4) | Exported Linux + Windows dedicated server boots and runs every map and mode (CI smoke test per map/mode); graceful shutdown on SIGTERM/Ctrl+C; **16 real test clients** soak 60 min within tick/bandwidth budgets; fuzz tests green (handshake, LOBBY/START, commands; malformed and oversized packets); **online checks**: a phone on mobile data joins and hosts through Epic relays, Windows build hosts and joins online, lobby → match → lobby cycles hold for 30 min; release builds get EOS credentials from CI secrets instead of a local file. *Moved out: `server.cfg`, rotation, standalone/managed modes, admin console, log rotation, capacity measurement → M7; DTLS spike → O1; composite-peer browser prototype → Web milestone* |
 | **M6** | **v1.0 LAN release** | Polish, full accessibility list, pseudoloc pass; min-spec phone, iGPU laptop and a dedicated-GPU PC tested (or claims removed); desktop release builds (Linux, Windows); Play **closed testing track** started (14-day gate if required); Play checklist (§3.18) including the data-flow review; Android release |
-| **M7** | Central server (LAN), **only if v1.0 is stable** | The deferred dedicated-server features (§3.5.2: `server.cfg`, rotation, standalone/managed modes, local admin console, log rotation, single-match capacity measurement); Manager, match list/create/join UI, port allocator, playlists, lifecycle protocol, restart backoff, admission by headroom; Manager capacity benchmark (§5) published in `docs/perf/` |
+| ~~**M7**~~ | ~~Central server (LAN)~~ **Dropped in revision 5** | The deferred dedicated-server features (§3.5.2: `server.cfg`, rotation, standalone/managed modes, local admin console, log rotation, single-match capacity measurement); Manager, match list/create/join UI, port allocator, playlists, lifecycle protocol, restart backoff, admission by headroom; Manager capacity benchmark (§5) published in `docs/perf/` |
 | **Web** | Web browser client (post-v1.0, separately budgeted) | As in §3.20, starting with the composite-peer prototype with a real browser client (moved from M5). Internet play for web players over **WebRTC** (decision 0005); a native host then serves EOS and WebRTC peers at once |
-| **O1–O4** | Internet play | As in §3.8, with O1 (secure identity + transport + account deletion) before any internet exposure |
-| Post-v1.0 | Expansion | CTF, Co-op Waves, wall-run, spectator mode, gamepad, map 3+, Compatibility preset for non-Vulkan Android, systemd/Docker, more weapons/cosmetics |
+| ~~**O1–O4**~~ | ~~Internet play on hosted servers~~ **Dropped in revision 5** | Player-hosted internet play over EOS (Post-M4) covers internet play; §3.8 keeps the old design as a record |
+| Post-v1.0 | Expansion | CTF, Co-op Waves, wall-run, spectator mode, map 3+, Compatibility preset for non-Vulkan Android, more weapons/cosmetics |
 
-**Cut lines if the estimate after M1 is too large** (cut in this order): 4 bot difficulties → 2; touch layout editor; QR join code; map 2 (ship TDM on map 1); M7. *(Revision 4: all of these shipped except M7; the remaining cut line is M7, then the Windows dedicated server.)* The internal MVP (M2) is never cut. Browser work never blocks v1.0.
+**Cut lines if the estimate after M1 is too large** (cut in this order): 4 bot difficulties → 2; touch layout editor; QR join code; map 2 (ship TDM on map 1); M7. *(Revision 4: all of these shipped except M7. Revision 5: M7 is dropped.)* The internal MVP (M2) is never cut. Browser work never blocks v1.0.
 
 ---
 

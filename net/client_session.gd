@@ -25,6 +25,9 @@ var player_name: String = "Player"
 var character: int = 0  ## sent in the handshake (CharacterRig.SELECTABLE index)
 var color: int = 0  ## sent in the handshake (PlayerVisual.PALETTE index)
 var primary: int = 0  ## sent in the handshake (Loadouts.PRIMARIES index)
+## Join as a spectator (sent in the handshake): no player, no prediction;
+## every player arrives as a remote entity.
+var spectate: bool = false
 ## Reconnect token from the server's WELCOME; pass it to join() to get the
 ## same player and score back within 60 s (PLAN §3.4).
 var reconnect_token: int = 0
@@ -54,6 +57,8 @@ var server_state: PlayerSimState  ## latest authoritative owner state
 var projectiles: Array = []
 var items: Array = []  ## latest snapshot's floor items {id, weapon, position}
 var spot_ticks := PackedInt32Array()
+var flags: Array = []  ## CTF: latest snapshot's flags (Snapshot.flags)
+var wave: Dictionary = {}  ## co-op: latest snapshot's wave status (Snapshot.wave)
 
 # Metrics
 var corrections: int = 0
@@ -94,7 +99,7 @@ func join(address: String, port: int, movement_config: MovementConfig, weapons: 
 	transport.message.connect(_on_message)
 	_last_packet_ms = Time.get_ticks_msec()
 	var hello := Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
-			uuid, player_name, reconnect_token, character, color, primary)
+			uuid, player_name, reconnect_token, character, color, primary, spectate)
 	return transport.join_peer(peer, hello) if peer != null else transport.join(address, port, hello)
 
 
@@ -116,6 +121,11 @@ func leave() -> void:
 
 func is_predicting() -> bool:
 	return _ready_to_predict and pred != null
+
+
+## Playing (predicting our player) or, as a spectator, receiving snapshots.
+func is_live() -> bool:
+	return is_predicting() or (spectate and latest_snapshot != null)
 
 
 ## Remote players at the current render time.
@@ -350,6 +360,8 @@ func _on_snapshot(data: PackedByteArray) -> void:
 	projectiles = snap.projectiles
 	items = snap.items
 	spot_ticks = snap.spot_ticks
+	flags = snap.flags
+	wave = snap.wave
 	_events.append_array(snap.events)
 	# Time dilation (PLAN §3.3.2): run up to 5% faster or slower to keep the
 	# server's command buffer at its target, instead of hard resyncs.

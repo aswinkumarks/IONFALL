@@ -48,6 +48,8 @@ const STREAM_BACKLOG_BYTES := 4096
 const STREAM_RESYNC_MS := 500
 ## older than this: the client is dropped.
 const STREAM_DROP_MS := 3000
+## Remote spectators allowed on top of the combatants.
+const MAX_SPECTATORS := 4
 
 var transport := Transport.new()
 var world: SimWorld
@@ -69,6 +71,9 @@ var bots: Dictionary = {}  ## net id -> BotBrain (or TargetDummyDriver without n
 var bot_nav: BotNavigation
 ## Listen host / offline: the local player's id and this tick's command.
 var local_player_id: int = 0
+## The host watches without playing (spectator mode): it keeps the match
+## running like a human would but takes no combatant slot.
+var local_spectating: bool = false
 var local_command: PlayerCommand
 var anomalies: int = 0
 var networked: bool = false
@@ -80,6 +85,8 @@ var max_combatants: int = Protocol.MAX_PEERS
 var lobby_after_match: bool = false
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
+## Co-op waves: spawns and clears the waves (null in other modes).
+var waves: WaveDirector
 ## Recent (claimed - expected) view tick errors, for diagnostics and tests.
 var view_errors := FrameStats.new(600)
 ## Wall time of the last tick (simulation + snapshots), in microseconds.
@@ -132,13 +139,16 @@ class Client:
 	var backlog_since_ms: int = 0  ## WebSocket: when its send queue last went over STREAM_BACKLOG_BYTES
 	var resync: bool = false  ## WebSocket: send the next snapshot as a full state
 	var coalesced: int = 0  ## WebSocket: snapshots skipped behind a backlog
+	## Watches without playing: gets snapshots and events, has no player.
+	var spectator: bool = false
 
 
 ## `port` < 0 runs without networking (offline play) unless `peer` is given:
 ## an already listening MultiplayerPeer (internet play over EOS, decision
 ## 0005). `spots`: the map's pickup spots (SimWorld.pickup_spots).
+## `flag_bases`: CTF only, [team 0's base, team 1's base].
 func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData], spawns: Array[Transform3D],
-		spots: Array = [], peer: MultiplayerPeer = null) -> Error:
+		spots: Array = [], peer: MultiplayerPeer = null, flag_bases: Array = []) -> Error:
 	movement = movement_config
 	loadout = weapons
 	_rng.randomize()
@@ -148,10 +158,15 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	world.name = "ServerWorld"
 	world.lag_compensation = true
 	world.pickups_enabled = true
-	world.teams_enabled = game_mode == GameMode.TDM
-	world.friendly_fire = friendly_fire
+	world.teams_enabled = GameMode.is_team_mode(game_mode)
+	world.kills_score_for_team = game_mode == GameMode.TDM
+	world.friendly_fire = friendly_fire and game_mode != GameMode.WAVES
 	world.respawn_ticks = GameMode.respawn_ticks(game_mode)
 	world.configure(_rng.randi(), movement, spawns, spots)
+	if game_mode == GameMode.CTF:
+		world.configure_flags(flag_bases)
+	if game_mode == GameMode.WAVES:
+		waves = WaveDirector.new(self)
 	add_child(world)
 	add_child(transport)
 	if port >= 0 or peer != null:
@@ -179,6 +194,13 @@ func add_local_player(player_name: String, character: int = 0, color: int = 0, p
 	return p
 
 
+## Watch the match instead of playing (see local_spectating).
+func add_local_spectator() -> void:
+	local_spectating = true
+	update_bot_fill()
+	_on_humans_changed()
+
+
 const BOT_NAMES := ["Kestrel", "Vanta", "Ordo", "Lumen", "Rook", "Sable", "Quill", "Echo", "Halcyon", "Tarsus",
 		"Wren", "Corvid", "Nyx", "Brant", "Ivo"]
 
@@ -194,6 +216,24 @@ func add_bot(bot_name: String, driver: RefCounted) -> SimPlayer:
 	stats.add_player(id, bot_name, true, world.tick)
 	_broadcast_roster()
 	return p
+
+
+## Co-op: one bot of the current wave, hunting the humans.
+func add_wave_bot(difficulty: int) -> SimPlayer:
+	var bot_name: String = BOT_NAMES[_bot_seq % BOT_NAMES.size()]
+	var id := 1000 + _bot_seq
+	if bot_nav == null:
+		return add_bot(bot_name, TargetDummyDriver.new(_bot_seq * 50))
+	var brain := BotBrain.new(world, bot_nav, id, _rng.randi(), difficulty)
+	brain.hunt = true
+	return add_bot(bot_name, brain)
+
+
+func remove_bot(id: int) -> void:
+	bots.erase(id)
+	world.remove_player(id)
+	stats.remove_player(id, world.tick)
+	_broadcast_roster()
 
 
 ## The spawn loadout for primary choice `primary`. Matches started with a
@@ -217,8 +257,10 @@ func combatants() -> int:
 ## TDM: a new player joins the smaller team (ties: the one behind), and
 ## respawns there so it starts on its own side.
 func _join_team(p: SimPlayer, team: int = -1) -> void:
-	if game_mode != GameMode.TDM:
+	if not GameMode.is_team_mode(game_mode):
 		return
+	if game_mode == GameMode.WAVES:  # humans against the waves
+		team = GameMode.WAVE_TEAM if p.is_bot else GameMode.HUMANS
 	if team < 0:
 		var counts := team_counts(p.net_id)
 		team = 0 if counts[0] < counts[1] or (counts[0] == counts[1] and world.team_scores[0] <= world.team_scores[1]) else 1
@@ -236,9 +278,12 @@ func team_counts(except: int = 0) -> PackedInt32Array:
 
 
 func update_bot_fill() -> void:
+	if waves != null:  # co-op: the waves bring their own bots
+		_broadcast_roster()
+		return
 	while bots.size() > 0 and combatants() > maxi(bot_fill, _humans()):
 		var id: int = bots.keys().max()
-		if game_mode == GameMode.TDM:
+		if GameMode.is_team_mode(game_mode):
 			# Make room on the larger team.
 			var counts := team_counts()
 			var big := 0 if counts[0] > counts[1] else 1
@@ -308,7 +353,7 @@ func roster() -> Array:
 		var p: SimPlayer = world.players[id]
 		var l: MatchStats.Line = stats.lines.get(id)
 		out.append({"id": id, "name": p.display_name, "bot": p.is_bot, "character": p.character, "color": p.color,
-				"score": world.scores.get(id, 0), "team": p.team if game_mode == GameMode.TDM else GameMode.NO_TEAM,
+				"score": world.scores.get(id, 0), "team": p.team if GameMode.is_team_mode(game_mode) else GameMode.NO_TEAM,
 				"kills": l.kills if l else 0, "deaths": l.deaths if l else 0, "assists": l.assists if l else 0})
 	return out
 
@@ -343,8 +388,8 @@ func _physics_process(_delta: float) -> void:
 			var brain: Variant = bots.get(e.target)
 			if brain is BotBrain:
 				brain.on_event(e)
-		if e.type == "death" or e.type == "spawn":
-			score_changed = score_changed or e.type == "death"
+		if e.type in ["death", "spawn", "flag", "wave"]:
+			score_changed = score_changed or e.type != "spawn"
 			_send_reliable_event(e)
 		else:
 			_queue_cosmetic(e)
@@ -473,15 +518,20 @@ func _set_phase(p: int, ends: int) -> void:
 func _humans() -> int:
 	var n := 1 if local_player_id != 0 else 0
 	for c: Client in clients.values():
-		if c.loaded:
+		if c.loaded and not c.spectator:
 			n += 1
 	return n
 
 
+## Humans the match runs for: players plus spectators.
+func _audience() -> int:
+	return _humans() + (1 if local_spectating else 0)
+
+
 func _on_humans_changed() -> void:
-	if phase == MatchPhase.WAITING and _humans() > 0:
+	if phase == MatchPhase.WAITING and _audience() > 0:
 		_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
-	elif _humans() == 0 and phase != MatchPhase.WAITING:
+	elif _audience() == 0 and phase != MatchPhase.WAITING:
 		_set_phase(MatchPhase.WAITING, 0)
 
 
@@ -491,7 +541,14 @@ func _update_phase() -> void:
 			if world.tick >= phase_ends_tick:
 				_play_started_tick = world.tick
 				_set_phase(MatchPhase.PLAYING, world.tick + time_limit_ticks)
+				if waves != null:
+					waves.reset(world.tick)
 		MatchPhase.PLAYING:
+			if waves != null:  # co-op: the waves decide, there is no time limit
+				var decided := waves.step()
+				if decided != 0:
+					_end_match(decided)
+				return
 			var scores := _victory_scores()
 			var top := -999
 			for id in scores:
@@ -517,6 +574,9 @@ func _update_phase() -> void:
 			elif world.tick >= phase_ends_tick:
 				match_id = _rng.randi() | 1
 				phase_seq = 0
+				if waves != null:  # the last wave's bots go
+					for id: int in bots.keys():
+						remove_bot(id)
 				world.reset_match(_rng.randi())
 				stats.reset(world.tick)
 				for d: Dictionary in _departed.values():
@@ -528,17 +588,18 @@ func _update_phase() -> void:
 ## What decides the match: player scores (FFA) or team scores keyed by
 ## team + 1 (TDM), so MatchPhase.leader's 0 still means "nobody".
 func _victory_scores() -> Dictionary:
-	if game_mode != GameMode.TDM:
+	if not GameMode.is_team_mode(game_mode):
 		return world.scores
 	return {1: world.team_scores[0], 2: world.team_scores[1]}
 
 
 ## PLAN §2.6: results go to every client (reliable) and to the host's own
 ## presentation; each carries a unique result id for idempotent profiles.
-## `lead`: the winning player id (FFA) or team + 1 (TDM); 0 = draw.
+## `lead`: the winning player id (FFA) or team + 1 (team modes); 0 = draw.
 func _end_match(lead: int) -> void:
-	var winner := lead if game_mode != GameMode.TDM else 0
-	var winner_team := lead - 1 if game_mode == GameMode.TDM and lead > 0 else GameMode.NO_TEAM
+	var teams := GameMode.is_team_mode(game_mode)
+	var winner := lead if not teams else 0
+	var winner_team := lead - 1 if teams and lead > 0 else GameMode.NO_TEAM
 	last_winner = winner
 	_set_phase(MatchPhase.POST_MATCH, world.tick + MatchPhase.POST_MATCH_TICKS)
 	var rows := []
@@ -550,7 +611,7 @@ func _end_match(lead: int) -> void:
 				"assists_vs_bots": l.assists_vs_bots, "suicides": l.suicides, "headshot_kills": l.headshot_kills,
 				"shots": l.shots, "hits": l.hits, "damage_dealt": l.damage_dealt, "damage_taken": l.damage_taken,
 				"best_streak": l.best_streak, "weapon_kills": l.weapon_kills,
-				"team": world.players[id].team if game_mode == GameMode.TDM and world.players.has(id) else GameMode.NO_TEAM})
+				"team": world.players[id].team if teams and world.players.has(id) else GameMode.NO_TEAM})
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
 	var result_id := "%08x-%08x" % [_instance_id, match_id]
 	var msg := Protocol.encode_results(match_id, result_id, winner, world.tick - _play_started_tick, _humans(), rows,
@@ -582,11 +643,19 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 				_on_peer_left(old.id)
 				transport.kick(old.id)
 				break
-	# Bots give way to humans, so only humans count against the limit.
-	if clients.size() + (1 if local_player_id != 0 else 0) >= max_combatants:
+	# Bots give way to humans, so only humans count against the limit;
+	# spectators have their own.
+	var watching := 0
+	for other: Client in clients.values():
+		watching += 1 if other.spectator else 0
+	if hello.spectate:
+		if watching >= MAX_SPECTATORS:
+			return "server full"
+	elif clients.size() - watching + (1 if local_player_id != 0 else 0) >= max_combatants:
 		return "server full"
 	var c := Client.new()
 	c.id = id
+	c.spectator = hello.spectate
 	c.name = sanitize_name(hello.name)
 	c.uuid = hello.uuid
 	c.character = hello.character
@@ -662,7 +731,7 @@ func _on_peer_joined(id: int) -> void:
 func _on_peer_left(id: int) -> void:
 	var c: Client = clients.get(id)
 	clients.erase(id)
-	if c != null:
+	if c != null and not c.spectator:
 		if c.loaded:
 			var gone: SimPlayer = world.players.get(c.player_id)
 			_departed[c.token] = {"player_id": c.player_id, "score": world.scores.get(c.player_id, 0),
@@ -679,6 +748,8 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 	if c == null or not type in Protocol.CLIENT_MESSAGES:
 		anomalies += 1
 		return
+	if c.spectator and type == Protocol.Msg.CMD:
+		return  # spectators have no player to command
 	match type:
 		Protocol.Msg.CMD:
 			_on_commands(c, data)
@@ -695,7 +766,7 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 					c.rtt_ms = lerpf(c.rtt_ms, rtt, 0.3)
 		Protocol.Msg.LOADOUT:
 			var primary := Protocol.decode_loadout(data)
-			if primary < 0:
+			if primary < 0 or c.spectator:
 				anomalies += 1
 			else:
 				c.primary = primary
@@ -704,6 +775,8 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			var loaded := Protocol.decode_loaded(data)
 			if loaded.is_empty():
 				anomalies += 1
+			elif not c.loaded and c.spectator:
+				c.loaded = true  # snapshots and events from now on; no player
 			elif not c.loaded:
 				c.loaded = true
 				var joined := world.add_player(c.player_id, _loadout_for(c.primary), c.name, false)
@@ -761,6 +834,12 @@ func _send_snapshot(c: Client, tick_entities: Dictionary) -> void:
 		snap.owner_gen = me.entity_gen & 0xFF
 	for it in world.items:
 		snap.items.append({"id": it.id, "weapon": it.weapon, "position": it.position})
+	for f in world.flags:
+		snap.flags.append({"team": f.team, "carrier": f.carrier, "position": f.position,
+				"return_ticks": maxi(f.return_tick - world.tick, 0) if f.return_tick > 0 else 0})
+	if waves != null:
+		snap.wave = {"wave": waves.wave, "fighting": waves.fighting, "left": waves.enemies_left(),
+				"next": waves.ticks_to_next()}
 	snap.spot_ticks.resize(world.pickup_spots.size())
 	for i in world.pickup_spots.size():
 		snap.spot_ticks[i] = world.spot_ticks_left(i)
