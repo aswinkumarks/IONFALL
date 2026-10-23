@@ -9,6 +9,8 @@ const MAGIC := 0x464E4F49  ## "IONF"
 ## HELLO flags.
 const HELLO_SPECTATE := 1
 const DEFAULT_PORT := 47710
+## Browser clients (WebSocket, TCP) when a native host also serves them (§3.20).
+const DEFAULT_WEB_PORT := 47711
 const MAX_PEERS := 16
 
 enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27, LOBBY = 28, START = 29 }

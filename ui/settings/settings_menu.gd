@@ -39,6 +39,7 @@ const SCHEMA := {
 	"SETTINGS_TAB_GAME": [
 		["profile", "bot_difficulty", "SETTING_BOT_DIFFICULTY", "choice", ["easy", "normal", "hard", "insane"]],
 		["profile", "friendly_fire", "SETTINGS_FRIENDLY_FIRE", "check"],
+		["profile", "browser_players", "SETTING_BROWSER_PLAYERS", "check"],
 		["hud", "show_stats", "SETTING_SHOW_STATS", "check"],
 	],
 	"SETTINGS_TAB_AUDIO": [

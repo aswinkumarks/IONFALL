@@ -90,6 +90,9 @@ func _open() -> void:
 	else:
 		err = session.host(config.player_name, max_players, config.port)
 		_subtitle.text = tr("LOBBY_LAN_HINT")
+		var web_port := session.transport.host_web_port()
+		if err == OK and web_port > 0:
+			_subtitle.text += "\n" + tr("LOBBY_BROWSER_HINT") % web_port
 		_code_caption.text = tr("LOBBY_LAN_CAPTION")
 		_code.text = Discovery.lan_addresses()[0]
 		var advertiser := Discovery.Advertiser.new()
@@ -244,9 +247,14 @@ func _on_started(settings: Dictionary) -> void:
 	_starting = true
 	_waiting.text = tr("LOADING")
 	if _host:
-		# Let START reach everyone before the lobby's connections close; the
-		# match then listens on the same port or online socket.
-		await get_tree().create_timer(0.5).timeout
+		# Let START reach everyone before the lobby's connections close (the
+		# members leave once they have it; a browser polls less often, and a
+		# close arriving with START would win); the match then listens on the
+		# same port or online socket.
+		var waited := 0.0
+		while waited < 0.5 or (session.members.size() > 1 and waited < 3.0):
+			await get_tree().create_timer(0.1).timeout
+			waited += 0.1
 		session.leave()
 		Online.update_info({"state": "playing"})
 	_go(MATCH)

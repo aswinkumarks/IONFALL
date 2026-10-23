@@ -40,6 +40,14 @@ const LOCAL_PLAYER_ID := 1
 ## A client that drops can come back with its reconnect token within this
 ## time and gets its player id and score back (PLAN §3.4).
 const RECONNECT_WINDOW_MS := 60000
+## WebSocket clients (PLAN §3.20 rule 4): while more than this is still
+## queued for one, its snapshots are skipped, so only the newest goes out
+## once the stream drains (coalescing; keeps its queue near 200 ms).
+const STREAM_BACKLOG_BYTES := 4096
+## A backlog older than this: the next snapshot is a full state (resync);
+const STREAM_RESYNC_MS := 500
+## older than this: the client is dropped.
+const STREAM_DROP_MS := 3000
 ## Remote spectators allowed on top of the combatants.
 const MAX_SPECTATORS := 4
 
@@ -128,6 +136,9 @@ class Client:
 	var restored_score: int = 0
 	var restored_team: int = -1  ## TDM: the team to rejoin after a reconnect
 	var primary: int = 0  ## Loadouts.PRIMARIES index
+	var backlog_since_ms: int = 0  ## WebSocket: when its send queue last went over STREAM_BACKLOG_BYTES
+	var resync: bool = false  ## WebSocket: send the next snapshot as a full state
+	var coalesced: int = 0  ## WebSocket: snapshots skipped behind a backlog
 	## Watches without playing: gets snapshots and events, has no player.
 	var spectator: bool = false
 
@@ -805,6 +816,8 @@ func _on_commands(c: Client, data: PackedByteArray) -> void:
 
 ## `tick_entities`: every player quantized once this tick, shared by all clients.
 func _send_snapshot(c: Client, tick_entities: Dictionary) -> void:
+	if transport.is_stream(c.id) and not _stream_ready(c):
+		return
 	var snap := Snapshot.new()
 	snap.id = completed_tick()
 	snap.match_id = match_id
@@ -848,6 +861,29 @@ func _send_snapshot(c: Client, tick_entities: Dictionary) -> void:
 			c.sent.erase(t)
 	transport.send(c.id, bytes, Protocol.CH_GAME, false)
 	transport.stats.on_snapshot(bytes.size())
+
+
+## WebSocket clients (PLAN §3.20 rule 4): false while the stream is backed
+## up (this snapshot is dropped; a newer one replaces it). A long backlog
+## makes the next snapshot a full state, a very long one drops the client.
+func _stream_ready(c: Client) -> bool:
+	var now := Time.get_ticks_msec()
+	if transport.buffered_bytes(c.id) > STREAM_BACKLOG_BYTES:
+		if c.backlog_since_ms == 0:
+			c.backlog_since_ms = now
+		var age := now - c.backlog_since_ms
+		if age > STREAM_DROP_MS:
+			Platform.perf_log("NET dropping %s: WebSocket backlog for %d ms" % [c.name, age])
+			transport.kick(c.id)
+		elif age > STREAM_RESYNC_MS:
+			c.resync = true
+		c.coalesced += 1
+		return false
+	c.backlog_since_ms = 0
+	if c.resync:
+		c.sent.clear()  # no baseline: a full state
+		c.resync = false
+	return true
 
 
 ## Cosmetic events ride in snapshots until acked; the oldest are dropped

@@ -16,6 +16,7 @@ const DEFAULTS := {
 		"minutes": 10,  ## match length (LobbySession.DURATIONS), for single player and lobbies
 		"friendly_fire": false,  ## TDM, when hosting (PLAN §2.3)
 		"bot_difficulty": "normal",  ## BotBrain.DIFFICULTY_IDS
+		"browser_players": false,  ## LAN hosts also take browsers over WebSocket (PLAN §3.20)
 	},
 	"video": {
 		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive
