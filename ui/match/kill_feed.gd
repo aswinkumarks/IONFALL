@@ -78,6 +78,30 @@ func add_death(e: Dictionary, name_of: Callable, local_id: int) -> void:
 	move_child(row, -1)
 
 
+## A mode line (CTF flag takes and captures, co-op waves): `who` in its
+## colour, then `what`; highlighted when it concerns us.
+func add_note(who: String, what: String, color: Color, involved: bool = false) -> void:
+	_apply_scale(float(Settings.get_value("accessibility", "hud_scale")))
+	var row: PanelContainer = get_child(0)
+	for r: PanelContainer in _rows:
+		if not r.visible:
+			row = r
+			break
+	if involved:
+		row.add_theme_stylebox_override("panel", _involved_box)
+	else:
+		row.remove_theme_stylebox_override("panel")
+	var parts := row.get_child(0).get_children()
+	_set_part(parts[0], who, color)
+	_set_part(parts[1], what, UiStyle.TEXT)
+	_set_part(parts[2], "", UiStyle.TEXT)
+	_set_part(parts[3], "", UiStyle.TEXT_DIM)
+	row.set_meta("ttl", ROW_SECONDS)
+	row.modulate.a = 1.0
+	row.visible = true
+	move_child(row, -1)
+
+
 ## Hides every row (e.g. after the loading-screen warm-up).
 func clear() -> void:
 	for row in _rows:

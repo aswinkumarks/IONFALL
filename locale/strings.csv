@@ -193,6 +193,35 @@ LOADOUT_PRIMARY,Next spawn:
 CUSTOMIZE_PRIMARY,Primary weapon
 MODE_FFA,Free-for-all
 MODE_TDM,Team Deathmatch
+MODE_CTF,Capture the Flag
+MODE_WAVES,Co-op Waves
+MODE_TDM_SHORT,Team DM
+MODE_CTF_SHORT,CTF
+CTF_GOAL,Take the enemy flag to your base
+CTF_CARRYING,You have the flag! Bring it to your base
+CTF_OUR_FLAG_TAKEN,%s has our flag
+CTF_OUR_FLAG_DROPPED,Our flag is down: returns in %d s
+CTF_WE_HAVE_FLAG,%s has their flag: escort them home
+CTF_NOBODY,The flag
+CTF_FEED_TAKE,took the %s flag
+CTF_FEED_DROP,dropped the %s flag
+CTF_FEED_RETURN,returned the %s flag
+CTF_FEED_CAPTURE,captured the %s flag
+CAPTION_FLAG_TAKEN,Enemy flag taken
+CAPTION_OUR_FLAG_TAKEN,Our flag was taken
+CAPTION_FLAG_CAPTURED,Flag captured
+CAPTION_FLAG_LOST,They captured our flag
+CAPTION_FLAG_RETURNED,Flag returned
+WAVES_WAVE,Wave %d
+WAVES_INCOMING,%d enemies incoming
+WAVES_CLEARED,cleared
+WAVES_FIGHTING,Wave %d of %d · %d enemies left
+WAVES_NEXT,Wave %d in %d s
+CAPTION_WAVE_START,Wave %d
+CAPTION_WAVE_CLEARED,Wave cleared
+HUD_WAVE_WAIT,Back when the wave is cleared
+WAVES_VICTORY,All %d waves cleared
+WAVES_DEFEAT,Overrun on wave %d
 TEAM_CYAN,Cyan
 TEAM_ORANGE,Orange
 RESULTS_TEAM_WINS,%s team wins
@@ -268,6 +297,7 @@ MENU_SECTION_MODE,Mode
 MENU_SECTION_DURATION,Match length
 MENU_MINUTES,%d min
 MENU_SOLO_HINT,You against %d bots
+MENU_SOLO_HINT_WAVES,"You against 10 waves of bots, each bigger and tougher"
 MENU_JOIN_DIRECT,Join directly
 MENU_JOIN_DIRECT_HINT,"Enter the host's IP address (192.168.0.10) or a 6-letter invite code."
 MENU_JOIN_DIRECT_HINT_LAN,"Enter the host's IP address, e.g. 192.168.0.10."

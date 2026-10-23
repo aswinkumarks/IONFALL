@@ -44,6 +44,7 @@ var _xp_bar: ProgressBar
 var _xp_label: Label
 var _map_tiles: Array[MenuTile] = []
 var _mode_chips: HBoxContainer
+var _solo_hint: Label
 var _duration_chips: HBoxContainer
 var _address_edit: LineEdit
 var _games_label: Label
@@ -282,14 +283,15 @@ func _build_solo() -> void:
 	var options := HBoxContainer.new()
 	options.add_theme_constant_override("separation", 40)
 	column.add_child(options)
-	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.NAME_KEYS, c.game_mode,
+	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.CHIP_KEYS, c.game_mode,
 			func(i: int) -> void: _save_choice("mode", GameMode.IDS[i]))
 	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
 			LobbySession.DURATIONS.find(c.minutes),
 			func(i: int) -> void: _save_choice("minutes", LobbySession.DURATIONS[i]))
 	var bottom := HBoxContainer.new()
 	column.add_child(bottom)
-	var hint := UiStyle.label(tr("MENU_SOLO_HINT") % OFFLINE_DUMMIES, &"DimLabel")
+	var hint := UiStyle.label("", &"DimLabel")
+	_solo_hint = hint
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(hint)
@@ -305,6 +307,7 @@ func _build_solo() -> void:
 	start.pressed.connect(_start_solo)
 	bottom.add_child(start)
 	_first[Page.SOLO] = start
+	_update_solo()
 
 
 ## A captioned chip row in `parent`.
@@ -523,6 +526,7 @@ func _update_solo() -> void:
 	for i in _map_tiles.size():
 		_map_tiles[i].selected = Maps.PLAYABLE[i] == c.map
 	MenuKit.select_chip(_mode_chips, c.game_mode)
+	_solo_hint.text = tr("MENU_SOLO_HINT_WAVES") if c.game_mode == GameMode.WAVES else tr("MENU_SOLO_HINT") % OFFLINE_DUMMIES
 	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(c.minutes))
 
 

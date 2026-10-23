@@ -65,7 +65,7 @@ func show_scoreboard(roster: Array, local_id: int, subtitle: String, team_scores
 
 ## Results rows from a decoded RESULTS message (Protocol.decode_results).
 func show_results(results: Dictionary, local_id: int) -> void:
-	var tdm: bool = results.get("mode", GameMode.FFA) == GameMode.TDM
+	var tdm: bool = GameMode.is_team_mode(results.get("mode", GameMode.FFA))
 	var players: Array = _sorted(results.players) if tdm else results.players
 	var rows := []
 	var colors := []
@@ -114,6 +114,12 @@ func show_results(results: Dictionary, local_id: int) -> void:
 	table.set_rows(["COL_PLAYER", "COL_SCORE", "COL_KILLS", "COL_DEATHS", "COL_ASSISTS", "COL_ACCURACY", "COL_DAMAGE"],
 			rows, mine, colors)
 	footer.text = _team_line(results.team_scores) if tdm else ""
+	if results.get("mode", GameMode.FFA) == GameMode.WAVES:  # co-op: how far the team got
+		var cleared: int = results.team_scores[GameMode.HUMANS]
+		var won: bool = results.get("winner_team", GameMode.NO_TEAM) == GameMode.HUMANS
+		title.text = (tr("WAVES_VICTORY") % GameMode.WAVE_COUNT if won else tr("WAVES_DEFEAT") % (cleared + 1)).to_upper()
+		title.add_theme_color_override("font_color", UiStyle.ACCENT if won else UiStyle.WARN)
+		footer.text = ""
 	visible = true
 
 

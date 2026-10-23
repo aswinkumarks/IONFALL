@@ -47,7 +47,7 @@ single player only. Browser multiplayer is planned after v1.0.
 
 ## The game
 
-- **Modes:** Free-for-all and Team Deathmatch, 5–20 minute matches.
+- **Modes:** Free-for-all, Team Deathmatch, Capture the Flag (3 captures win) and Co-op Waves (hold out against 10 waves of bots together), 5–20 minute matches.
 - **Maps:** *Meridian Station*, a compact station deck with close quarters, and *Halcyon Spire*,
   an open moon platform with long sightlines.
 - **Weapons:** pick the Pulse Rifle, Burst Rifle or Scatter Gun as your primary, with the Mag Pistol
