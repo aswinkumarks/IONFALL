@@ -181,6 +181,8 @@ CHAR_VANGUARD,Vanguard
 CHAR_VANGUARD_DESC,"Heavy plated trooper with a gold visor, armour in your colour."
 CHAR_OPERATIVE,Operative
 CHAR_OPERATIVE_DESC,"Light flight-suit pilot, quick and low-profile."
+CHAR_SPACER,Spacer
+CHAR_SPACER_DESC,"A cheerful crew of station astronauts: frog, red panda, bee or flamingo."
 HUD_GRENADES,Frag ×%d
 TOUCH_GRENADE,Grenade
 TOUCH_MELEE,Melee
@@ -208,6 +210,9 @@ UNLOCK_COLOR_5,Crimson
 UNLOCK_COLOR_6,Gold
 UNLOCK_COLOR_7,Magenta
 UNLOCK_COLOR_8,Frost
+UNLOCK_COLOR_9,Ion teal
+UNLOCK_COLOR_10,Gunmetal
+UNLOCK_COLOR_11,Ember
 SETTING_AIM_ASSIST,Aim assist (touch)
 SETTING_AUTO_FIRE,Auto-fire (touch)
 SETTING_TOUCH_OPACITY,Touch button opacity
