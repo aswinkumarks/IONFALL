@@ -6,7 +6,7 @@ extends RefCounted
 
 const DEFAULT := "station"
 ## Maps offered in the menu, in order.
-const PLAYABLE := ["station", "spire"]
+const PLAYABLE := ["station", "spire", "foundry"]
 const LIST := {
 	"station": {
 		"name": "MAP_STATION",
@@ -21,6 +21,13 @@ const LIST := {
 		"thumb": "res://ui/maps/spire.png",
 		"gameplay": "res://maps/spire/gameplay.tscn",
 		"presentation": "res://maps/spire/presentation.tscn",
+	},
+	"foundry": {
+		"name": "MAP_FOUNDRY",
+		"blurb": "MAP_FOUNDRY_BLURB",
+		"thumb": "res://ui/maps/foundry.png",
+		"gameplay": "res://maps/foundry/gameplay.tscn",
+		"presentation": "res://maps/foundry/presentation.tscn",
 	},
 	"test_arena": {
 		"name": "MAP_TEST_ARENA",

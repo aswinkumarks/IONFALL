@@ -19,7 +19,7 @@ func test_tints_affect_their_range() -> void:
 func test_lut_size_and_maps_have_grades() -> void:
 	var lut := ColorGrade.lut({"shadows": Color(0, 0.02, 0.04), "highlights": Color(0.02, 0, 0), "contrast": 0.1})
 	assert_eq(lut.get_depth(), ColorGrade.SIZE)
-	for map: String in ["station", "spire"]:
+	for map: String in ["station", "spire", "foundry"]:
 		var scene: Node = Maps.presentation(map)
 		assert_true(scene.has_meta("grade"), map)
 		assert_eq(scene.find_children("*", "ReflectionProbe").size(), 1, map + " has its reflection probe")
