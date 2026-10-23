@@ -88,6 +88,18 @@ SETTINGS_TAB_VIDEO,Video
 SETTINGS_TAB_AUDIO,Audio
 SETTINGS_TAB_ACCESSIBILITY,Accessibility
 SETTINGS_TAB_KEYS,Keys
+SETTINGS_TAB_ABOUT,About
+ABOUT_VERSION,Version %s
+ABOUT_CREDITS,Credits
+ABOUT_CREDIT_ICONS,"Touch icons: fire, jump, grenade, interact"
+ABOUT_CREDIT_CHARACTERS,Characters and weapons
+ABOUT_CREDIT_ENVIRONMENT,"Station environment, astronauts, animations"
+ABOUT_CREDIT_SENTINEL,Cybernetic Sentinel character
+ABOUT_CREDIT_FONTS,Fonts
+ABOUT_CREDIT_ENGINE,Engine
+ABOUT_CREDIT_ONLINE,Online play
+ABOUT_LICENSE,"IONFALL is open source under the MIT License. Third-party assets keep their own licenses; the full list and license texts are in the source repository (art/ASSETS.csv, licenses/)."
+ABOUT_SOURCE,Source code and licenses
 SETTINGS_PRESS_KEY,Press a key… (Esc cancels)
 SETTINGS_RESET_KEYS,Reset to defaults
 SETTING_SENS_X,Look sensitivity (horizontal)

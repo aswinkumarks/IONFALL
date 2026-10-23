@@ -55,6 +55,17 @@ const SCHEMA := {
 		["accessibility", "captions", "SETTING_CAPTIONS", "check"],
 	],
 }
+## About tab credits: [what, who, license]. Names and licenses stay as they are.
+const CREDITS := [
+	["ABOUT_CREDIT_ICONS", "Delapouite, Lorc · game-icons.net", "CC BY 3.0"],
+	["ABOUT_CREDIT_CHARACTERS", "Kenney (kenney.nl)", "CC0 1.0"],
+	["ABOUT_CREDIT_ENVIRONMENT", "Quaternius (quaternius.com)", "CC0 1.0"],
+	["ABOUT_CREDIT_SENTINEL", "tborcen via Meshy", "CC0 1.0"],
+	["ABOUT_CREDIT_FONTS", "Indian Type Foundry (Rajdhani), The Exo 2 Project Authors (Exo 2)", "SIL OFL 1.1"],
+	["ABOUT_CREDIT_ENGINE", "Godot Engine contributors (godotengine.org)", "MIT"],
+	["ABOUT_CREDIT_ONLINE", "Epic Online Services (Epic Games); EOSG plugin by Delano Lourenco", "EOS SDK License, MIT"],
+]
+const REPO_URL := "https://github.com/aswinkumarks/IONFALL"
 const REMAPPABLE := ["move_forward", "move_back", "move_left", "move_right", "jump", "sprint", "crouch", "reload",
 		"switch_weapon", "weapon_1", "weapon_2", "grenade", "melee", "interact", "scoreboard"]
 
@@ -86,6 +97,7 @@ func _init() -> void:
 		tabs.add_child(_build_tab(tab, SCHEMA[tab]))
 	if not Platform.is_mobile():
 		tabs.add_child(_build_keys_tab())
+	tabs.add_child(_build_about_tab())
 	Events.settings_changed.connect(_refresh_control)
 	var done := UiStyle.menu_button("SETTINGS_DONE", &"PrimaryButton")
 	done.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -192,6 +204,47 @@ func _control_for(row: Array) -> Control:
 			box.add_child(slider)
 			box.add_child(readout)
 			return box
+
+
+## Version, credits (CC BY assets need visible credit) and licenses.
+func _build_about_tab() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.name = tr("SETTINGS_TAB_ABOUT")
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 10)
+	scroll.add_child(box)
+	box.add_child(UiStyle.label("MENU_TITLE", &"HeaderLabel"))
+	box.add_child(UiStyle.label(tr("ABOUT_VERSION") % BuildInfo.display_string(), &"DimLabel"))
+	var heading := UiStyle.label("ABOUT_CREDITS")
+	heading.add_theme_font_size_override("font_size", 26)
+	box.add_child(heading)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 8)
+	box.add_child(grid)
+	for c: Array in CREDITS:
+		grid.add_child(UiStyle.label(c[0]))
+		var who := UiStyle.label(c[1], &"DimLabel")
+		who.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+		who.autowrap_mode = TextServer.AUTOWRAP_WORD
+		who.custom_minimum_size.x = 380
+		who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(who)
+		var license := UiStyle.label(c[2], &"DimLabel")
+		license.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+		grid.add_child(license)
+	var note := UiStyle.label("ABOUT_LICENSE", &"DimLabel")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD
+	box.add_child(note)
+	var link := UiStyle.menu_button("ABOUT_SOURCE")
+	link.custom_minimum_size = Vector2(320, 44)
+	link.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	link.pressed.connect(func() -> void: OS.shell_open(REPO_URL))
+	box.add_child(link)
+	return scroll
 
 
 func _build_keys_tab() -> Control:
