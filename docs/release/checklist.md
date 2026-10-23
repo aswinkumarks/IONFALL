@@ -7,7 +7,7 @@ Status as of 2026-10-23. ✅ done · ⏳ in progress · 👤 needs the owner
 
 | Item | Status |
 |---|---|
-| Exported Linux + Windows dedicated server; CI boots it on every map × mode | ✅ CI smoke test loops station/spire × ffa/tdm |
+| Exported Linux + Windows dedicated server; CI boots it on every map × mode | ✅ CI smoke test loops station/spire/foundry × ffa/tdm/ctf/waves |
 | Graceful shutdown (players told "The server was shut down") | ✅ stop file + `ionfall_server.sh` (Ctrl+C/SIGTERM) / `stop_server.bat`; verified with test clients |
 | Server guide shipped with the server builds | ✅ `docs/server.md` → `README.md` in both server folders |
 | 16 test clients, 60 min, within tick/bandwidth budgets | ✅ PASS: 16/16 for 60 min, tick p99 4.4 ms (median window), 96 MiB, 0 visible corrections; `docs/perf/m5.md` |

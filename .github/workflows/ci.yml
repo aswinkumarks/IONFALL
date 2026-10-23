@@ -19,7 +19,9 @@ env:
 jobs:
   test-and-export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
+    permissions:
+      contents: write  # a v* tag drafts its GitHub release
     steps:
       # LFS objects come from a cache keyed on their IDs, so a run downloads
       # only new or changed files (GitHub's LFS bandwidth quota is small).
@@ -37,6 +39,25 @@ jobs:
 
       - name: Fetch LFS files
         run: git lfs pull
+
+      # A v* tag is the release version (v0.9.2 → 0.9.2, v1.0 → 1.0.0; a
+      # suffix such as v1.0.0-rc2 makes a pre-release of 1.0.0), so a release
+      # needs no version commit; other builds use project.godot's.
+      - name: Version
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+            if [[ "$V" == *-* ]]; then echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV"; V="${V%%-*}"; fi
+            [[ "$V" =~ ^[0-9]+\.[0-9]+$ ]] && V="$V.0"
+            if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::tag $GITHUB_REF_NAME isn't vMAJOR.MINOR[.PATCH]"; exit 1
+            fi
+            sed -i "s/^config\/version=\".*\"/config\/version=\"$V\"/" project.godot
+          fi
+          V="$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "Building version $V"
 
       - name: Cache Godot
         id: cache-godot
@@ -128,8 +149,8 @@ jobs:
       - name: Smoke test exported dedicated server (every map and mode)
         run: |
           set -euo pipefail
-          for map in station spire; do
-            for mode in ffa tdm; do
+          for map in station spire foundry; do
+            for mode in ffa tdm ctf waves; do
               timeout 60 build/server-linux/ionfall_server.x86_64 --headless -- --map $map --mode $mode --no-discovery --smoke-test
             done
           done
@@ -142,23 +163,75 @@ jobs:
           curl -fsSL -o ~/bundletool.jar \
             https://github.com/google/bundletool/releases/download/$BUNDLETOOL_VERSION/bundletool-all-$BUNDLETOOL_VERSION.jar
 
-      - name: Export Android (debug-signed AAB) and run 16 KB checks
+      # Release tags are signed with the Play upload key when its secrets are
+      # set (ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_KEY_ALIAS,
+      # ANDROID_UPLOAD_KEY_PASSWORD; docs/release/releasing.md), and also
+      # give a universal APK for sideloading. Everything else is debug-signed.
+      - name: Export Android and run 16 KB checks
         env:
           BUNDLETOOL: /home/runner/bundletool.jar
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          python3 tools/write_build_info.py --platform android --arch arm64 --config debug
+          CONFIG=debug
+          if [[ "$GITHUB_REF" == refs/tags/v* && -n "$KEYSTORE_BASE64" ]]; then
+            CONFIG=release
+            (umask 077; echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks")
+            export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="$RUNNER_TEMP/upload.jks"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_USER="$KEY_ALIAS"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="$KEY_PASSWORD"
+          fi
+          python3 tools/write_build_info.py --platform android --arch arm64 --config $CONFIG
           mkdir -p build/android
-          timeout 1800 godot --headless --install-android-build-template --export-debug "Android" build/android/ionfall.aab 2>&1 | tee export.log
+          timeout 1800 godot --headless --install-android-build-template --export-$CONFIG "Android" build/android/ionfall.aab 2>&1 | tee export.log
           if grep -q "ERROR" export.log; then echo "::error::Android export logged errors"; exit 1; fi
           test -f build/android/ionfall.aab
           bash tools/check_16kb.sh build/android/ionfall.aab
+          if [ "$CONFIG" = release ]; then
+            java -jar "$BUNDLETOOL" build-apks --bundle=build/android/ionfall.aab --output="$RUNNER_TEMP/universal.apks" \
+              --mode=universal --ks="$RUNNER_TEMP/upload.jks" --ks-key-alias="$KEY_ALIAS" \
+              --ks-pass="pass:$KEY_PASSWORD" --key-pass="pass:$KEY_PASSWORD"
+            unzip -q -o "$RUNNER_TEMP/universal.apks" universal.apk -d build/android
+            rm -f "$RUNNER_TEMP/upload.jks"
+          fi
+          echo "ANDROID_CONFIG=$CONFIG" >> "$GITHUB_ENV"
+
+      # A v* tag drafts its GitHub release with every download (release assets
+      # don't count against the Actions storage quota). Publishing the draft
+      # deploys its web build to GitHub Pages (pages.yml).
+      - name: Draft the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/dist"
+          mkdir -p "$D"
+          for p in linux windows server-linux server-windows web; do
+            (cd build/$p && zip -qr "$D/ionfall-$VERSION-$p.zip" .)
+          done
+          if [ "$ANDROID_CONFIG" = release ]; then
+            cp build/android/universal.apk "$D/ionfall-$VERSION-android-arm64.apk"
+            cp build/android/ionfall.aab "$D/ionfall-$VERSION.aab"
+          else
+            echo "::warning::No Android upload key secrets: the release has no APK or Play bundle"
+          fi
+          (cd "$D" && shopt -s nullglob && sha256sum ./*.zip ./*.apk > SHA256SUMS)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$D"/* --clobber
+          else
+            sed "s/{{VERSION}}/$VERSION/g" docs/release/notes-template.md > "$RUNNER_TEMP/notes.md"
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag ${PRERELEASE:-} --title "IONFALL $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" --generate-notes "$D"/*
+          fi
 
       # Builds are ~280 MB and the free plan's Actions storage is 500 MB, so
-      # they're uploaded only for releases and manual runs; every push still
-      # builds and checks them.
+      # they're uploaded only for manual runs (tags go to their release);
+      # every push still builds and checks them.
       - name: Upload builds
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: ionfall-${{ github.run_number }}

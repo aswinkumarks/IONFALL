@@ -1,6 +1,8 @@
 # GitHub Pages: the landing page (site/, screenshots from docs/media) at the
-# root and a release's web build (ionfall-<version>-web.zip, single player
-# only in browsers) under play/.
+# root, its download links pointing at the release being served, and that
+# release's web build (ionfall-<version>-web.zip) under play/. Runs when a
+# release is published (the github-pages environment allows v* tags), when
+# the site changes on main, or by hand.
 name: Web build on Pages
 
 on:
@@ -44,6 +46,10 @@ jobs:
           echo "Serving the web build of $TAG"
           mkdir -p out/media out/play
           cp -r site/. out/
+          VERSION="${TAG#v}"; VERSION="${VERSION%%-*}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+$ ]] && VERSION="$VERSION.0"
+          sed -i "s/{{TAG}}/$TAG/g; s/{{VERSION}}/$VERSION/g" out/*.html
+          if grep -q "{{" out/*.html; then echo "::error::unfilled placeholder in the site"; exit 1; fi
           cp docs/media/*.jpg out/media/
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-web.zip' --dir dl
           unzip -q dl/*-web.zip -d out/play
