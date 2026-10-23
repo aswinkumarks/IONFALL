@@ -12,8 +12,8 @@ const STYLES := ["sentinel", "armored", "astronaut", "skinned", "parts", "capsul
 ## Characters a player can pick (profile "character"), with their name keys.
 ## Sent as an index in the handshake and roster; indices wrap, so bots can
 ## take any number.
-const SELECTABLE := ["sentinel", "armored", "skinned"]
-const SELECTABLE_KEYS := ["CHAR_SENTINEL", "CHAR_VANGUARD", "CHAR_OPERATIVE"]
+const SELECTABLE := ["sentinel", "armored", "skinned", "astronaut"]
+const SELECTABLE_KEYS := ["CHAR_SENTINEL", "CHAR_VANGUARD", "CHAR_OPERATIVE", "CHAR_SPACER"]
 
 
 static func selectable_index(style: String) -> int:

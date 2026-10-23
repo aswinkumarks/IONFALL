@@ -26,3 +26,8 @@ func spawn_points() -> Array[Transform3D]:
 
 func pickup_spots() -> Array:
 	return []
+
+
+## CTF tests: open floor near the west and east walkways.
+func flag_bases() -> Array:
+	return [Vector3(-12, 0, 0), Vector3(12, 0, 0)]

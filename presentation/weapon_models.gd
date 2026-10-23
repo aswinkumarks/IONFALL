@@ -13,6 +13,7 @@ const MODELS := {
 	&"burst_rifle": ["blaster-g", 0.42, Vector3(0.2, -0.2, -0.46), Vector3(0, 0.03, -0.36)],
 	&"rail_sniper": ["blaster-e", 0.4, Vector3(0.19, -0.19, -0.8), Vector3(0, 0.02, -0.02)],
 	&"scatter_gun": ["blaster-l", 0.44, Vector3(0.2, -0.19, -0.44), Vector3(0, 0.02, -0.29)],
+	&"flux_smg": ["blaster-j", 0.4, Vector3(0.2, -0.2, -0.44), Vector3(0, 0.02, -0.31)],
 }
 
 static var _material: StandardMaterial3D

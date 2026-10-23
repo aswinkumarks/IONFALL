@@ -85,8 +85,10 @@ func _init() -> void:
 		_swatches.append(b)
 	side.add_child(_gap())
 	side.add_child(UiStyle.label("CUSTOMIZE_CHARACTER", &"DimLabel"))
-	var characters := HBoxContainer.new()
-	characters.add_theme_constant_override("separation", 8)
+	var characters := GridContainer.new()  # two per row: room for the names and lock levels
+	characters.columns = 2
+	characters.add_theme_constant_override("h_separation", 8)
+	characters.add_theme_constant_override("v_separation", 8)
 	side.add_child(characters)
 	for i in CharacterRig.SELECTABLE.size():
 		var b := UiStyle.menu_button(CharacterRig.SELECTABLE_KEYS[i])
@@ -101,8 +103,10 @@ func _init() -> void:
 		_character_buttons.append(b)
 	side.add_child(_gap())
 	side.add_child(UiStyle.label("CUSTOMIZE_PRIMARY", &"DimLabel"))
-	var primaries := HBoxContainer.new()
-	primaries.add_theme_constant_override("separation", 8)
+	var primaries := GridContainer.new()  # two per row, like the characters
+	primaries.columns = 2
+	primaries.add_theme_constant_override("h_separation", 8)
+	primaries.add_theme_constant_override("v_separation", 8)
 	side.add_child(primaries)
 	for i in Loadouts.PRIMARIES.size():
 		var b := UiStyle.menu_button(Loadouts.PRIMARIES[i].display_name)

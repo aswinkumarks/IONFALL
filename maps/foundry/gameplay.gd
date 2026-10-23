@@ -27,5 +27,5 @@ func pickup_spots() -> Array:
 	return FoundryLayout.pickup_spots()
 
 
-func flag_bases() -> Array[Vector3]:
+func flag_bases() -> Array:
 	return FoundryLayout.flag_bases()

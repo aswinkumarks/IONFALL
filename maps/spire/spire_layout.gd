@@ -305,6 +305,12 @@ static func pickup_spots() -> Array:
 	return out
 
 
+## CTF flag bases (PLAN §2.4): inside the west (team 0) and east (team 1)
+## bases, under their roofs.
+static func flag_bases() -> Array:
+	return [Vector3(-28.5, 0, 0), Vector3(28.5, 0, 0)]
+
+
 ## Hash of everything the presentation is built from.
 static func layout_hash() -> String:
 	return var_to_str([boxes(), decor(), pieces(), lights()]).sha256_text()

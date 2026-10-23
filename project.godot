@@ -53,7 +53,7 @@ locale/translations.dedicated_server=PackedStringArray()
 
 [rendering]
 
-rendering_device/fallback_to_opengl3=false
+rendering_device/fallback_to_opengl3=true
 renderer/rendering_method="mobile"
 lightmapping/lightmap_gi/use_bicubic_filter.mobile=false
 textures/vram_compression/import_s3tc_bptc=true

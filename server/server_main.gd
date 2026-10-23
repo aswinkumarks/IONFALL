@@ -3,7 +3,7 @@ extends Node
 ##
 ## Arguments (after `--`): `--port N` (default 47710), `--map ID` (maps/maps.gd), `--bots N` fills the match
 ## with training dummies up to N combatants, `--status-interval S` seconds between status lines,
-## `--name NAME` shown in LAN server lists, `--mode ffa|tdm`, `--friendly-fire` (TDM),
+## `--name NAME` shown in LAN server lists, `--mode ffa|tdm|ctf|waves`, `--friendly-fire` (TDM),
 ## `--bot-difficulty easy|normal|hard|insane`,
 ## `--no-discovery` stops beacons, `--stop-file PATH` (graceful shutdown, below), `--smoke-test`
 ## exits right after startup so CI can verify that the exported server boots.
@@ -47,7 +47,8 @@ func _ready() -> void:
 	server.bot_difficulty = maxi(BotBrain.DIFFICULTY_IDS.find(Platform.get_user_arg("--bot-difficulty", "normal")), 0)
 	add_child(server)
 	var loadout := Loadouts.ffa()
-	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points(), gameplay.pickup_spots())
+	var err := server.start(port, MOVEMENT, loadout, gameplay.spawn_points(), gameplay.pickup_spots(), null,
+			gameplay.flag_bases())
 	if err != OK:
 		printerr("IONFALL server: could not listen on UDP port %d: %s" % [port, error_string(err)])
 		get_tree().quit(1)

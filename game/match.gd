@@ -30,6 +30,8 @@ var input := InputAdapter.new()
 var view := FirstPersonView.new()
 var effects := Effects.new()
 var pickups := PickupVisuals.new()
+var flag_visuals := FlagVisuals.new()
+var _flag_bases: Array = []  ## CTF: the map's flag bases
 var _aim_assist := AimAssist.new()
 var audio := GameAudio.new()
 var hud: Hud
@@ -61,6 +63,8 @@ var _death_label: Label
 var _loadout_bar: HBoxContainer  ## primary choice while respawning (PLAN §2.6)
 ## The scoreboard on the pause menu, right of its buttons.
 var _pause_scores: MatchPanel
+## Spectator mode: the player we watch (0 until one is picked).
+var _spec_target: int = 0
 var _results_until: float = 0.0
 ## Death cam (PLAN §2.6): {pos, killer, until} while active.
 var _death_cam: Dictionary = {}
@@ -102,6 +106,7 @@ func _ready() -> void:
 	var gameplay := Maps.gameplay(config.map)
 	add_child(gameplay)
 	pickups.spots = gameplay.pickup_spots()
+	_flag_bases = gameplay.flag_bases() if gameplay.has_method("flag_bases") else []
 	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
@@ -114,6 +119,7 @@ func _ready() -> void:
 	add_child(view)
 	add_child(effects)
 	add_child(pickups)
+	add_child(flag_visuals)
 	add_child(audio)
 	audio.listener = view.camera
 	_build_ui()
@@ -166,7 +172,8 @@ func _ready() -> void:
 			online_peer = hosted.peer
 			_online_code = Online.hosting_code
 			Online.update_info(info)
-		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots(), online_peer)
+		var err := server.start(port, MOVEMENT, loadout, spawns, gameplay.pickup_spots(), online_peer,
+				gameplay.flag_bases())
 		if err != OK:
 			_fail(tr("NET_HOST_ERROR") % [config.port, error_string(err)])
 			return
@@ -179,8 +186,13 @@ func _ready() -> void:
 		server.bot_fill = 1 + config.bots
 		server.lobby_after_match = config.from_lobby
 		server.match_over.connect(_back_to_lobby)
-		var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
-		input.look_yaw = me.state.yaw
+		if config.spectate:
+			server.add_local_spectator()
+			input.enabled = false
+			touch.visible = false
+		else:
+			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
+			input.look_yaw = me.state.yaw
 		if config.online:
 			_info.text = tr("NET_ONLINE_HOSTING") % _online_code
 			Platform.perf_log("ONLINE hosting with invite code %s" % _online_code)
@@ -192,7 +204,7 @@ func _ready() -> void:
 		_snapshot_prev()
 	if config.mode != MatchConfig.Mode.OFFLINE:
 		Platform.set_low_latency_network(true)
-	if not Platform.is_mobile():
+	if not Platform.is_mobile() and not spectating():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_started = true
 
@@ -354,13 +366,19 @@ func _apply_shadows(root: Node) -> void:
 ## id (for the "auto" colour) is known.
 ## First-person arms in our colour (our team's in TDM); rebuilt if it changes.
 func _ensure_arms() -> void:
+	var character := config.character
+	var pick := config.color
+	if spectating():  # the watched player's arms
+		var p: SimPlayer = server.world.players.get(_spec_target)
+		character = p.character if p != null else 0
+		pick = p.color if p != null else 0
 	var team := _team_of(local_id())
-	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(local_id(), config.color)
+	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(local_id(), pick)
 	if _arms_ready and color == _arms_color:
 		return
 	_arms_ready = true
 	_arms_color = color
-	view.set_character(CharacterRig.selectable_style(config.character), color)
+	view.set_character(CharacterRig.selectable_style(character), color)
 
 
 func _game_mode() -> int:
@@ -375,7 +393,7 @@ func _is_ally(id: int) -> bool:
 
 
 func _team_of(id: int) -> int:
-	if _game_mode() != GameMode.TDM:
+	if not GameMode.is_team_mode(_game_mode()):
 		return GameMode.NO_TEAM
 	if server != null:
 		var p: SimPlayer = server.world.players.get(id)
@@ -387,8 +405,16 @@ func _team_scores() -> PackedInt32Array:
 	return server.world.team_scores if server != null else client.team_scores
 
 
+## Whose eyes the match is seen through: our player, or the watched one
+## while spectating (so hit markers, damage and the death cam follow them).
 func local_id() -> int:
+	if spectating():
+		return _spec_target
 	return client.local_id if client != null else ServerSession.LOCAL_PLAYER_ID
+
+
+func spectating() -> bool:
+	return server != null and server.local_spectating
 
 
 # --- Simulation (host / offline) ---
@@ -497,6 +523,9 @@ func _watch_connection() -> void:
 
 
 func _render_host(delta: float) -> void:
+	if spectating():
+		_render_spectator(delta)
+		return
 	var world := server.world
 	var alpha := Engine.get_physics_interpolation_fraction()
 	var me := world.get_player(ServerSession.LOCAL_PLAYER_ID)
@@ -522,8 +551,65 @@ func _render_host(delta: float) -> void:
 	for i in world.pickup_spots.size():
 		spot_ticks.append(world.spot_ticks_left(i))
 	pickups.sync(world.items, spot_ticks)
+	if _game_mode() == GameMode.CTF:
+		flag_visuals.sync(world.flags, _flag_bases, _flag_carrier_at)
 	_update_pickup_hud(s, world.items, spot_ticks)
 	hud.update_state(s, me.current_weapon(), world.scores.get(me.net_id, 0), s.respawn_tick - world.tick)
+
+
+## Spectator mode: the watched player's own view (camera, weapon, HUD), with
+## everyone else drawn as usual.
+func _render_spectator(delta: float) -> void:
+	var world := server.world
+	if not world.players.has(_spec_target):
+		_cycle_spectator(1)
+		if not world.players.has(_spec_target):
+			return  # no one to watch yet
+	var alpha := Engine.get_physics_interpolation_fraction()
+	var p: SimPlayer = world.players[_spec_target]
+	var s := p.state
+	var prev: PlayerSimState = _prev.get(p.net_id)
+	var from := prev if prev != null and prev.discontinuity_gen == s.discontinuity_gen else s
+	_ensure_arms()
+	view.set_scope(null)
+	hud.set_scope(0.0, false)
+	view.update_view(from.position.lerp(s.position, alpha), p.config.eye_for(s.stance),
+			lerp_angle(from.yaw, s.yaw, alpha), lerpf(from.pitch, s.pitch, alpha), s, p.current_weapon(), delta)
+	var seen := {}
+	for id in world.players:
+		if id == p.net_id:
+			continue
+		var other: SimPlayer = world.players[id]
+		seen[id] = true
+		_visual_for(id, other.display_name, other.is_bot, other.character, other.color).update_from(_prev.get(id), other.state, alpha, _time)
+		audio.update_player(id, other.state, false, _is_ally(id))
+	audio.update_player(p.net_id, s, true)
+	_prune_visuals(seen)
+	effects.sync_projectiles(world.projectiles, alpha)
+	var spot_ticks := PackedInt32Array()
+	for i in world.pickup_spots.size():
+		spot_ticks.append(world.spot_ticks_left(i))
+	pickups.sync(world.items, spot_ticks)
+	var names := PackedStringArray()
+	for i in s.weapons.size():
+		var w := s.weapon(i)
+		names.append(KillFeed.weapon_tag(w.id) if KillFeed.WEAPON_TAGS.has(w.id) else tr(w.display_name))
+	hud.set_slots(names, s.weapon_slot)
+	hud.update_state(s, p.current_weapon(), world.scores.get(p.net_id, 0), s.respawn_tick - world.tick)
+	_info.text = tr("SPECTATE_WATCHING") % _display_name(p.net_id) + "\n" + tr(
+			"SPECTATE_HINT_TOUCH" if DisplayServer.is_touchscreen_available() else "SPECTATE_HINT")
+
+
+## Spectator mode: watch the next (`step` 1) or previous (-1) combatant.
+func _cycle_spectator(step: int) -> void:
+	var ids: Array = server.world.players.keys()
+	if ids.is_empty():
+		return
+	ids.sort()
+	var i := ids.find(_spec_target)
+	_spec_target = ids[posmod(i + step, ids.size()) if i >= 0 else 0]
+	_death_cam = {}
+	_arms_ready = false
 
 
 ## The interact prompt for the nearest item that needs one, and the power
@@ -626,6 +712,8 @@ func _render_client(delta: float) -> void:
 				"velocity": proj.velocity})
 	effects.sync_projectiles(rockets, 1.0)
 	pickups.sync(client.items, client.spot_ticks)
+	if _game_mode() == GameMode.CTF:
+		flag_visuals.sync(client.flags, _flag_bases, _flag_carrier_at)
 	_update_pickup_hud(s, client.items, client.spot_ticks)
 	var server_state := client.server_state if client.server_state != null else s
 	# Health, shield and death come from the server; movement and ammo are predicted.
@@ -719,7 +807,7 @@ func _track_tally(e: Dictionary) -> void:
 ## as an incomplete match; unconfirmed when the host vanished.
 func _save_partial(confirmed: bool) -> void:
 	var phase := server.phase if server != null else client.phase
-	if _results_applied or not (phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH):
+	if spectating() or _results_applied or not (phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH):
 		return
 	var me := local_id()
 	var l: MatchStats.Line = _tally.lines.get(me)
@@ -764,15 +852,73 @@ func _vitals_of(id: int) -> Vector2:
 	return Vector2(st.shield, st.health) if st != null else Vector2.ZERO
 
 
+## Where a flag carrier is drawn: us at our view, others as rendered.
+func _flag_carrier_at(id: int) -> Vector3:
+	if id == local_id():
+		var me := _local_player()
+		return me.state.position if me != null else Vector3.INF
+	var v: PlayerVisual = _visuals.get(id)
+	return v.global_position if v != null else _position_of(id)
+
+
+## The mode's objective line (PLAN §2.4): CTF flag status, co-op wave.
+func _update_objective() -> void:
+	var mode := _game_mode()
+	if mode == GameMode.CTF:
+		var flags: Array = server.world.flags if server != null else client.flags
+		var my_team := _team_of(local_id())
+		if flags.size() < 2 or my_team > 1:
+			hud.set_objective("")
+			return
+		var own: Variant = flags[my_team]
+		var enemy: Variant = flags[1 - my_team]
+		if enemy.carrier == local_id():
+			hud.set_objective(tr("CTF_CARRYING"), GameMode.TEAM_COLORS[1 - my_team])
+		elif own.carrier != 0:
+			hud.set_objective(tr("CTF_OUR_FLAG_TAKEN") % _display_name(own.carrier), UiStyle.WARN)
+		elif _flag_dropped(own):
+			hud.set_objective(tr("CTF_OUR_FLAG_DROPPED") % ceili(_flag_return_ticks(own) / float(Sim.TICK_RATE)), UiStyle.WARN)
+		elif enemy.carrier != 0:
+			hud.set_objective(tr("CTF_WE_HAVE_FLAG") % _display_name(enemy.carrier), GameMode.TEAM_COLORS[my_team])
+		else:
+			hud.set_objective(tr("CTF_GOAL"), UiStyle.TEXT_DIM)
+	elif mode == GameMode.WAVES:
+		var w: Dictionary = {}
+		if server != null and server.waves != null:
+			w = {"wave": server.waves.wave, "fighting": server.waves.fighting, "left": server.waves.enemies_left(),
+					"next": server.waves.ticks_to_next()}
+		elif client != null:
+			w = client.wave
+		if w.is_empty():
+			hud.set_objective("")
+		elif w.fighting:
+			hud.set_objective(tr("WAVES_FIGHTING") % [w.wave, GameMode.WAVE_COUNT, w.left], UiStyle.WARN)
+		else:
+			hud.set_objective(tr("WAVES_NEXT") % [w.wave + 1, ceili(w.next / float(Sim.TICK_RATE))], UiStyle.ACCENT)
+	else:
+		hud.set_objective("")
+
+
+func _flag_dropped(f: Variant) -> bool:
+	return f.carrier == 0 and (f.return_tick > 0 if f is SimWorld.Flag else f.return_ticks > 0)
+
+
+func _flag_return_ticks(f: Variant) -> int:
+	return maxi(f.return_tick - server.world.tick, 0) if f is SimWorld.Flag else int(f.return_ticks)
+
+
 func _update_match_ui(delta: float) -> void:
 	hud.set_view(view.global_position, input.look_yaw)
 	var phase := server.phase if server != null else client.phase
 	var ends := server.phase_ends_tick if server != null else client.phase_ends_tick
 	var now := float(server.world.tick) if server != null else client.clock.server_time()
 	var playing := phase == MatchPhase.PLAYING or phase == MatchPhase.SUDDEN_DEATH
-	hud.set_timer(maxi(ceili((ends - now) / Sim.TICK_RATE), 0), playing)
+	# Co-op has no clock: the waves end it.
+	hud.set_timer(maxi(ceili((ends - now) / Sim.TICK_RATE), 0), playing and _game_mode() != GameMode.WAVES)
+	_update_objective()
 	var my_team := _team_of(local_id())
-	hud.set_teams(my_team, _team_scores() if my_team < 2 else PackedInt32Array())
+	# Co-op shows the wave instead (_update_objective).
+	hud.set_teams(my_team, _team_scores() if my_team < 2 and _game_mode() != GameMode.WAVES else PackedInt32Array())
 	var me := _local_player()
 	if me != null:
 		var names := PackedStringArray()
@@ -813,7 +959,7 @@ func _update_match_ui(delta: float) -> void:
 			_results.footer.text = (_results.footer_extra + "\n" if not _results.footer_extra.is_empty() else "") \
 					+ tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
 	var subtitle := tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else ""
-	var team_scores := _team_scores() if _game_mode() == GameMode.TDM else PackedInt32Array()
+	var team_scores := _team_scores() if GameMode.is_team_mode(_game_mode()) else PackedInt32Array()
 	if Input.is_action_pressed("scoreboard") and not _results.visible and not _paused:
 		_scoreboard.show_scoreboard(_roster(), local_id(), subtitle, team_scores)
 	else:
@@ -969,11 +1115,12 @@ func _handle_event(e: Dictionary) -> void:
 				_death_cam = {"pos": e.position + Vector3(0.0, 1.6, 0.0), "killer": e.killer,
 						"until": _time + DEATH_CAM_SECONDS, "suicide": e.suicide}
 		"results":
-			_results.show_results(e, me)
+			_results.show_results(e, -1 if spectating() else me)
 			_results_applied = true
-			var gained := Profile.apply_results(e, me)
 			_results.footer_extra = ""
-			_results.show_xp(gained, Profile.data.xp())
+			if not spectating():  # watching earns nothing
+				var gained := Profile.apply_results(e, me)
+				_results.show_xp(gained, Profile.data.xp())
 			_results_until = _time + MatchPhase.POST_MATCH_TICKS / float(Sim.TICK_RATE)
 		"spawn":
 			if e.player == me:
@@ -986,12 +1133,39 @@ func _handle_event(e: Dictionary) -> void:
 			elif _visuals.has(e.player):
 				effects.spawn_in(e.position, (_visuals[e.player] as PlayerVisual).color)
 				audio.play_at("spawn", e.position, "World", 1, -4.0)
+		"flag":
+			_on_flag_event(e, me)
+		"wave":
+			if e.action == "start":
+				_kill_feed.add_note(tr("WAVES_WAVE") % e.wave, tr("WAVES_INCOMING") % e.enemies, UiStyle.WARN)
+				audio.cue("countdown", tr("CAPTION_WAVE_START") % e.wave)
+			else:
+				_kill_feed.add_note(tr("WAVES_WAVE") % e.wave, tr("WAVES_CLEARED"), UiStyle.GOOD)
+				audio.cue("go", "CAPTION_WAVE_CLEARED")
 		"pickup":
 			effects.pickup_burst(e.position + Vector3(0.0, 0.6, 0.0), PickupVisuals.color_of(e.weapon))
 			if e.player == me:
 				audio.play_ui("pickup", -4.0)
 			else:
 				audio.play_at("pickup", e.position, "World", 1, -6.0)
+
+
+## CTF events: a kill-feed line, a caption and a cue for the ones about us.
+func _on_flag_event(e: Dictionary, me: int) -> void:
+	var team: int = e.team
+	var who := _display_name(e.player) if e.player != 0 else tr("CTF_NOBODY")
+	var mine := team == _team_of(me)
+	var keys := {"take": "CTF_FEED_TAKE", "drop": "CTF_FEED_DROP", "return": "CTF_FEED_RETURN", "capture": "CTF_FEED_CAPTURE"}
+	var what: String = tr(keys[e.action]) % tr(GameMode.TEAM_KEYS[team])
+	var carrier_team: int = 1 - team if e.action in ["take", "drop", "capture"] else team
+	_kill_feed.add_note(who, what, GameMode.TEAM_COLORS[carrier_team], e.player == me)
+	if e.action == "take":
+		audio.cue("shield_break", "CAPTION_OUR_FLAG_TAKEN" if mine else "CAPTION_FLAG_TAKEN")
+	elif e.action == "capture":
+		audio.cue("kill_confirm", "CAPTION_FLAG_LOST" if mine else "CAPTION_FLAG_CAPTURED")
+	elif e.action == "return":
+		audio.cue("pickup", "CAPTION_FLAG_RETURNED")
+	effects.pickup_burst(e.position + Vector3(0.0, 0.8, 0.0), GameMode.TEAM_COLORS[team])
 
 
 func _net_info() -> String:
@@ -1204,12 +1378,12 @@ func _set_paused(paused: bool) -> void:
 	_pause_panel.visible = paused
 	if not paused:
 		_confirm_panel.visible = false
-	input.enabled = not paused
+	input.enabled = not paused and not spectating()
 	input.reset_held()
 	touch.release_all()
 	if server != null and config.mode == MatchConfig.Mode.OFFLINE:
 		server.process_mode = Node.PROCESS_MODE_DISABLED if paused else Node.PROCESS_MODE_INHERIT
-	if paused:
+	if paused or spectating():
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif not Platform.is_mobile():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -1279,12 +1453,32 @@ func _fail(reason: String) -> void:
 ## Escape / Android back (Platform turns it into ui_cancel): dismiss the
 ## leave question, else toggle the pause menu.
 func _unhandled_input(event: InputEvent) -> void:
+	if spectating() and not _paused and _spectator_switch(event) != 0:
+		_cycle_spectator(_spectator_switch(event))
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_cancel"):
 		if _confirm_panel.visible:
 			_confirm_panel.visible = false
 		else:
 			_set_paused(not _paused)
 		get_viewport().set_input_as_handled()
+
+
+## Spectator controls: click, Space or → for the next player; right click
+## or ← for the previous one. A tap arrives as a click (unless a button took
+## it). 0: not a switch.
+func _spectator_switch(event: InputEvent) -> int:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			return 1
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			return -1
+	elif event.is_action_pressed("jump") or event.is_action_pressed("ui_right"):
+		return 1
+	elif event.is_action_pressed("ui_left"):
+		return -1
+	return 0
 
 
 func _notification(what: int) -> void:

@@ -192,7 +192,7 @@ static func pickup_spots() -> Array:
 
 
 ## Capture-the-flag bases (west team 0, east team 1): inside the loading bays.
-static func flag_bases() -> Array[Vector3]:
+static func flag_bases() -> Array:
 	return [Vector3(-24, 0, 0), Vector3(24, 0, 0)]
 
 
