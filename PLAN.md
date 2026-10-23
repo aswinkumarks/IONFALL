@@ -62,6 +62,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 | Pulse Rifle | Primary | Auto, 6 between shots (600 RPM) | 18 | ×1.5 (health only) | 36 / 180 | 120 | 12 | 66 t = **1.10 s** / 54 t = **0.90 s** (6 body + 4 head) |
 | Burst Rifle | Primary | 3-round burst, 3 between rounds, 20-tick cycle | 18 per round | ×2 (health only) | 36 / 144 | 132 | 4 bursts | 66 t = **1.10 s** / 46 t = **0.77 s** (2 body bursts + 3 head rounds) |
 | Scatter Gun | Primary | Pump, 48 between shots | 10 pellets × 12 (≤ 5 m), falls off to 30% at 15 m | ×1 | 6 / 24 | 30 per shell | 2 point-blank | 48 t = **0.80 s** |
+| Flux SMG | Primary | Auto, 4 between shots (900 RPM) | 13; full to 12 m, 45% from 30 m | ×1.5 (health only) | 45 / 225 | 105 | 16 | 60 t = **1.00 s** / 48 t = **0.80 s** (8 body + 5 head) |
 | Mag Pistol | Sidearm | Semi, min 12 between shots | 25 | ×2 (health only) | 12 / 60 | 90 | 8 | 84 t = **1.40 s** / 60 t = **1.00 s** (4 body + 2 head) |
 | Rail Sniper | Power | Bolt, 72 between shots | 110 | ×2 (**precision**, through shield) | 4 / 8 | 150 | 2 body / **1 head** | 72 t = **1.20 s** / instant |
 | Arc Launcher | Power | Projectile 40 m/s, 60 between shots | 200 direct; splash ≤ 120, falls off to 0 at 4 m | — | 2 / 4 | 150 | 1 direct | — |

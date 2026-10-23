@@ -48,6 +48,8 @@ func _init() -> void:
 	_save("go", _chime([659.25, 987.77, 1318.51], 0.5))
 	_save("reload_shell", _tick(700.0, 0.05))
 	_save_loop("menu_theme", _theme(19.2))
+	# Post-v1 weapons (appended).
+	_save("flux_smg", _gun(0.1, 760.0, 260.0, 0.45, 0.75))
 	print("gen_sounds: done")
 	quit()
 

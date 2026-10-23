@@ -4,7 +4,7 @@ art/characters/kenney/idle.fbx;run.fbx;jump.fbx,same pack (Animations/),Kenney (
 art/characters/kenney/humanMaleA.png,same pack (Skins/),Kenney (www.kenney.nl),2026-10-19,CC0 1.0,optional: Kenney,none,none
 art/textures/*.png,tools/gen_textures.gd (procedural),IONFALL project,n/a,project's own work,none,none,none
 maps/station/space_sky.gdshader,written for IONFALL,IONFALL project,n/a,project's own work,none,none,none
-art/weapons/kenney/blaster-{a;e;g;h;l;n}.glb;grenade-b.glb,https://opengameart.org/content/blaster-kit (Kenney Blaster Kit v2.1),Kenney (www.kenney.nl),2026-10-19,CC0 1.0 (licenses/kenney-blaster-kit.txt),optional: Kenney,"materials replaced (recoloured colormap)",none
+art/weapons/kenney/blaster-{a;e;g;h;j;l;n}.glb;grenade-b.glb,https://opengameart.org/content/blaster-kit (Kenney Blaster Kit v2.1),Kenney (www.kenney.nl),2026-10-19,CC0 1.0 (licenses/kenney-blaster-kit.txt),optional: Kenney,"materials replaced (recoloured colormap)",none
 art/weapons/kenney/colormap_ion*.png,tools/recolor_colormap.py from the Blaster Kit colormap,Kenney / IONFALL project,2026-10-19,CC0 1.0,optional: Kenney,recoloured to the IONFALL palette + emission map,none
 ui/fonts/Rajdhani-*.ttf,https://github.com/google/fonts/tree/main/ofl/rajdhani,Indian Type Foundry,2026-10-19,SIL OFL 1.1 (licenses/OFL-Rajdhani.txt),license text shipped,none,"OFL: can't be sold on its own; keep the license"
 ui/fonts/Exo2-Variable.ttf,https://github.com/google/fonts/tree/main/ofl/exo2,The Exo 2 Project Authors,2026-10-19,SIL OFL 1.1 (licenses/OFL-Exo2.txt),license text shipped,renamed from Exo2[wght].ttf,"OFL: can't be sold on its own; keep the license"
