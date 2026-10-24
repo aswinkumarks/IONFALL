@@ -325,6 +325,7 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 				phase = p.phase
 				phase_seq = p.phase_seq
 				phase_ends_tick = p.ends
+				match_seed = p.seed
 		Protocol.Msg.ROSTER:
 			var r := Protocol.decode_roster(data)
 			if not r.is_empty():

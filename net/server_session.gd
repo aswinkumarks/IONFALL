@@ -509,7 +509,7 @@ func _set_phase(p: int, ends: int) -> void:
 	phase_ends_tick = ends
 	world.damage_enabled = MatchPhase.allows_damage(p)
 	if networked:
-		var msg := Protocol.encode_phase(match_id, phase_seq, phase, world.tick, ends)
+		var msg := Protocol.encode_phase(match_id, phase_seq, phase, world.tick, ends, world.match_seed)
 		for c: Client in clients.values():
 			transport.send(c.id, msg, Protocol.CH_CONTROL, true)
 	phase_changed.emit(p)
@@ -540,6 +540,10 @@ func _update_phase() -> void:
 		MatchPhase.COUNTDOWN:
 			if world.tick >= phase_ends_tick:
 				_play_started_tick = world.tick
+				# Players and bots roam freely in the countdown; the match
+				# itself starts from fresh spawns, with spawn protection, so
+				# nobody is mid-fight (or next to an enemy) at GO.
+				world.reset_match(world.match_seed)
 				_set_phase(MatchPhase.PLAYING, world.tick + time_limit_ticks)
 				if waves != null:
 					waves.reset(world.tick)
@@ -723,7 +727,7 @@ func _on_peer_joined(id: int) -> void:
 		return
 	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, map_id, c.token),
 			Protocol.CH_CONTROL, true)
-	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick),
+	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick, world.match_seed),
 			Protocol.CH_CONTROL, true)
 	transport.send(id, Protocol.encode_roster(match_id, roster(), game_mode, world.team_scores), Protocol.CH_CONTROL, true)
 

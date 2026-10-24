@@ -50,3 +50,16 @@ func test_host_and_client_see_each_other() -> void:
 	assert_string_contains(joiner._net_info(), "NET client")
 	assert_string_contains(host._net_info(), "clients 1")
 	assert_eq(joiner.client.undecodable_snapshots, 0)
+
+
+func test_leaving_a_hosted_match_asks_first() -> void:
+	var cfg := MatchConfig.make(MatchConfig.Mode.HOST, "Hoster", 1)
+	cfg.port = SimHarness.free_udp_port()
+	var m := _spawn(cfg)
+	await wait_seconds(0.3)
+	m._set_paused(true)
+	m._ask_leave()
+	assert_true(m._confirm_panel.visible, "the confirmation opens")
+	var label: Label = m._confirm_panel.find_child("Text", true, false)
+	assert_eq(label.text, tr("LEAVE_CONFIRM_HOST"))
+	assert_true(is_instance_valid(m) and m.is_inside_tree(), "still in the match until confirmed")

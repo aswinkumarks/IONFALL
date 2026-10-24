@@ -76,3 +76,16 @@ func test_editor_saves() -> void:
 	var saved: Dictionary = Settings.get_value("input", "touch_layout")
 	assert_almost_eq(saved.scope[2], 1.4, 0.001)
 	assert_almost_eq(float(Settings.get_value("input", "touch_opacity")), 0.5, 0.001)
+
+
+func test_editor_covers_the_screen_inside_an_offset_page() -> void:
+	# The settings page has margins; the editor must still lay buttons out in
+	# screen space, exactly where a match draws them.
+	var page := Control.new()
+	page.position = Vector2(72, 32)
+	add_child_autofree(page)
+	var editor := TouchLayoutEditor.new()
+	page.add_child(editor)
+	await wait_process_frames(2)
+	assert_eq(editor.get_global_rect().position, Vector2.ZERO)
+	assert_eq(editor.get_global_rect().size, editor.get_viewport_rect().size)

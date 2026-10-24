@@ -14,8 +14,10 @@ Station), mirror-symmetric in X and Z for free-for-all.
 - **Cover**: half walls, crates, barrels, lockers, desks and columns across
   the lanes, courtyards and bases; the satellite dishes mark the corners.
 
-Jump pads were planned but need a simulation feature (deterministic
-launches in the rollback sim); ramps stand in for now.
+- **Jump pads**: one in each side lane by the lane half wall, throwing
+  you 12 m up onto the plaza corner (`SpireLayout.jump_pads()`, see
+  PLAN §2.1). They're drawn at runtime (`JumpPadVisuals`), so they aren't
+  part of the baked presentation.
 
 ## Build
 

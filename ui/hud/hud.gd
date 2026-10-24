@@ -311,7 +311,7 @@ func _draw() -> void:
 	_draw_stats()
 	if not _alive:
 		_draw_respawn(c)
-		_draw_caption()
+		_draw_caption(true)
 		return
 	if _scope_overlay:
 		_draw_scope(c)
@@ -526,7 +526,9 @@ func _draw_respawn(c: Vector2) -> void:
 	_text(c + Vector2(0, 150 * s), str(maxi(secs, 0)), 64, UiStyle.TEXT, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 
 
-func _draw_caption() -> void:
+## `dead`: above the respawn countdown, clear of the next-spawn weapon chips
+## (where it usually is) and the spectator line at the bottom.
+func _draw_caption(dead := false) -> void:
 	if _caption_time <= 0.0:
 		return
 	var s := _scale
@@ -535,6 +537,6 @@ func _draw_caption() -> void:
 	var f := UiStyle.font_body_bold
 	var px := roundi(19 * s)
 	var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-	var pos := Vector2(size.x * 0.5, size.y - 150 * s)
+	var pos := Vector2(size.x * 0.5, size.y * 0.5 + 40 * s if dead else size.y - 150 * s)
 	draw_rect(Rect2(pos - Vector2(tw * 0.5 + 12 * s, 24 * s), Vector2(tw + 24 * s, 34 * s)), Color(0, 0, 0, 0.6 * a))
 	draw_string(f, pos - Vector2(tw * 0.5, 0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Color(1.0, 0.95, 0.75, a))

@@ -8,6 +8,8 @@ extends Node3D
 ## de-duplicated by event id (PLAN §3.1).
 
 signal caption(text: String)
+## A player was thrown by a jump pad at `at` (seen from movement state).
+signal launched(at: Vector3)
 
 const DIR := "res://audio/generated/"
 const MAX_VOICES := 32
@@ -16,6 +18,8 @@ const MAX_RAYS_PER_FRAME := 16
 const OCCLUSION_INTERVAL := 0.1
 const STRIDE := {"walk": 1.9, "sprint": 2.6}
 const BELOW_METRES := 2.5  ## sounds this far under the listener get the Below bus
+## Take-offs faster than any jump (6 m/s) come from a jump pad.
+const PAD_LAUNCH_SPEED := 8.0
 
 var listener: Node3D  ## the camera: listener position for occlusion
 
@@ -105,7 +109,10 @@ func update_player(id: int, s: PlayerSimState, local: bool, ally: bool = false) 
 	var sliding := s.move_state == PlayerSimState.Move.SLIDE
 	var vol := -8.0 if local else (-3.0 if ally else 0.0)
 	var priority := 1 if local else (2 if ally else 3)
-	if airborne and not st.airborne and s.velocity.y > 2.0:
+	if airborne and not st.airborne and s.velocity.y > PAD_LAUNCH_SPEED:
+		play_at("jump_pad", s.position, "Footsteps", priority, vol + 2.0)
+		launched.emit(s.position)
+	elif airborne and not st.airborne and s.velocity.y > 2.0:
 		play_at("jump", s.position, "Footsteps", priority, vol - 4.0)
 	if not airborne and st.airborne:
 		play_at("land", s.position, "Footsteps", priority, vol)

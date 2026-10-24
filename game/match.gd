@@ -31,6 +31,7 @@ var view := FirstPersonView.new()
 var effects := Effects.new()
 var pickups := PickupVisuals.new()
 var flag_visuals := FlagVisuals.new()
+var pad_visuals := JumpPadVisuals.new()
 var _flag_bases: Array = []  ## CTF: the map's flag bases
 var _aim_assist := AimAssist.new()
 var audio := GameAudio.new()
@@ -108,6 +109,8 @@ func _ready() -> void:
 	add_child(gameplay)
 	pickups.spots = gameplay.pickup_spots()
 	_flag_bases = gameplay.flag_bases() if gameplay.has_method("flag_bases") else []
+	if gameplay.has_method("jump_pads"):
+		pad_visuals.build(gameplay.jump_pads())
 	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
@@ -121,7 +124,9 @@ func _ready() -> void:
 	add_child(effects)
 	add_child(pickups)
 	add_child(flag_visuals)
+	add_child(pad_visuals)
 	add_child(audio)
+	audio.launched.connect(pad_visuals.launched)
 	audio.listener = view.camera
 	_build_ui()
 	audio.caption.connect(hud.show_caption)
@@ -1033,7 +1038,9 @@ func _update_match_ui(delta: float) -> void:
 			_results.footer.text = (_results.footer_extra + "\n" if not _results.footer_extra.is_empty() else "") \
 					+ tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
 	var subtitle := tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else ""
-	var team_scores := _team_scores() if GameMode.is_team_mode(_game_mode()) else PackedInt32Array()
+	# Co-op waves has teams but no team score race (its progress is on the HUD).
+	var team_scores := _team_scores() if GameMode.is_team_mode(_game_mode()) and _game_mode() != GameMode.WAVES \
+			else PackedInt32Array()
 	if Input.is_action_pressed("scoreboard") and not _results.visible and not _paused:
 		_scoreboard.show_scoreboard(_roster(), local_id(), subtitle, team_scores)
 	else:
@@ -1423,7 +1430,7 @@ func _ask_leave() -> void:
 	if config.mode == MatchConfig.Mode.OFFLINE:
 		_leave()
 		return
-	var label: Label = _confirm_panel.get_node("Box/Text")
+	var label: Label = _confirm_panel.find_child("Text", true, false)
 	label.text = tr("LEAVE_CONFIRM_HOST") if config.mode == MatchConfig.Mode.HOST else tr("LEAVE_CONFIRM_CLIENT")
 	_confirm_panel.visible = true
 
@@ -1453,6 +1460,7 @@ func _make_confirm_panel() -> Control:
 func _set_paused(paused: bool) -> void:
 	_paused = paused
 	_pause_panel.visible = paused
+	_kill_feed.visible = not paused  # on touch it sits where the pause scoreboard opens
 	if not paused:
 		_confirm_panel.visible = false
 	input.enabled = not paused and not spectating()

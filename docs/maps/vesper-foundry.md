@@ -13,7 +13,8 @@ free-for-all, with team sides east and west.
   facing the crucible and two side doors, roofs reached by ramps along the
   hull. They hold the team spawns and the capture-the-flag bases.
 - **Flank lanes** along the north and south hulls: crates, tarps and barrels;
-  the Arc Launcher in the south lane.
+  the Arc Launcher in the south lane. A jump pad in each lane throws you up
+  onto the catwalk above it (`FoundryLayout.jump_pads()`, PLAN §2.1).
 
 ## Build
 
