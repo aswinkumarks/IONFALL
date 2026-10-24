@@ -29,7 +29,7 @@ func test_offline_match_runs_with_dummies() -> void:
 
 func test_host_and_client_see_each_other() -> void:
 	var host_cfg := MatchConfig.make(MatchConfig.Mode.HOST, "Hoster", 2)
-	host_cfg.port = 43000 + randi() % 5000
+	host_cfg.port = SimHarness.free_udp_port()
 	var host := _spawn(host_cfg)
 	await wait_seconds(0.3)
 	assert_true(host.server.networked)

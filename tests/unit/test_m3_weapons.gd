@@ -119,3 +119,37 @@ func test_no_friendly_fire_by_default() -> void:
 	world.friendly_fire = true
 	_run(Weapons.at(Weapons.SCATTER).ticks_between_shots)
 	assert_eq(_hits(_run(1, 0, [Action.FIRE])).size(), 1, "the host can turn it on")
+
+
+## A slot request on the same tick as a melee or a grenade throw used to be
+## dropped (they return early).
+func test_slot_request_survives_melee_and_grenade() -> void:
+	for action in [Action.MELEE, Action.GRENADE]:
+		var c := input.cmd(world.tick, Vector2.ZERO, 0, [action])
+		c.weapon_slot = 1 - shooter.state.weapon_slot
+		var want := c.weapon_slot
+		world.step({1: c, 2: target_input.cmd(world.tick)})
+		assert_eq(shooter.state.weapon_slot, want, "switched on the %s tick" % PlayerCommand.Action.keys()[action])
+		_run(60)
+
+
+## Spawns are never picked from a much worse score just for variety, and a
+## live grenade nearby rules a spot out.
+func test_spawns_avoid_enemy_sight_and_live_grenades() -> void:
+	world.remove_player(2)
+	var enemy := world.add_player(3, Loadouts.make(0), "enemy", true)
+	var spot := TestArenaLayout.spawn_points()[0].origin
+	SimHarness.place(enemy, spot + Vector3(0, 0, -6), 0.0)  # in sight, 6 m away
+	var picks := {}
+	for i in 40:
+		picks[world._choose_spawn(1).origin] = true
+	assert_false(picks.has(spot), "never the spawn an enemy is standing next to")
+	var nade := SimWorld.Projectile.new()
+	nade.owner_id = 3
+	nade.weapon = Weapons.at(Weapons.FRAG)
+	var best := world._choose_spawn(1).origin
+	nade.position = best
+	world.projectiles.append(nade)
+	for i in 40:
+		assert_ne(world._choose_spawn(1).origin, best, "not next to a live grenade")
+	world.projectiles.clear()

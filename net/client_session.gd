@@ -238,6 +238,9 @@ func _predict_tick() -> void:
 func _simulate(cmd: PlayerCommand, emit: bool) -> void:
 	var executed := ActionInput.consume(pred.state, cmd)
 	var shots := PlayerSimulation.step(pred, cmd, executed, match_seed)
+	# Player collision, predicted against the other players as we show them.
+	for id in _last_remote_states:
+		SimWorld.push_out_of(pred, _last_remote_states[id])
 	if emit:
 		for shot in shots:
 			_events.append(_predicted_fire_event(shot))

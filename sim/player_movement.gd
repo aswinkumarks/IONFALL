@@ -153,6 +153,12 @@ static func _move_and_collide(p: SimPlayer) -> void:
 	var floor_cos := cos(deg_to_rad(cfg.max_floor_angle_deg))
 	var was_on_floor := s.is_on_floor()
 	var motion := s.velocity * Sim.TICK_DT
+	# On the ground, move along the floor plane at full horizontal speed.
+	# Walking into a slope otherwise hits it like a wall, and the slide off it
+	# trimmed the horizontal speed every tick: ramps were far slower uphill.
+	var grounded_move := was_on_floor and s.move_state != Move.AIR
+	if grounded_move:
+		motion = _along_floor(motion, s.floor_normal)
 	for i in 4:
 		if motion.length_squared() < 1e-10:
 			break
@@ -160,6 +166,9 @@ static func _move_and_collide(p: SimPlayer) -> void:
 		if col == null:
 			break
 		var n := col.get_normal()
+		if grounded_move and n.y >= floor_cos:
+			motion = _along_floor(col.get_remainder(), n)  # onto (another) walkable slope
+			continue
 		motion = col.get_remainder().slide(n)
 		if s.velocity.dot(n) < 0.0:
 			s.velocity = s.velocity.slide(n)
@@ -187,6 +196,14 @@ static func _move_and_collide(p: SimPlayer) -> void:
 		s.ticks_since_floor = mini(s.ticks_since_floor + 1, 1000)
 		s.floor_normal = Vector3.UP
 	s.position = p.global_position
+
+
+## `motion`'s horizontal part, tilted onto the plane with normal `n`
+## (horizontal distance unchanged).
+static func _along_floor(motion: Vector3, n: Vector3) -> Vector3:
+	if n.y > 0.9999:
+		return Vector3(motion.x, 0.0, motion.z)
+	return Vector3(motion.x, -(n.x * motion.x + n.z * motion.z) / n.y, motion.z)
 
 
 static func _find_mantle_target(p: SimPlayer, fwd: Vector3) -> Variant:

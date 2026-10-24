@@ -33,6 +33,19 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 		s.melee_cooldown -= 1
 	var busy := s.sprinting or s.move_state == PlayerSimState.Move.MANTLE
 
+	# Switching first: a slot request lives in one command only, and the
+	# melee and grenade early returns below used to drop it.
+	var requested := s.weapon_slot
+	if cmd.weapon_slot >= 0 and cmd.weapon_slot < s.weapons.size():
+		requested = cmd.weapon_slot
+	elif ActionInput.has(executed, Action.SWITCH):
+		requested = (s.weapon_slot + 1) % s.weapons.size()
+	if requested != s.weapon_slot:
+		s.reload[s.weapon_slot] = 0
+		s.burst_left[s.weapon_slot] = 0
+		s.weapon_slot = requested
+		s.switch_ticks = s.weapon(requested).raise_ticks
+
 	# Melee and grenades work with any weapon up (not while mantling).
 	if ActionInput.has(executed, Action.MELEE) and s.melee_cooldown == 0 and s.move_state != PlayerSimState.Move.MANTLE:
 		var melee := Weapons.at(Weapons.MELEE)
@@ -46,17 +59,6 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 		var aim := aim_direction(s.yaw, s.pitch)
 		shots.append(_shot(p, Weapons.at(Weapons.FRAG), (aim + Vector3.UP * THROW_LIFT).normalized()))
 		return shots
-
-	var requested := s.weapon_slot
-	if cmd.weapon_slot >= 0 and cmd.weapon_slot < s.weapons.size():
-		requested = cmd.weapon_slot
-	elif ActionInput.has(executed, Action.SWITCH):
-		requested = (s.weapon_slot + 1) % s.weapons.size()
-	if requested != s.weapon_slot:
-		s.reload[s.weapon_slot] = 0
-		s.burst_left[s.weapon_slot] = 0
-		s.weapon_slot = requested
-		s.switch_ticks = s.weapon(requested).raise_ticks
 
 	var w := s.weapon_slot
 	var data := s.weapon()

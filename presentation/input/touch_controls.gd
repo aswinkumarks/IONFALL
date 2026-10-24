@@ -210,6 +210,13 @@ func release_all() -> void:
 
 
 func _on_down(index: int, pos: Vector2) -> void:
+	# The weapon chips are small and sit near the action buttons: a tap on
+	# one switches weapon rather than pressing the button under it.
+	var target: String = hud_target.call(pos) if hud_target.is_valid() else ""
+	if target.begins_with("slot:") and _hud_tap(pos):
+		_fingers[index] = {"kind": Kind.BUTTON, "origin": pos, "pos": pos, "button": {"id": "hud"}}
+		queue_redraw()
+		return
 	var button := _button_at(pos)
 	if not button.is_empty():
 		var kind: int = button.get("kind", Kind.BUTTON)

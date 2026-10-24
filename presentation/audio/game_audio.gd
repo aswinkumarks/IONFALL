@@ -48,7 +48,7 @@ func _ready() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.bus = "Music"
 	_music.stream = _streams.get("ambient_loop")
-	_music.volume_db = -10.0
+	_music.volume_db = -18.0  # well under the gunfire and footsteps
 	add_child(_music)
 	_music.play()
 

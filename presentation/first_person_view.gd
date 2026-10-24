@@ -33,13 +33,15 @@ const SUPPORT_DROP := 0.035
 ## Melee bash and grenade throw motions (seconds).
 ## Seconds to scope fully in or out.
 const SCOPE_TIME := 0.14
-const MELEE_TIME := 0.32
+const MELEE_TIME := 0.36
 const THROW_TIME := 0.45
 
 var camera := Camera3D.new()
 var _viewmodel := Node3D.new()  ## pose root, animated every frame
 var _models: Dictionary = {}  ## weapon id -> Node3D
 var _arms: CharacterRig
+var _arms_rest := Vector3.ZERO  ## the arms rig's position under the camera at rest
+var _bash := 0.0  ## this frame's melee bash amount (_melee_curve)
 var _current_id: StringName = &""
 var _muzzle: Node3D
 var _flash := MeshInstance3D.new()
@@ -62,6 +64,8 @@ var _recoil_roll: float = 0.0
 var _pose := Vector3.ZERO  ## smoothed [sprint, crouch/slide, reload/switch] blend
 var _cam_dip: float = 0.0
 var _melee_t: float = 0.0  ## time left in the melee bash
+var _melee_struck: bool = false  ## this bash's strike (camera punch) has played
+var _punch: float = 0.0  ## camera punch from a melee strike or hit, decays fast
 var _throw_t: float = 0.0  ## time left in the throw dip
 ## 0 = hip, 1 = fully scoped; eases with SCOPE_TIME.
 var scope_amount: float = 0.0
@@ -128,6 +132,7 @@ func set_character(style: String, color: Color, fallback: String = "armored") ->
 			_arms = rig
 			_arms.rotation.y = STANCE_YAW
 			_arms.position = -EYE_FROM_HEAD - _arms.basis * rig.head_position()
+			_arms_rest = _arms.position
 			return
 		rig.free()
 
@@ -135,6 +140,31 @@ func set_character(style: String, color: Color, fallback: String = "armored") ->
 ## Our melee: the weapon jabs forward and across.
 func melee() -> void:
 	_melee_t = MELEE_TIME
+	_melee_struck = false
+
+
+func meleeing() -> bool:
+	return _melee_t > 0.0
+
+
+## Our melee connected: a heavier jolt.
+func melee_impact() -> void:
+	_punch = maxf(_punch, 1.0)
+
+
+## The bash over its time `u` (0 → 1): a short wind-up back, a fast strike
+## forward and across, a moment held, then the recovery.
+static func _melee_curve(u: float) -> float:
+	if u <= 0.0 or u >= 1.0:
+		return 0.0
+	if u < 0.18:
+		return -0.35 * sin(PI * 0.5 * u / 0.18)
+	if u < 0.34:
+		var k := (u - 0.18) / 0.16
+		return lerpf(-0.35, 1.0, 1.0 - pow(1.0 - k, 3.0))  # ease-out snap
+	if u < 0.5:
+		return 1.0
+	return 0.5 + 0.5 * cos(PI * (u - 0.5) / 0.5)
 
 
 ## Our grenade throw: the weapon dips out of the way.
@@ -262,14 +292,25 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	pos = pos.lerp(Vector3(0.0, hip.y + 0.02, hip.z + 0.05), scope_amount * 0.85)
 	_melee_t = maxf(_melee_t - delta, 0.0)
 	_throw_t = maxf(_throw_t - delta, 0.0)
-	var bash := sin(PI * _melee_t / MELEE_TIME) if _melee_t > 0.0 else 0.0
+	var u := 1.0 - _melee_t / MELEE_TIME if _melee_t > 0.0 else 0.0
+	var bash := _melee_curve(u)
+	_bash = bash
+	if _melee_t > 0.0 and not _melee_struck and u >= 0.26:
+		_melee_struck = true
+		_punch = maxf(_punch, 0.45)
+	_punch = move_toward(_punch, 0.0, delta * 5.0)
 	var dip := sin(PI * _throw_t / THROW_TIME) if _throw_t > 0.0 else 0.0
-	pos += Vector3(-0.08, 0.03, -0.16) * bash + Vector3(0.04, -0.22, 0.06) * dip
+	pos += Vector3(-0.11, 0.05, -0.22) * bash + Vector3(0.04, -0.22, 0.06) * dip
 	_viewmodel.position = pos
 	_viewmodel.rotation = Vector3(
-		_recoil * 0.12 - _pose.x * 0.35 - _pose.z * 0.5 + _sway.y * 0.15 - dip * 0.6,
+		_recoil * 0.12 - _pose.x * 0.35 - _pose.z * 0.5 + _sway.y * 0.15 - dip * 0.6 - bash * 0.22,
 		_sway.x * 0.2 + _pose.x * 0.6 + bash * 0.7,
-		_recoil_roll + _pose.y * 0.25 + _pose.z * 0.4 - _sway.x * 0.1)
+		_recoil_roll + _pose.y * 0.25 + _pose.z * 0.4 - _sway.x * 0.1 - bash * 0.35)
+	# Melee punch: the view jolts down and in a touch, the FOV pinches.
+	var p := _punch * _punch * shake
+	camera.rotation.x -= 0.035 * p
+	camera.rotation.z += 0.02 * p
+	camera.fov -= 4.0 * p
 
 	_flash_time -= delta
 	_flash.visible = _flash_time > 0.0
@@ -283,6 +324,9 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 	if _arms != null:
 		_arms.visible = s.alive and _models.has(_current_id) and not behind_scope
 		if _arms.visible:
+			# The shoulders drive the bash too, so the hands keep hold of the
+			# weapon at the far end of the strike (it outreaches the arms).
+			_arms.position = _arms_rest + Vector3(-0.07, 0.04, -0.15) * maxf(_bash, 0.0)
 			var weapon_node: Node3D = _models[_current_id]
 			var to_rig := _arms.global_transform.affine_inverse()
 			var grip := weapon_node.global_position

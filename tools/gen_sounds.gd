@@ -9,10 +9,14 @@ const RATE := 22050
 const OUT := "res://audio/generated/"
 
 var _rng := RandomNumberGenerator.new()
+## Music noise has its own generator, so the music can change without
+## changing any sound effect.
+var _music_rng := RandomNumberGenerator.new()
 
 
 func _init() -> void:
 	_rng.seed = 7741
+	_music_rng.seed = 2401
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	_save("pulse_rifle", _gun(0.16, 520.0, 160.0, 0.55, 0.9))
 	_save("mag_pistol", _gun(0.22, 380.0, 110.0, 0.7, 1.0))
@@ -32,13 +36,13 @@ func _init() -> void:
 	_save("switch", _tick(900.0, 0.06))
 	_save("ui_click", _tick(1600.0, 0.03))
 	_save("spawn", _sweep(200.0, 700.0, 0.5, 0.3))
-	_save_loop("ambient_loop", _ambient(16.0))
+	_save_loop("ambient_loop", _pad_loop(24.0, 0.55, 0.0))
 	# M3 weapons (appended so the earlier sounds keep their random sequence).
 	_save("burst_rifle", _gun(0.12, 600.0, 200.0, 0.5, 0.85))
 	_save("scatter_gun", _gun(0.38, 240.0, 60.0, 1.0, 1.1))
 	_save("rail_sniper", _gun(0.5, 1900.0, 180.0, 0.8, 1.0))
 	_save("frag_grenade", _whoosh(0.22, 700.0))
-	_save("melee", _whoosh(0.18, 1500.0))
+	_save("melee", _melee_swing())
 	# M4 audio pass.
 	_save("footstep_ally_1", _soft_step(0.0))
 	_save("footstep_ally_2", _soft_step(0.4))
@@ -47,9 +51,10 @@ func _init() -> void:
 	_save("countdown", _tick(880.0, 0.12))
 	_save("go", _chime([659.25, 987.77, 1318.51], 0.5))
 	_save("reload_shell", _tick(700.0, 0.05))
-	_save_loop("menu_theme", _theme(19.2))
+	_save_loop("menu_theme", _pad_loop(32.0, 1.0, 1.0))
 	# Post-v1 weapons (appended).
 	_save("flux_smg", _gun(0.1, 760.0, 260.0, 0.45, 0.75))
+	_save("melee_hit", _melee_hit())
 	print("gen_sounds: done")
 	quit()
 
@@ -237,53 +242,117 @@ func _reload() -> PackedFloat32Array:
 
 
 ## Ambient pad: slow detuned chord changes, seamless loop.
-func _ambient(seconds: float) -> PackedFloat32Array:
-	var b := _buffer(seconds)
-	var chords := [[110.0, 164.81, 220.0, 277.18], [98.0, 146.83, 196.0, 246.94],
-			[123.47, 185.0, 246.94, 293.66], [103.83, 155.56, 207.65, 261.63]]
+## Music (menu theme and the in-match bed): a slow, filtered pad of detuned
+## saws over open chords (D, Bm, G, Asus), crossfading with no beat, a soft
+## sub and a band of air; `bells` adds sparse soft bell tones with an echo.
+## `brightness` scales the filter (the match bed is darker). Rendered with a
+## tail that is crossfaded into the start, so the loop is seamless.
+func _pad_loop(seconds: float, brightness: float, bells: float) -> PackedFloat32Array:
+	var chords := [
+		[73.42, [146.83, 220.0, 329.63, 369.99]],  # D(add9)
+		[61.74, [185.0, 246.94, 293.66, 440.0]],  # Bm7
+		[49.0, [146.83, 246.94, 369.99, 440.0]],  # Gmaj9
+		[55.0, [164.81, 220.0, 293.66, 329.63]],  # Asus
+	]
+	var tail := 4.0
+	var n := int((seconds + tail) * RATE)
+	var b := PackedFloat32Array()
+	b.resize(n)
 	var per := seconds / chords.size()
-	var lp := 0.0
+	var fade_s := 2.5
+	var detune := [0.9965, 1.0, 1.0035]
+	var phases := PackedFloat32Array()
+	phases.resize(chords.size() * 4 * detune.size())
+	var sub_phase := [0.0, 0.0, 0.0, 0.0]
+	var lp1 := 0.0
+	var lp2 := 0.0
+	var air_lp := 0.0
+	var air_hp := 0.0
+	var bell := PackedFloat32Array()
+	bell.resize(n)
+	if bells > 0.0:
+		# A soft bell every half chord, on a chord tone two octaves up.
+		var picks := [3, 1, 2, 0, 1, 3, 0, 2]
+		var count := int(seconds / (per * 0.5))
+		for k in count:
+			var start := k * per * 0.5 + 0.6
+			var chord: Array = chords[int(start / per) % chords.size()][1]
+			var f: float = chord[picks[k % picks.size()]] * 2.0
+			var i0 := int(start * RATE)
+			for i in int(3.0 * RATE):
+				if i0 + i >= n:
+					break
+				var t := float(i) / RATE
+				var mod := 1.2 * exp(-t / 0.35) * sin(TAU * f * 2.0 * t)
+				bell[i0 + i] += sin(TAU * f * t + mod) * _env(t, 0.004, 0.9) * 0.5
+		# Echo: 3/8 s feedback delay.
+		var d := int(0.375 * RATE)
+		for i in range(d, n):
+			bell[i] += bell[i - d] * 0.42
+	for i in n:
+		var t := float(i) / RATE
+		var x := fmod(t, seconds) / per
+		var idx := int(x) % chords.size()
+		var local := (x - floorf(x)) * per
+		var w_next := smoothstep(per - fade_s, per, local)
+		var pad := 0.0
+		var sub := 0.0
+		for c in chords.size():
+			var w := 0.0
+			if c == idx:
+				w = 1.0 - w_next
+			elif c == (idx + 1) % chords.size():
+				w = w_next
+			var notes: Array = chords[c][1]
+			for j in notes.size():
+				for k in detune.size():
+					var pi := (c * 4 + j) * detune.size() + k
+					phases[pi] = fmod(phases[pi] + notes[j] * detune[k] / RATE, 1.0)
+					if w > 0.0:
+						pad += (2.0 * phases[pi] - 1.0) * w
+			sub_phase[c] = fmod(sub_phase[c] + chords[c][0] / RATE, 1.0)
+			if w > 0.0:
+				sub += sin(TAU * sub_phase[c]) * w
+		# The filter breathes once per loop.
+		var cutoff := (520.0 + 380.0 * sin(TAU * t / seconds)) * brightness + 180.0
+		lp1 = _lp(lp1, pad, cutoff)
+		lp2 = _lp(lp2, lp1, cutoff)
+		var noise := _music_rng.randf_range(-1.0, 1.0)
+		air_lp = _lp(air_lp, noise, 2400.0)
+		air_hp = _lp(air_hp, air_lp, 900.0)
+		var air := (air_lp - air_hp) * (0.5 + 0.5 * sin(TAU * t / (seconds * 0.5)))
+		b[i] = lp2 * 0.05 + sub * 0.07 + air * 0.025 + bell[i] * 0.05 * bells
+	# Seamless loop: the tail crossfades into the head.
+	var tn := int(tail * RATE)
+	var out := PackedFloat32Array()
+	out.resize(int(seconds * RATE))
+	for i in out.size():
+		out[i] = b[i]
+		if i < tn:
+			var a := float(i) / tn
+			out[i] = b[i] * sin(a * PI * 0.5) + b[int(seconds * RATE) + i] * cos(a * PI * 0.5)
+	return out
+
+
+## Melee swing: the whoosh (same noise as before) over a low thump.
+func _melee_swing() -> PackedFloat32Array:
+	var b := _whoosh(0.18, 1500.0)
 	for i in b.size():
 		var t := float(i) / RATE
-		var idx := int(t / per) % chords.size()
-		var local := fmod(t, per)
-		var fade := clampf(local / 1.5, 0.0, 1.0) * clampf((per - local) / 1.5, 0.0, 1.0)
-		var v := 0.0
-		for f: float in chords[idx]:
-			v += sin(TAU * f * t) + 0.5 * sin(TAU * f * 1.003 * t)
-		lp = _lp(lp, v, 900.0)
-		b[i] = lp * 0.06 * (0.4 + 0.6 * fade)
+		b[i] += sin(TAU * (95.0 - 220.0 * t) * t) * _env(t, 0.004, 0.045) * 0.7
 	return b
 
 
-## Menu theme: the ambient chords under a slow arpeggio and a soft bass
-## pulse (100 bpm, 8 bars), seamless loop.
-func _theme(seconds: float) -> PackedFloat32Array:
-	var b := _buffer(seconds)
-	var chords := [[110.0, 164.81, 220.0, 277.18], [98.0, 146.83, 196.0, 246.94],
-			[123.47, 185.0, 246.94, 293.66], [103.83, 155.56, 207.65, 261.63]]
-	var per := seconds / chords.size()
-	var step := 60.0 / 100.0 / 2.0  # eighth notes
-	var pad := 0.0
-	var lead := 0.0
+## Melee hit: a dull body impact (low drop, a short crack, a mid knock).
+func _melee_hit() -> PackedFloat32Array:
+	var b := _buffer(0.28)
+	var lp := 0.0
 	for i in b.size():
 		var t := float(i) / RATE
-		var idx := int(t / per) % chords.size()
-		var chord: Array = chords[idx]
-		var local := fmod(t, per)
-		var fade := clampf(local / 1.0, 0.0, 1.0) * clampf((per - local) / 1.0, 0.0, 1.0)
-		var v := 0.0
-		for f: float in chord:
-			v += sin(TAU * f * t) + 0.4 * sin(TAU * f * 1.004 * t)
-		pad = _lp(pad, v, 700.0)
-		var n := int(t / step)
-		var note: float = chord[[0, 2, 1, 3, 2, 1, 3, 2][n % 8]] * 2.0
-		var nt := fmod(t, step)
-		var tri := absf(fmod(note * t, 1.0) * 4.0 - 2.0) - 1.0
-		lead = _lp(lead, tri * _env(nt, 0.005, 0.12), 2400.0)
-		var beat := fmod(t, step * 2.0)
-		var bass := sin(TAU * chord[0] * 0.5 * t) * _env(beat, 0.01, 0.18)
-		b[i] = pad * 0.045 * (0.5 + 0.5 * fade) + lead * 0.16 + bass * 0.16
+		lp = _lp(lp, _rng.randf_range(-1.0, 1.0), 2600.0)
+		var low := sin(TAU * (130.0 - 260.0 * t) * t) * _env(t, 0.002, 0.08)
+		var knock := sin(TAU * 310.0 * t) * _env(t, 0.001, 0.025)
+		b[i] = low * 0.9 + lp * _env(t, 0.0005, 0.015) * 0.8 + knock * 0.35
 	return b
 
 

@@ -171,23 +171,23 @@ func test_difficulty_changes_accuracy() -> void:
 
 ## Regression: a roaming bot that finished its path picked a new target but
 ## kept the finished path, so it never re-pathed and stood still for good.
+## One bot per round, alone, so it roams the whole time (a fight in the
+## window would legitimately keep it near one spot).
 func test_roaming_bots_keep_moving() -> void:
-	for round in 4:
+	for round in 6:
 		for id in brains.keys():
 			world.remove_player(id)
 		brains = {}
-		for i in 2:
-			var id := 3000 + round * 10 + i
-			world.add_player(id, Loadouts.ffa(), "Bot %d" % i, true)
-			brains[id] = BotBrain.new(world, nav, id, 51 + round * 7 + i)
-		var last := {}
-		for id in brains:
-			last[id] = world.get_player(id).state.position
+		var bot_id := 3000 + round
+		world.add_player(bot_id, Loadouts.ffa(), "Bot %d" % round, true)
+		brains[bot_id] = BotBrain.new(world, nav, bot_id, 51 + round * 7)
+		# The bug froze a bot for good; a rare short snag (stuck recovery
+		# gets it out) is fine, so fail on two still windows in a row.
+		var last := world.get_player(bot_id).state.position
+		var still := 0
 		for window in 6:  # 6 × 10 s
 			_run(600)
-			for id in brains:
-				var p := world.get_player(id)
-				if p.state.alive and brains[id].goal == BotBrain.Goal.ROAM:
-					assert_gt(p.state.position.distance_to(last[id]), 1.0,
-							"bot %d moved in 10 s of roaming (at %s)" % [id, p.state.position])
-				last[id] = p.state.position
+			var p := world.get_player(bot_id)
+			still = still + 1 if p.state.alive and p.state.position.distance_to(last) < 1.0 else 0
+			assert_lt(still, 2, "bot %d still for 20 s of roaming (at %s)" % [bot_id, p.state.position])
+			last = p.state.position
