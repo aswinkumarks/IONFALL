@@ -1460,6 +1460,7 @@ func _make_confirm_panel() -> Control:
 func _set_paused(paused: bool) -> void:
 	_paused = paused
 	_pause_panel.visible = paused
+	_kill_feed.visible = not paused  # on touch it sits where the pause scoreboard opens
 	if not paused:
 		_confirm_panel.visible = false
 	input.enabled = not paused and not spectating()
