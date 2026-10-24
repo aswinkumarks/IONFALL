@@ -1,6 +1,6 @@
 class_name LobbySession
 extends Node
-## Pre-match lobby: who is in, and the host's map, mode and duration. Uses
+## Pre-match lobby: who is in, and the host's map, mode, duration and bots. Uses
 ## the match's Transport (same handshake, whitelist and ingress limits) over
 ## ENet or an online peer. Only the host sends: LOBBY on every change, START
 ## when the match begins. Then everyone leaves the lobby and joins the match,
@@ -19,6 +19,11 @@ var is_host: bool = false
 var map_id: String = Maps.DEFAULT
 var game_mode: int = GameMode.FFA
 var minutes: int = DEFAULT_MINUTES
+## The host's bot settings, shown to everyone (bot count up to the cap,
+## BotBrain.Difficulty); bots make room as players join.
+var bots: int = 0
+var bot_difficulty: int = 1
+var friendly_fire: bool = false
 var max_players: int = Protocol.MAX_PEERS
 ## [{name, host}], the host first, then in join order.
 var members: Array = []
@@ -55,10 +60,14 @@ func join(address: String, port: int, player_name: String, uuid: String, peer: M
 
 
 ## Host: changes the settings everyone sees.
-func configure(p_map: String, p_mode: int, p_minutes: int) -> void:
+func configure(p_map: String, p_mode: int, p_minutes: int, p_bots: int = bots, p_difficulty: int = bot_difficulty,
+		p_friendly_fire: bool = friendly_fire) -> void:
 	map_id = p_map if Maps.has(p_map) else Maps.DEFAULT
 	game_mode = p_mode if p_mode >= 0 and p_mode < GameMode.IDS.size() else GameMode.FFA
 	minutes = p_minutes if DURATIONS.has(p_minutes) else DEFAULT_MINUTES
+	bots = clampi(p_bots, 0, Protocol.MAX_PEERS - 1)
+	bot_difficulty = clampi(p_difficulty, 0, BotBrain.DIFFICULTY_IDS.size() - 1)
+	friendly_fire = p_friendly_fire
 	_broadcast()
 
 
@@ -125,7 +134,7 @@ func _update_members() -> void:
 
 func _broadcast() -> void:
 	if is_host:
-		var msg := Protocol.encode_lobby(map_id, game_mode, minutes, max_players, members)
+		var msg := Protocol.encode_lobby(map_id, game_mode, minutes, max_players, members, bots, bot_difficulty, friendly_fire)
 		for id in _accepted:
 			transport.send(id, msg, Protocol.CH_CONTROL, true)
 	changed.emit()
@@ -141,6 +150,9 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 				minutes = l.minutes
 				max_players = l.max
 				members = l.members
+				bots = l.bots
+				bot_difficulty = l.bot_difficulty
+				friendly_fire = l.friendly_fire
 				changed.emit()
 		Protocol.Msg.START:
 			var s := Protocol.decode_start(data)

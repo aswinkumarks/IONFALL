@@ -30,6 +30,9 @@ var _code: Label
 var _map_tiles: Array[MenuTile] = []
 var _mode_chips: HBoxContainer
 var _duration_chips: HBoxContainer
+var _bot_stepper: Stepper
+var _difficulty_chips: HBoxContainer
+var _ff_chips: HBoxContainer
 var _slots: VBoxContainer
 var _count: Label
 var _start_button: Button
@@ -68,7 +71,8 @@ func _exit_tree() -> void:
 ## Host: listens on the LAN port or opens an online game with an invite code.
 func _open() -> void:
 	var max_players := config.max_combatants()
-	session.configure(config.map, config.game_mode, config.minutes)
+	session.configure(config.map, config.game_mode, config.minutes, config.bots, config.bot_difficulty,
+			config.friendly_fire)
 	var err := OK
 	if config.online:
 		_subtitle.text = tr("NET_ONLINE_SIGNING_IN")
@@ -152,6 +156,16 @@ func _refresh() -> void:
 		_map_tiles[i].selected = Maps.PLAYABLE[i] == session.map_id
 	MenuKit.select_chip(_mode_chips, session.game_mode)
 	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(session.minutes))
+	_bot_stepper.set_value(session.bots)
+	MenuKit.select_chip(_difficulty_chips, session.bot_difficulty)
+	MenuKit.select_chip(_ff_chips, 1 if session.friendly_fire else 0)
+	# Co-op waves bring their own bots; friendly fire needs teams.
+	if _host:
+		_bot_stepper.set_enabled(session.game_mode != GameMode.WAVES)
+		MenuKit.set_chips_enabled(_ff_chips, MatchConfig.friendly_fire_applies(session.game_mode))
+	else:
+		_bot_stepper.modulate.a = 1.0 if session.game_mode != GameMode.WAVES else 0.4
+		_ff_chips.modulate.a = 1.0 if MatchConfig.friendly_fire_applies(session.game_mode) else 0.4
 	_fill_slots()
 	# Unknown until the host's first update arrives.
 	_count.text = tr("LOBBY_PLAYERS") % [session.members.size(), session.max_players] \
@@ -218,12 +232,19 @@ func _host_name() -> String:
 
 # --- Host settings ---
 
-## Applies and remembers the host's choices (the next lobby starts with them).
-func _apply(map_id: String, mode: int, minutes: int) -> void:
-	session.configure(map_id, mode, minutes)
+## Applies and remembers the host's choices (the next lobby starts with
+## them): `changes` holds any of map, mode, minutes, bots, bot_difficulty,
+## friendly_fire; the rest stay as they are.
+func _apply(changes: Dictionary) -> void:
+	session.configure(changes.get("map", session.map_id), changes.get("mode", session.game_mode),
+			changes.get("minutes", session.minutes), changes.get("bots", session.bots),
+			changes.get("bot_difficulty", session.bot_difficulty), changes.get("friendly_fire", session.friendly_fire))
 	Settings.set_value("profile", "map", session.map_id)
 	Settings.set_value("profile", "mode", GameMode.IDS[session.game_mode])
 	Settings.set_value("profile", "minutes", session.minutes)
+	Settings.set_value("profile", "bots", session.bots)
+	Settings.set_value("profile", "bot_difficulty", BotBrain.DIFFICULTY_IDS[session.bot_difficulty])
+	Settings.set_value("profile", "friendly_fire", session.friendly_fire)
 	Settings.save_settings()
 
 
@@ -242,6 +263,9 @@ func _on_started(settings: Dictionary) -> void:
 	config.map = settings.map
 	config.game_mode = settings.mode
 	config.minutes = settings.minutes
+	config.bots = session.bots
+	config.bot_difficulty = session.bot_difficulty
+	config.friendly_fire = session.friendly_fire
 	config.from_lobby = true
 	config.spectate = false  # lobby members play; spectating is for games already playing
 	_starting = true
@@ -310,7 +334,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_back()
 
 
-# --- Layout: header with the invite code; map, mode and length on the left,
+# --- Layout: header with the invite code; map, mode, length and bots on the left,
 # the players' places on the right; Start at the bottom ---
 
 func _build_ui() -> void:
@@ -361,13 +385,14 @@ func _build_ui() -> void:
 	settings.add_child(MenuKit.section("MENU_SECTION_MAP" if _host else "LOBBY_HOST_CHOOSES"))
 	var maps := HBoxContainer.new()
 	maps.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	maps.custom_minimum_size.y = 120  # room for the name and blurb with every option row below
 	maps.add_theme_constant_override("separation", 14)
 	settings.add_child(maps)
 	for id: String in Maps.PLAYABLE:
 		var tile := MenuTile.make(Maps.LIST[id].name, Maps.LIST[id].blurb, "", load(Maps.LIST[id].thumb))
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tile.read_only = not _host
-		tile.pressed.connect(func() -> void: _apply(id, session.game_mode, session.minutes))
+		tile.pressed.connect(func() -> void: _apply({"map": id}))
 		maps.add_child(tile)
 		_map_tiles.append(tile)
 	# One row each: side by side, the chips don't fit the column in longer
@@ -376,9 +401,31 @@ func _build_ui() -> void:
 	options.add_theme_constant_override("separation", 10)
 	settings.add_child(options)
 	_mode_chips = _option(options, "MENU_SECTION_MODE", GameMode.CHIP_KEYS,
-			func(i: int) -> void: _apply(session.map_id, i, session.minutes))
-	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
-			func(i: int) -> void: _apply(session.map_id, session.game_mode, LobbySession.DURATIONS[i]))
+			func(i: int) -> void: _apply({"mode": i}))
+	# Match length and the bot count share a row, so every option fits a
+	# 720 px screen.
+	var length_row := HBoxContainer.new()
+	length_row.add_theme_constant_override("separation", 24)
+	options.add_child(length_row)
+	_duration_chips = _option(length_row, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
+			func(i: int) -> void: _apply({"minutes": LobbySession.DURATIONS[i]}))
+	# Members see the host's count; the host's cap is the limit.
+	var bots_box := VBoxContainer.new()
+	bots_box.add_theme_constant_override("separation", 8)
+	length_row.add_child(bots_box)
+	bots_box.add_child(MenuKit.section("MENU_SECTION_BOTS"))
+	_bot_stepper = Stepper.new(0, config.max_bots() if _host else Protocol.MAX_PEERS - 1, config.bots, not _host)
+	_bot_stepper.label_for = MenuKit.bot_label
+	_bot_stepper.set_value(config.bots)
+	_bot_stepper.changed.connect(func(n: int) -> void: _apply({"bots": n}))
+	bots_box.add_child(_bot_stepper)
+	var bot_row := HBoxContainer.new()
+	bot_row.add_theme_constant_override("separation", 24)
+	options.add_child(bot_row)
+	_difficulty_chips = _option(bot_row, "MENU_SECTION_BOT_DIFFICULTY", MenuKit.difficulty_labels(),
+			func(i: int) -> void: _apply({"bot_difficulty": i}))
+	_ff_chips = _option(bot_row, "MENU_SECTION_FRIENDLY_FIRE", ["MENU_OFF", "MENU_ON"],
+			func(i: int) -> void: _apply({"friendly_fire": i == 1}))
 
 	var players := PanelContainer.new()
 	players.theme_type_variation = &"CardPanel"

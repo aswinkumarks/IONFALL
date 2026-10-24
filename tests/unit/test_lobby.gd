@@ -71,3 +71,25 @@ func test_full_lobby_rejects_and_unknown_settings_fall_back() -> void:
 	assert_signal_emitted_with_parameters(late, "closed", ["server full"])
 	host.configure("nowhere", 9, 7)
 	assert_eq([host.map_id, host.game_mode, host.minutes], [Maps.DEFAULT, GameMode.FFA, LobbySession.DEFAULT_MINUTES])
+
+
+func test_lobby_carries_the_bot_settings() -> void:
+	var members := [{"name": "Host", "host": true}]
+	var l := Protocol.decode_lobby(Protocol.encode_lobby("foundry", GameMode.CTF, 10, 16, members, 7, 2, true))
+	assert_eq(l.bots, 7)
+	assert_eq(l.bot_difficulty, 2)
+	assert_true(l.friendly_fire)
+	assert_true(Protocol.decode_lobby(Protocol.encode_lobby("foundry", GameMode.CTF, 10, 16, members, 16)).is_empty(),
+			"more bots than places is refused")
+
+
+func test_bot_counts_stay_inside_the_host_cap() -> void:
+	var c := MatchConfig.make(MatchConfig.Mode.HOST, "Host")
+	assert_eq(c.max_bots(), c.max_combatants() - 1)
+	assert_eq(c.clamp_bots(99, true), c.max_bots())
+	assert_eq(c.clamp_bots(0, true), 0, "a lobby can have no bots")
+	assert_eq(c.clamp_bots(0, false), 1, "single player needs someone to fight")
+	assert_true(MatchConfig.friendly_fire_applies(GameMode.TDM))
+	assert_true(MatchConfig.friendly_fire_applies(GameMode.CTF))
+	assert_false(MatchConfig.friendly_fire_applies(GameMode.FFA))
+	assert_false(MatchConfig.friendly_fire_applies(GameMode.WAVES))

@@ -14,8 +14,9 @@ const DEFAULTS := {
 		"map": "station",  ## Maps.PLAYABLE, for Play and Host
 		"mode": "ffa",  ## GameMode.IDS, for Play and Host
 		"minutes": 10,  ## match length (LobbySession.DURATIONS), for single player and lobbies
-		"friendly_fire": false,  ## TDM, when hosting (PLAN §2.3)
+		"friendly_fire": false,  ## TDM and CTF, single player and hosting (PLAN §2.3)
 		"bot_difficulty": "normal",  ## BotBrain.DIFFICULTY_IDS
+		"bots": 3,  ## bots next to you (single player, hosting), up to MatchConfig.max_bots()
 		"browser_players": false,  ## LAN hosts also take browsers over WebSocket (PLAN §3.20)
 	},
 	"video": {

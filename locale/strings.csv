@@ -303,6 +303,13 @@ MENU_HOST_HINT,You pick the map and mode in the lobby once players have joined.
 MENU_SECTION_MAP,Map
 MENU_SECTION_MODE,Mode
 MENU_SECTION_DURATION,Match length
+MENU_SECTION_BOTS,Bots
+MENU_SECTION_BOT_DIFFICULTY,Bot difficulty
+MENU_SECTION_FRIENDLY_FIRE,Friendly fire
+MENU_BOTS_NONE,None
+MENU_OFF,Off
+MENU_ON,On
+MENU_SOLO_HINT_ONE,You against 1 bot
 MENU_MINUTES,%d min
 MENU_SOLO_HINT,You against %d bots
 MENU_SOLO_HINT_WAVES,"You against 10 waves of bots, each bigger and tougher"
@@ -313,7 +320,7 @@ MENU_JOIN_DIRECT_HINT_WEB,"Enter the host's IP address, e.g. 192.168.0.10. The h
 LOBBY_SHARE_CODE,Share the invite code with friends. They find the game under Join Game or type the code.
 LOBBY_LAN_HINT,Players on this network see the game under Join Game.
 LOBBY_LAN_CAPTION,Local network
-LOBBY_HOST_BOTS_HINT,Bots fill the empty places. Start when everyone is in.
+LOBBY_HOST_BOTS_HINT,Bots make room as players join. Start when everyone is in.
 MENU_GAMES_EMPTY,"No games yet. Ask a friend to host, or enter their address or invite code."
 NET_SERVER_SHUTDOWN,The server was shut down
 SETTING_REDUCE_FLASHES,Reduce flashes

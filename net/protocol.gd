@@ -436,8 +436,12 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 
 ## The host's settings and who is in the lobby. `members`: Array of
 ## {name, host} in join order.
-static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: int, members: Array) -> PackedByteArray:
-	var w := Wire.Writer.new().u8(Msg.LOBBY).str8(map_id).u8(mode).u8(minutes).u8(max_players).u8(members.size())
+## `bots`, `bot_difficulty`, `friendly_fire`: the host's bot settings, shown
+## read-only to members.
+static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: int, members: Array,
+		bots: int = 0, bot_difficulty: int = 1, friendly_fire: bool = false) -> PackedByteArray:
+	var w := Wire.Writer.new().u8(Msg.LOBBY).str8(map_id).u8(mode).u8(minutes).u8(max_players) \
+			.u8(bots).u8(bot_difficulty).u8(1 if friendly_fire else 0).u8(members.size())
 	for m in members:
 		w.u8(1 if m.host else 0).str8(m.name)
 	return w.data()
@@ -446,9 +450,10 @@ static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: i
 static func decode_lobby(data: PackedByteArray) -> Dictionary:
 	var r := Wire.Reader.new(data)
 	r.u8()
-	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8(), "max": r.u8(), "members": []}
+	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8(), "max": r.u8(), "bots": r.u8(),
+			"bot_difficulty": r.u8(), "friendly_fire": r.u8() == 1, "members": []}
 	var n := r.u8()
-	if n > MAX_PEERS:
+	if n > MAX_PEERS or out.bots >= MAX_PEERS or out.bot_difficulty > 3:
 		return {}
 	for i in n:
 		out.members.append({"host": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES)})

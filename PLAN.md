@@ -74,7 +74,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 - **Spread & recoil**: deterministic, seeded from the shot's action ID (§3.2)
 - **Reload**: switching weapons cancels a reload. Sprinting allows the reload to continue. You can't fire until the reload finishes
 - **Weapon switch**: 24 ticks to raise; power weapons 36 ticks
-- **Friendly fire**: off by default in TDM (host setting). **Self-damage** is on for explosives at 50%
+- **Friendly fire**: off by default in TDM and CTF, chosen with the bot count and difficulty on the Single Player screen or in the lobby (moved out of Settings after 0.9.1). **Self-damage** is on for explosives at 50%
 - **Power weapons**: picking one up replaces your primary; your loadout primary drops and despawns after 1,200 ticks (20 s). If you die, the power weapon drops with its remaining ammo and despawns after 20 s. A spawn point's 60–120 s timer starts only when its previous instance no longer exists (never more than one instance per spot). The HUD shows the countdown
 - **Pickup contention**: the server resolves pickups in tick order; ties go to the player closest to the item
 - **Taking items**: walking over a power weapon takes it unless you already hold one; any other swap (a dropped primary, a second power weapon) needs Interact. Walking over a weapon you carry tops up its reserve. Spot timers: Rail Sniper 120 s, Arc Launcher 90 s, grenades 20 s
