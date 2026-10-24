@@ -37,8 +37,8 @@ python3 tools/write_build_info.py --platform linux --arch x86_64 --config releas
 godot --headless --export-release "Linux" build/linux/ionfall.x86_64
 
 # Dedicated server
-godot --headless --export-release "Server Linux" build/server-linux/ionfall_server.x86_64
-build/server-linux/ionfall_server.x86_64 --headless -- --server --smoke-test
+godot --headless --export-release "Linux" build/linux/ionfall.x86_64
+build/linux/ionfall.x86_64 --headless -- --server --smoke-test
 
 # Signed release AAB for Play, with the 16 KB checks (no install):
 #   tools/android_release.sh

@@ -27,7 +27,6 @@ or play with friends over the local network or the internet. Phones and PCs play
 | **Windows 10/11** (64-bit) | From the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest), download `ionfall-<version>-windows.zip`, unzip, run `IONFALL.exe`. The build isn't code-signed, so SmartScreen may warn: **More info → Run anyway**. |
 | **Linux** (x86_64) | From the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest), download `ionfall-<version>-linux.zip`, unzip, run `./ionfall.x86_64`. |
 | **Android 10+** (64-bit) | On the phone, download `ionfall-<version>-android-arm64.apk` from the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest) and open it (allow installs from your browser or file manager). A Google Play release is coming with v1.0. |
-| **Dedicated server** | Linux or Windows server (`ionfall-<version>-server-*.zip` on the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest)) for LAN matches of up to 16 players; see [docs/server.md](docs/server.md). |
 
 Checksums are in each release's `SHA256SUMS`.
 Everyone in a match needs the same version.
@@ -67,7 +66,8 @@ as GitHub Pages can't open `ws://`), then use Join Game in the browser with the 
 
 - **LAN:** one player picks **Host Game**; others find it under **Join Game**, or join by IP or by
   scanning the host's QR code. A phone can host up to 4 players and a PC up to 16 (8 for
-  internet games). A dedicated server also takes up to 16.
+  internet games). The desktop game can also run headless as a LAN server
+  ([docs/server.md](docs/server.md)).
 - **Internet:** **Host Game → Internet** gives a 6-letter invite code; friends enter it under
   **Join Game**. This runs through Epic Online Services relays, so no port forwarding is needed.
   See [docs/online.md](docs/online.md).
