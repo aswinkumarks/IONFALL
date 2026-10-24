@@ -26,6 +26,9 @@ const CH_CHAT := 2  ## reliable ordered: chat (later)
 const MAX_CLIENT_PACKET := 256
 const CMD_REDUNDANCY := 4
 const MAX_NAME_BYTES := 48
+## Rows in a results message: everyone who played part of the match, so
+## bots that gave way to joining players count too (more than MAX_PEERS).
+const MAX_RESULT_ROWS := 32
 
 
 enum Event { FIRE = 1, EXPLOSION = 2, HIT = 3, DEATH = 4, SPAWN = 5, PICKUP = 6, FLAG = 7, WAVE = 8 }
@@ -225,7 +228,7 @@ static func decode_results(data: PackedByteArray) -> Dictionary:
 			"humans": r.u8(), "mode": r.u8(), "winner_team": r.u8(), "team_scores": PackedInt32Array([r.i16(), r.i16()]),
 			"players": []}
 	var n := r.u8()
-	if n > MAX_PEERS:
+	if n > MAX_RESULT_ROWS:
 		return {}
 	for i in n:
 		var p := {"id": r.u16(), "bot": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES), "score": r.i16(), "team": r.u8(),

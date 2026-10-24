@@ -617,6 +617,12 @@ func _end_match(lead: int) -> void:
 				"best_streak": l.best_streak, "weapon_kills": l.weapon_kills,
 				"team": world.players[id].team if teams and world.players.has(id) else GameMode.NO_TEAM})
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
+	# Every human keeps a row (their profile reads it); bots fill what's left.
+	if rows.size() > Protocol.MAX_RESULT_ROWS:
+		var humans := rows.filter(func(r: Dictionary) -> bool: return not r.bot)
+		var bots := rows.filter(func(r: Dictionary) -> bool: return r.bot)
+		rows = humans + bots.slice(0, maxi(Protocol.MAX_RESULT_ROWS - humans.size(), 0))
+		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
 	var result_id := "%08x-%08x" % [_instance_id, match_id]
 	var msg := Protocol.encode_results(match_id, result_id, winner, world.tick - _play_started_tick, _humans(), rows,
 			game_mode, winner_team, world.team_scores)
