@@ -13,6 +13,9 @@ var _hint: Label
 
 
 func _init() -> void:
+	# Over the whole screen, not the settings page's margins: TouchControls
+	# lays buttons out in screen space, as in a match.
+	top_level = true
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var backdrop := ColorRect.new()
