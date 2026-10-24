@@ -70,6 +70,23 @@ static func duration_labels() -> Array:
 	return LobbySession.DURATIONS.map(func(m: int) -> String: return TranslationServer.translate("MENU_MINUTES") % m)
 
 
+## The bot count as shown on steppers: "None" for 0, else the number.
+static func bot_label(n: int) -> String:
+	return TranslationServer.translate("MENU_BOTS_NONE") if n == 0 else str(n)
+
+
+## "Easy", "Normal", "Hard", "Insane" for BotBrain.DIFFICULTY_IDS.
+static func difficulty_labels() -> Array:
+	return BotBrain.DIFFICULTY_IDS.map(func(id: String) -> String: return "SETTING_VALUE_" + id.to_upper())
+
+
+## Greys out a chip row that doesn't apply (friendly fire outside team modes).
+static func set_chips_enabled(row: HBoxContainer, enabled: bool) -> void:
+	row.modulate.a = 1.0 if enabled else 0.4
+	for b: Button in row.get_children():
+		b.disabled = not enabled
+
+
 ## Selects chip `index` in a row from `chips` without emitting.
 static func select_chip(row: HBoxContainer, index: int) -> void:
 	for i in row.get_child_count():

@@ -17,7 +17,7 @@
 | Platforms | Android, Linux, Windows; cross-play in the same LAN match. A **web browser client** is a post-v1.0 target; the architecture is designed to keep it feasible, subject to a transport prototype (§3.20). **v1.0 does not depend on browser support** |
 | Single-player | Bot matches on the multiplayer maps/modes |
 | Modes | FFA (internal MVP) → TDM (v1.0) → CTF, Co-op Waves (post-v1.0) |
-| Hosting | **Listen host**: PC up to 8 combatants, phone up to 4 *(provisional, raised only after the phone-host test passes)*. **Dedicated server** (Linux/Windows headless): 8 by default, up to 16 combatants. "Combatants" counts humans + bots |
+| Hosting | **Listen host**: PC up to 16 combatants on LAN and 8 online (raised from 8 after the 16-combatant host test, `docs/perf/host-caps.md`), phone up to 4 *(raised only after the phone-host test passes)*. **Dedicated server** (Linux/Windows headless): 8 by default, up to 16 combatants. "Combatants" counts humans + bots |
 | Simulation | Authoritative **forward-simulated server** (the server never rolls back the world) + client prediction for the local player (§3.3). Changing this needs a formal architecture revision |
 | Movement | Sprint, slide, double-jump, mantle (wall-run was dropped in revision 5). No portals/abilities. **Players block each other** (added after 0.9.1, §3.2: the server pushes overlapping players apart; clients predict it against the players they see) |
 | Health | Shield + health, both regenerate (§2.2) |
@@ -74,7 +74,7 @@ Effective HP = 200. Values are *(provisional)*; the table is generated from the 
 - **Spread & recoil**: deterministic, seeded from the shot's action ID (§3.2)
 - **Reload**: switching weapons cancels a reload. Sprinting allows the reload to continue. You can't fire until the reload finishes
 - **Weapon switch**: 24 ticks to raise; power weapons 36 ticks
-- **Friendly fire**: off by default in TDM (host setting). **Self-damage** is on for explosives at 50%
+- **Friendly fire**: off by default in TDM and CTF, chosen with the bot count and difficulty on the Single Player screen or in the lobby (moved out of Settings after 0.9.1). **Self-damage** is on for explosives at 50%
 - **Power weapons**: picking one up replaces your primary; your loadout primary drops and despawns after 1,200 ticks (20 s). If you die, the power weapon drops with its remaining ammo and despawns after 20 s. A spawn point's 60–120 s timer starts only when its previous instance no longer exists (never more than one instance per spot). The HUD shows the countdown
 - **Pickup contention**: the server resolves pickups in tick order; ties go to the player closest to the item
 - **Taking items**: walking over a power weapon takes it unless you already hold one; any other swap (a dropped primary, a second power weapon) needs Interact. Walking over a weapon you carry tops up its reserve. Spot timers: Rail Sniper 120 s, Arc Launcher 90 s, grenades 20 s
@@ -305,7 +305,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 ### 3.5 Hosting
 #### 3.5.1 Listen host
 - "Host Game" from the menu. Single-player bot matches are a listen host with networking disabled
-- **PC host**: up to 8 combatants
+- **PC host**: up to **16 combatants on LAN** (`docs/perf/host-caps.md`: 21 minutes at 60 fps on the Iris Xe laptop on Medium, tick p99 ≤ 5.6 ms), **8 online** until 16 is measured through the EOS relays
 - **Phone host**: up to **4 combatants by default** *(provisional)*. It is raised to 8 only after the Mi 11X passes a 20-minute host test meeting the §3.10 targets
 - **Lifecycle** (Android, and later browser tabs). The OS can suspend or kill the app without notice, so these are **best-effort** behaviors, not guarantees:
   - **User-initiated exit** (Leave/Quit button, back gesture in a match): a confirmation dialog warns "Leaving ends the match" (host) or "You'll leave the match" (client)
@@ -425,6 +425,7 @@ LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNT
 | Mi 11X (client) | Medium, render scale 0.6 of 2400×1080 (adaptive down to 0.5) | 8 combatants, in combat | p95 ≤ 25 ms (40 fps), p99 ≤ 33.3 ms *(revised in M4)* |
 | Mi 11X (client) | Low, 0.6 (adaptive down to 0.5) | **16 combatants** (dedicated server), in combat | p95 ≤ 25 ms (40 fps), p99 ≤ 33.3 ms *(revised in M4)* |
 | Mi 11X (phone host) | Medium, 0.6 | **4 combatants (final, M4)** | p95 ≤ 18.2 ms (55 fps), server tick p99 ≤ 4 ms |
+| Intel Iris Xe laptop (PC host, *verified 2026-10-24*, `docs/perf/host-caps.md`) | Medium, 1080p | **16 combatants** (LAN cap) | p95 ≤ 16.7 ms, server tick p99 ≤ 6 ms: met (20 of 21 minutes at 16.7, tick p99 ≤ 5.6) |
 | Min-spec Android (*deferred, unverified*) | Low, 0.6 | 8 combatants (16 also supported on Low, unverified) | p95 ≤ 33.3 ms (30 fps); stretch 22.2 ms (45 fps) |
 | Intel Iris Xe laptop (*verified in M6*, `docs/perf/m6.md`; AMD Vega 8 unverified) | Medium, 1080p | 8 combatants (16 on Low) | p95 ≤ 16.7 ms: met (also on High) |
 | Dedicated GPU PC (*deferred to M6: none on hand in M4*) | High (Forward+), 1080p–1440p | 16 combatants | p95 ≤ 6.9 ms (144 fps) |

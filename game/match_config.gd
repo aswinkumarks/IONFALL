@@ -22,7 +22,7 @@ var character: int = 0  ## index into CharacterRig.SELECTABLE
 var color: int = 0  ## index into PlayerVisual.PALETTE (0 = auto)
 var primary: int = 0  ## index into Loadouts.PRIMARIES
 var game_mode: int = GameMode.FFA  ## hosting: the mode to run
-var friendly_fire: bool = false  ## hosting TDM
+var friendly_fire: bool = false  ## TDM and CTF
 var bot_difficulty: int = 1  ## BotBrain.Difficulty
 var map_retried: bool = false  ## joined once already and reloaded with the host's map
 var reconnect_token: int = 0  ## JOIN: rejoin a match we dropped out of
@@ -47,13 +47,44 @@ static func open_rejoin() -> Dictionary:
 	return rejoin if not rejoin.is_empty() and Time.get_ticks_msec() < int(rejoin.until_ms) else {}
 
 
-## PLAN §3.5.1: a phone host takes 4 combatants, a PC host 8. Final for M4:
-## the Mi 11X failed the 20-minute 8-combatant host test (frame p95 ~26 ms,
-## tick p99 up to 5 ms; docs/perf/m4.md).
+## PLAN §3.5.1: a phone host takes 4 combatants (the Mi 11X failed the
+## 8-combatant host test, docs/perf/m4.md), a PC host 16 on LAN
+## (docs/perf/host-caps.md) and 8 online: 16 hasn't been measured through
+## the EOS relays.
+const PHONE_HOST_CAP := 4
+const PC_HOST_CAP := 16
+const PC_ONLINE_HOST_CAP := 8
+
+
+## The bot counts this match can take: any number from 1 (0 in a lobby,
+## where players can fill it) up to the host cap minus the local player.
+func max_bots() -> int:
+	return max_combatants() - 1
+
+
+func clamp_bots(n: int, allow_none: bool) -> int:
+	if Platform.get_user_arg("--bots").is_valid_int():  # dev launches keep their exact count
+		return n
+	return clampi(n, 0 if allow_none else 1, max_bots())
+
+
+## Friendly fire only applies where there are teams to hurt (TDM and CTF;
+## co-op waves never have it).
+static func friendly_fire_applies(game_mode: int) -> bool:
+	return GameMode.is_team_mode(game_mode) and game_mode != GameMode.WAVES
+
+
+static func profile_bots() -> int:
+	var v: Variant = Settings.get_value("profile", "bots")
+	return v if v is int else 3
+
+
 func max_combatants() -> int:
-	if Platform.get_user_arg("--host-cap").is_valid_int():  # dev: the phone host test
+	if Platform.get_user_arg("--host-cap").is_valid_int():  # dev: host tests
 		return clampi(Platform.get_user_arg("--host-cap").to_int(), 2, Protocol.MAX_PEERS)
-	return 4 if Platform.is_mobile() else 8
+	if Platform.is_mobile():
+		return PHONE_HOST_CAP
+	return PC_ONLINE_HOST_CAP if online else PC_HOST_CAP
 
 
 static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String = "") -> MatchConfig:

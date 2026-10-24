@@ -164,3 +164,27 @@ func test_go_starts_everyone_from_a_fresh_spawn() -> void:
 func test_phase_messages_carry_the_match_seed() -> void:
 	var msg := Protocol.decode_phase(Protocol.encode_phase(7, 2, MatchPhase.PLAYING, 100, 200, 0xDEADBEEF))
 	assert_eq(msg.seed, 0xDEADBEEF, "a rematch's new spread seed reaches clients")
+
+
+## Bots that give way to joining players keep their stats lines, so a full
+## match can have more participants than MAX_PEERS; the results must still
+## decode (they crashed the host's results screen before).
+func test_results_survive_more_participants_than_peers() -> void:
+	var server := ServerSession.new()
+	add_child_autofree(server)
+	assert_eq(server.start(-1, SimHarness.MOVEMENT, SimHarness.loadout(), TestArenaLayout.spawn_points()), OK)
+	var host := server.add_local_player("Host")
+	server.max_combatants = Protocol.MAX_PEERS
+	server.bot_fill = Protocol.MAX_PEERS
+	server.update_bot_fill()
+	for i in 8:  # players come and go: their bots leave, new ones fill in
+		server.remove_bot(server.bots.keys()[0])
+		server.update_bot_fill()
+	assert_gt(server.stats.lines.size(), Protocol.MAX_PEERS)
+	server._set_phase(MatchPhase.PLAYING, server.world.tick + 1000)
+	server._end_match(host.net_id)
+	var results := server.drain_host_events().filter(func(e: Dictionary) -> bool: return e.type == "results")
+	assert_eq(results.size(), 1)
+	assert_true(results[0].has("players"), "the results decoded")
+	var ids: Array = results[0].players.map(func(p: Dictionary) -> int: return p.id)
+	assert_has(ids, host.net_id, "the host has a row")

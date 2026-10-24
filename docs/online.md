@@ -20,7 +20,8 @@ chips, Start), **Host Game** and **Join Game**.
   *Playing* card joins the match. *Join directly* takes an IP address or an
   invite code (case, spaces and dashes don't matter); it goes to the lobby,
   or straight into the match if the host already started.
-- Host caps are unchanged: 4 combatants on a phone host, 8 on a PC host.
+- Host caps online: 4 combatants on a phone host, 8 on a PC host (16 on
+  LAN; 16 through the EOS relays hasn't been measured).
 - The code stops working when the host leaves the lobby or the match.
 
 ## Lobby
