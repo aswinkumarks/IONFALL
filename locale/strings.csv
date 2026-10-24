@@ -337,3 +337,15 @@ TAG_FRAG,FRAG
 TAG_MELEE,MELEE
 TAG_FALL,FALL
 NET_ONLINE_UNREACHABLE,"Couldn't connect to the host over the internet. Check your connection and try again."
+LOADING_MAP,Loading the map
+LOADING_FIRST_RUN,"Preparing graphics for this device. The first match after an install or a driver update takes longer."
+LOADING_TIP,Tip
+TIP_SLIDE,"Sprint, then crouch to slide under fire."
+TIP_DOUBLE_JUMP,Jump again in mid-air for a double jump.
+TIP_MANTLE,Jump at a ledge to mantle up onto it.
+TIP_PADS,Jump pads in the side lanes throw you up to the high ground.
+TIP_SCOPE,Scoping in tightens the spread of every gun.
+TIP_POWER,The Rail Sniper and Arc Launcher are power weapons: find them on the map.
+TIP_GRENADE,A frag grenade flushes enemies out of cover.
+TIP_CTF,"In Capture the Flag, three captures win."
+TIP_BOTS,Bots fill empty places. Pick their number and difficulty next to the map.

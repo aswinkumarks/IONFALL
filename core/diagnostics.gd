@@ -26,6 +26,7 @@ const PIPELINES := {"canvas": Performance.PIPELINE_COMPILATIONS_CANVAS, "mesh": 
 		"spec": Performance.PIPELINE_COMPILATIONS_SPECIALIZATION}
 var _pipelines: Dictionary = {}
 var _hitches_logged: int = 0
+var _last_frame_us: int = 0
 var _touches: Dictionary = {}
 
 
@@ -52,6 +53,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	frame_stats.add(delta * 1000.0)
+	# The engine clamps `delta` on long frames; the hitch log wants the wall
+	# clock (cold-cache pipeline compiles stall single frames for seconds).
+	var now_us := Time.get_ticks_usec()
+	var frame_ms := maxf(delta * 1000.0, (now_us - _last_frame_us) / 1000.0) if _last_frame_us > 0 else delta * 1000.0
+	_last_frame_us = now_us
 	# A hitch: log what the slow frame's sections took (autoloads process
 	# first, so _frame_us still holds that frame's sums).
 	var compiled := PackedStringArray()
@@ -60,12 +66,12 @@ func _process(delta: float) -> void:
 		if n != int(_pipelines.get(kind, n)):
 			compiled.append("%s+%d" % [kind, n - int(_pipelines[kind])])
 		_pipelines[kind] = n
-	if delta > 0.05 and hitch_log and _hitches_logged < 40:
+	if frame_ms > 50.0 and hitch_log and _hitches_logged < 40:
 		_hitches_logged += 1
 		var parts := PackedStringArray()
 		for name: String in _frame_us:
 			parts.append("%s=%.1f" % [name, _frame_us[name] / 1000.0])
-		Platform.perf_log("HITCH %.0f ms %s pipelines[%s]" % [delta * 1000.0, " ".join(parts), ",".join(compiled)])
+		Platform.perf_log("HITCH %.0f ms %s pipelines[%s]" % [frame_ms, " ".join(parts), ",".join(compiled)])
 	for name: String in _frame_us:
 		if not _sections.has(name):
 			_sections[name] = FrameStats.new(7200)

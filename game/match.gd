@@ -132,6 +132,9 @@ func _ready() -> void:
 	audio.caption.connect(hud.show_caption)
 	if not Platform.user_args.has("--no-warmup"):  # dev: cold-start comparison
 		_warm_up()
+	else:
+		LoadingCover.take(self, config).queue_free()
+		MatchPreload.release()
 	get_tree().root.get_window().focus_exited.connect(_on_focus_lost)
 	Diagnostics.net_info = _net_info
 	if Platform.user_args.has("--adpf"):  # ADPF spike (docs/decisions/0004-thermals-adpf.md)
@@ -332,18 +335,7 @@ func _reconnect_step() -> void:
 
 ## Shader warm-up behind a loading cover (Warmup).
 func _warm_up() -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = 100
-	add_child(layer)
-	var cover := ColorRect.new()
-	cover.color = Color(0.03, 0.05, 0.08)
-	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(cover)
-	var label := UiStyle.label("LOADING", &"DimLabel", HORIZONTAL_ALIGNMENT_CENTER)
-	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	label.grow_vertical = Control.GROW_DIRECTION_BOTH
-	cover.add_child(label)
+	var cover := LoadingCover.take(self, config)
 	# A kill-feed row too: its fonts' first glyphs cost up to ~0.6 s on the
 	# Mi 11X (m4.md), which used to land on the first kill.
 	var glyphs := "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789_-.,+"
@@ -352,11 +344,14 @@ func _warm_up() -> void:
 	var warm := Warmup.new()
 	add_child(warm)
 	_warming = true
+	warm.progress.connect(cover.set_progress)
+	warm.slow.connect(cover.show_slow_note)
 	warm.finished.connect(func() -> void:
 		_warming = false
 		_kill_feed.clear()
 		Diagnostics.hitch_log = Platform.user_args.has("--perf-log")
-		layer.queue_free())
+		MatchPreload.release()
+		cover.queue_free())
 	var started := Time.get_ticks_msec()
 	warm.finished.connect(func() -> void: Platform.perf_log("Warmup: %d ms" % (Time.get_ticks_msec() - started)))
 	warm.start(view.camera, effects)

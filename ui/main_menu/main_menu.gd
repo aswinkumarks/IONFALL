@@ -592,7 +592,7 @@ func _offer_rejoin() -> void:
 		config.from_lobby = false
 		MatchConfig.rejoin = {}
 		MatchConfig.pending = config
-		get_tree().change_scene_to_file(MATCH))
+		LoadingCover.change_scene(get_tree(), MATCH))
 	get_tree().create_timer((int(offer.until_ms) - Time.get_ticks_msec()) / 1000.0).timeout.connect(func() -> void:
 		if is_instance_valid(button):
 			button.queue_free())
@@ -781,4 +781,7 @@ func _config(mode: int, bots: int = 0) -> MatchConfig:
 
 func _go(scene: String, config: MatchConfig) -> void:
 	MatchConfig.pending = config
-	get_tree().change_scene_to_file(scene)
+	if scene == MATCH:
+		LoadingCover.change_scene(get_tree(), scene)
+	else:
+		get_tree().change_scene_to_file(scene)
