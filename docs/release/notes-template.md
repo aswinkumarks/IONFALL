@@ -12,7 +12,6 @@ IONFALL {{VERSION}}: a sci-fi arena shooter for Android, Linux, Windows and the 
 | `ionfall-{{VERSION}}-windows.zip` | Windows 10/11 (64-bit). Unzip and run `IONFALL.exe`. The build isn't code-signed, so SmartScreen may warn: More info → Run anyway. |
 | `ionfall-{{VERSION}}-linux.zip` | Linux x86_64. Unzip and run `ionfall.x86_64`. |
 | `ionfall-{{VERSION}}-web.zip` | Web browsers. Serve the unzipped folder from a web server and open `index.html`. Over plain `http://` it can also join LAN games whose host allows browser players. |
-| `ionfall-{{VERSION}}-server-linux.zip`, `ionfall-{{VERSION}}-server-windows.zip` | Dedicated LAN server (see the README inside). |
 | `ionfall-{{VERSION}}.aab` | The Google Play bundle (for the Play Console, not for installing). |
 | `SHA256SUMS` | Checksums for the downloads. |
 

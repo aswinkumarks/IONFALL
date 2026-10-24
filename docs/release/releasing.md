@@ -15,9 +15,9 @@ the version.
    1.0.0.
 3. CI (`.github/workflows/ci.yml`) runs the tests, builds every platform with
    that version (and the matching Android versionCode), smoke-tests the
-   dedicated server on every map and mode, and creates a **draft** release
+   exported game as a server (`--server`) on every map and mode, and creates a **draft** release
    with:
-   - `ionfall-<version>-{linux,windows,web,server-linux,server-windows}.zip`
+   - `ionfall-<version>-{linux,windows,web}.zip`
    - `ionfall-<version>-android-arm64.apk` and `ionfall-<version>.aab`
      (only when the Android upload key secrets are set, see below)
    - `SHA256SUMS`

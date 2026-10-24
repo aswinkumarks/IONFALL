@@ -125,7 +125,7 @@ jobs:
             "$EOS_PRODUCT_ID" "$EOS_SANDBOX_ID" "$EOS_DEPLOYMENT_ID" "$EOS_CLIENT_ID" "$EOS_CLIENT_SECRET" > eos_credentials.cfg
           echo "EOS credentials written: online play enabled in client builds"
 
-      - name: Export desktop, server and web builds
+      - name: Export desktop and web builds
         env:
           IONFALL_BUILD_NUMBER: "0"
         run: |
@@ -138,20 +138,16 @@ jobs:
           }
           export_preset "Linux" linux x86_64 release build/linux/ionfall.x86_64
           export_preset "Windows" windows x86_64 release build/windows/IONFALL.exe
-          export_preset "Server Linux" server-linux x86_64 release build/server-linux/ionfall_server.x86_64
-          export_preset "Server Windows" server-windows x86_64 release build/server-windows/ionfall_server.exe
           export_preset "Web" web wasm32 release build/web/index.html
-          cp tools/server/ionfall_server.sh build/server-linux/
-          cp tools/server/ionfall_server.bat tools/server/stop_server.bat build/server-windows/
-          cp docs/server.md build/server-linux/README.md
-          cp docs/server.md build/server-windows/README.md
 
-      - name: Smoke test exported dedicated server (every map and mode)
+      # Server builds aren't released any more; the exported game runs the
+      # same server (--server), so every map and mode is still checked.
+      - name: Smoke test the exported game as a server (every map and mode)
         run: |
           set -euo pipefail
           for map in station spire foundry; do
             for mode in ffa tdm ctf waves; do
-              timeout 60 build/server-linux/ionfall_server.x86_64 --headless -- --map $map --mode $mode --no-discovery --smoke-test
+              timeout 60 build/linux/ionfall.x86_64 --headless -- --server --map $map --mode $mode --no-discovery --smoke-test
             done
           done
 
@@ -209,7 +205,7 @@ jobs:
           set -euo pipefail
           D="$RUNNER_TEMP/dist"
           mkdir -p "$D"
-          for p in linux windows server-linux server-windows web; do
+          for p in linux windows web; do
             (cd build/$p && zip -qr "$D/ionfall-$VERSION-$p.zip" .)
           done
           if [ "$ANDROID_CONFIG" = release ]; then
