@@ -31,6 +31,7 @@ var view := FirstPersonView.new()
 var effects := Effects.new()
 var pickups := PickupVisuals.new()
 var flag_visuals := FlagVisuals.new()
+var pad_visuals := JumpPadVisuals.new()
 var _flag_bases: Array = []  ## CTF: the map's flag bases
 var _aim_assist := AimAssist.new()
 var audio := GameAudio.new()
@@ -108,6 +109,8 @@ func _ready() -> void:
 	add_child(gameplay)
 	pickups.spots = gameplay.pickup_spots()
 	_flag_bases = gameplay.flag_bases() if gameplay.has_method("flag_bases") else []
+	if gameplay.has_method("jump_pads"):
+		pad_visuals.build(gameplay.jump_pads())
 	var presentation := Maps.presentation(config.map)
 	add_child(presentation)
 	_apply_shadows(presentation)
@@ -121,7 +124,9 @@ func _ready() -> void:
 	add_child(effects)
 	add_child(pickups)
 	add_child(flag_visuals)
+	add_child(pad_visuals)
 	add_child(audio)
+	audio.launched.connect(pad_visuals.launched)
 	audio.listener = view.camera
 	_build_ui()
 	audio.caption.connect(hud.show_caption)

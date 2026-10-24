@@ -10,6 +10,8 @@ const TICK_DT := 1.0 / 60.0
 ## through each other and replays depend only on the local player (PLAN §3.2).
 const LAYER_WORLD := 1
 const LAYER_PLAYER := 2
+## Jump pad trigger zones (JumpPads): only queried, never collided with.
+const LAYER_PAD := 4
 
 
 static func ticks(seconds: float) -> int:

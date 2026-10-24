@@ -55,6 +55,7 @@ func _init() -> void:
 	# Post-v1 weapons (appended).
 	_save("flux_smg", _gun(0.1, 760.0, 260.0, 0.45, 0.75))
 	_save("melee_hit", _melee_hit())
+	_save("jump_pad", _jump_pad())
 	print("gen_sounds: done")
 	quit()
 
@@ -357,6 +358,25 @@ func _melee_hit() -> PackedFloat32Array:
 
 
 # --- Output ---
+
+## A jump pad: a low thump under a rising, airy sweep.
+func _jump_pad() -> PackedFloat32Array:
+	var length := 0.55
+	var b := _buffer(length)
+	var lp := 0.0
+	var phase := 0.0
+	var tone_phase := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		phase += TAU * lerpf(70.0, 40.0, t / length) / RATE
+		tone_phase += TAU * lerpf(300.0, 900.0, pow(t / length, 0.7)) / RATE
+		var thump := sin(phase) * _env(t, 0.004, 0.12)
+		lp = _lp(lp, _rng.randf_range(-1.0, 1.0), lerpf(400.0, 2600.0, t / length))
+		var air := lp * sin(PI * t / length) * 0.7
+		var tone := sin(tone_phase) * 0.12 * _env(t, 0.03, 0.35)
+		b[i] = thump * 0.8 + air + tone
+	return b
+
 
 func _to_wav(b: PackedFloat32Array) -> AudioStreamWAV:
 	var bytes := PackedByteArray()

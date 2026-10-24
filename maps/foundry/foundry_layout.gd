@@ -191,6 +191,16 @@ static func pickup_spots() -> Array:
 	return out
 
 
+## Jump pads (JumpPads): one in each flank lane, up onto the catwalk
+## above it.
+static func jump_pads() -> Array:
+	var out := []
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			out.append({"position": Vector3(9 * sx, 0, 16.5 * sz), "target": Vector3(6 * sx, DECK, 9.3 * sz)})
+	return out
+
+
 ## Capture-the-flag bases (west team 0, east team 1): inside the loading bays.
 static func flag_bases() -> Array:
 	return [Vector3(-24, 0, 0), Vector3(24, 0, 0)]
