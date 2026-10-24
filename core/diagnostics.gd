@@ -113,8 +113,8 @@ func toggle_overlay() -> void:
 ## `click` presses the visible, enabled button whose label, key or `ui_key` meta
 ## matches, at its on-screen centre (`click:~text`: label contains text); `type` sends key events to the focused control;
 ## `mouse:right:down` presses or releases a mouse button (in-game: aim, fire, middle: melee);
-## `back` sends the Android back button's go-back request;
-## `shot` saves the screen. Every step is logged ("UI ...").
+## `back` sends the Android back button's go-back request; `key:Escape` taps
+## a key; `wheel:X:Y:N` scrolls; `shot` saves the screen; `quit` quits. Every step is logged ("UI ...").
 func _run_ui_steps(spec: String) -> void:
 	for step in spec.split(",", false):
 		var kv := step.split(":", true, 1)
@@ -174,6 +174,31 @@ func _run_ui_steps(spec: String) -> void:
 				await RenderingServer.frame_post_draw
 				get_viewport().get_texture().get_image().save_png(arg)
 				Platform.perf_log("UI shot %s" % arg)
+			"key":  # key:NAME taps a key (Escape, Tab, F3...)
+				for pressed: bool in [true, false]:
+					var k := InputEventKey.new()
+					k.keycode = OS.find_keycode_from_string(arg)
+					k.physical_keycode = k.keycode
+					k.pressed = pressed
+					Input.parse_input_event(k)
+					await get_tree().process_frame
+				Platform.perf_log("UI key %s" % arg)
+			"wheel":  # wheel:X:Y:N scrolls N notches (negative: up) at (X, Y)
+				var parts := arg.split(":")
+				var n := parts[2].to_int()
+				for i in absi(n):
+					for pressed: bool in [true, false]:
+						var e := InputEventMouseButton.new()
+						e.button_index = MOUSE_BUTTON_WHEEL_DOWN if n > 0 else MOUSE_BUTTON_WHEEL_UP
+						e.pressed = pressed
+						e.position = Vector2(parts[0].to_float(), parts[1].to_float())
+						e.global_position = e.position
+						Input.parse_input_event(e)
+						await get_tree().process_frame
+				Platform.perf_log("UI wheel %s" % arg)
+			"quit":
+				Platform.perf_log("UI quit")
+				get_tree().quit()
 
 
 func _find_button(node: Node, label: String) -> Button:

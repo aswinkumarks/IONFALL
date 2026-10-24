@@ -305,6 +305,16 @@ static func pickup_spots() -> Array:
 	return out
 
 
+## Jump pads (JumpPads): one in each side lane, by the lane half wall,
+## up onto the plaza corner (12 m, over the under-croft's edge).
+static func jump_pads() -> Array:
+	var out := []
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			out.append({"position": Vector3(15 * sx, 0, 14.5 * sz), "target": Vector3(6.5 * sx, DECK, 4.5 * sz)})
+	return out
+
+
 ## CTF flag bases (PLAN §2.4): inside the west (team 0) and east (team 1)
 ## bases, under their roofs.
 static func flag_bases() -> Array:

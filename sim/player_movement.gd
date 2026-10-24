@@ -20,6 +20,10 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int) -> void:
 	if s.move_state == Move.MANTLE:
 		_step_mantle(p)
 		return
+	if s.is_on_floor():
+		var pad_target := JumpPads.target_at(p.get_world_3d().direct_space_state, s.position)
+		if pad_target != Vector3.INF:
+			_launch(p, pad_target)
 
 	var fwd := Vector3(-sin(s.yaw), 0.0, -cos(s.yaw))
 	var right := Vector3(cos(s.yaw), 0.0, -sin(s.yaw))
@@ -112,6 +116,20 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int) -> void:
 			_accelerate(s, wish_dir, minf(cfg.walk_speed * wish_len, cfg.air_wish_speed_cap), cfg.air_accel, dt)
 
 	_move_and_collide(p)
+
+
+## Thrown by a jump pad towards `target`: airborne, past coyote time (no
+## ground jump), with the double jump still available.
+static func _launch(p: SimPlayer, target: Vector3) -> void:
+	var s := p.state
+	if s.move_state == Move.SLIDE:
+		_end_slide(p, false)
+	s.velocity = JumpPads.launch_velocity(s.position, target, p.config.gravity)
+	s.move_state = Move.AIR
+	s.ticks_since_floor = p.config.coyote_ticks + 1
+	s.jump_buffer_ticks = 0
+	s.sprinting = false
+	s.air_jumps_left = 1
 
 
 static func _end_slide(p: SimPlayer, crouch_held: bool) -> void:

@@ -1,5 +1,5 @@
 extends Node3D
-## Gameplay half of Halcyon Spire: world collision and spawn points only.
+## Gameplay half of Halcyon Spire: world collision, jump pads and spawn points only.
 ## The dedicated server loads just this scene (PLAN §3.1).
 
 
@@ -17,6 +17,8 @@ func _ready() -> void:
 		var rot: Vector3 = b[3]
 		cs.transform = Transform3D(Basis.from_euler(rot * (PI / 180.0)), b[1])
 		body.add_child(cs)
+	for pad in SpireLayout.jump_pads():
+		add_child(JumpPads.make_area(pad))
 
 
 func spawn_points() -> Array[Transform3D]:
@@ -29,3 +31,7 @@ func pickup_spots() -> Array:
 
 func flag_bases() -> Array:
 	return SpireLayout.flag_bases()
+
+
+func jump_pads() -> Array:
+	return SpireLayout.jump_pads()

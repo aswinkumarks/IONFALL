@@ -33,6 +33,9 @@ const PERCEPTION_INTERVAL := 6
 const REPATH_INTERVAL := 30
 const CHASE_MEMORY_TICKS := 300
 const STUCK_CHECK_TICKS := 90
+## A jump pad path point is reached this close (pads launch at their edge,
+## JumpPads.RADIUS).
+const PAD_REACH := 1.2
 ## Splash weapons are kept for this range band (too close hurts the bot).
 const SPLASH_RANGE := Vector2(6.0, 30.0)
 const GRENADE_RANGE := Vector2(7.0, 18.0)
@@ -399,8 +402,10 @@ func _follow(tick: int, p: SimPlayer, goal_pos: Vector3) -> Vector3:
 		return Vector3.ZERO
 	var next: Vector3 = _path[_path_i][0]
 	var flat := Vector3(next.x - pos.x, 0.0, next.z - pos.z)
-	# The navmesh floats ~0.5 m above the floor: compare heights loosely.
-	if flat.length() < 0.6 and absf(next.y - 0.5 - pos.y) < 1.2:
+	# The navmesh floats ~0.5 m above the floor: compare heights loosely. A
+	# pad launches on its edge, so a pad's centre counts as reached early.
+	var reach := PAD_REACH if _path[_path_i][1] == T.PAD else 0.6
+	if flat.length() < reach and absf(next.y - 0.5 - pos.y) < 1.2:
 		_path_i += 1
 		_traversal = T.NONE
 		_traversal_jumps = 0
@@ -419,7 +424,7 @@ func _follow(tick: int, p: SimPlayer, goal_pos: Vector3) -> Vector3:
 ## Jumps for traversal links: jump + hold for mantles, a second jump near the
 ## apex for tall ledges. Mantling itself is the normal movement code.
 func _traversal_inputs(p: SimPlayer, move: Vector3) -> int:
-	if _traversal == T.NONE or _traversal == T.DROP or move.length_squared() < 0.01:
+	if _traversal == T.NONE or _traversal == T.DROP or _traversal == T.PAD or move.length_squared() < 0.01:
 		return 0
 	var s := p.state
 	var on_floor := s.move_state != PlayerSimState.Move.AIR and s.move_state != PlayerSimState.Move.MANTLE
