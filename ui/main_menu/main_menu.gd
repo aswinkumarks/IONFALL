@@ -17,8 +17,6 @@ extends Control
 
 const MATCH := "res://game/match.tscn"
 const LOBBY := "res://ui/lobby/lobby.tscn"
-const OFFLINE_DUMMIES := 3
-const HOST_DUMMIES := 2
 const ONLINE_LIST_INTERVAL_S := 5.0
 const MARGIN := Vector2(56, 40)
 ## Card sizes: full-width rows for thumbs on phones; fixed, smaller cards
@@ -46,6 +44,9 @@ var _map_tiles: Array[MenuTile] = []
 var _mode_chips: HBoxContainer
 var _solo_hint: Label
 var _duration_chips: HBoxContainer
+var _bot_stepper: Stepper
+var _difficulty_chips: HBoxContainer
+var _ff_chips: HBoxContainer
 var _address_edit: LineEdit
 var _watch_toggle: CheckButton
 var _games_label: Label
@@ -270,7 +271,7 @@ func _player_card() -> Button:
 func _build_solo() -> void:
 	var column := _page_root(Page.SOLO)
 	column.add_child(MenuKit.header("MENU_SINGLE_PLAYER", "MENU_BACK", _go_back))
-	var c := MatchConfig.make(MatchConfig.Mode.OFFLINE, "")
+	var c := MatchConfig.make(MatchConfig.Mode.OFFLINE, "", MatchConfig.profile_bots())
 	column.add_child(MenuKit.section("MENU_SECTION_MAP"))
 	var maps := HBoxContainer.new()
 	maps.add_theme_constant_override("separation", 18)
@@ -291,6 +292,15 @@ func _build_solo() -> void:
 	_duration_chips = _option(options, "MENU_SECTION_DURATION", MenuKit.duration_labels(),
 			LobbySession.DURATIONS.find(c.minutes),
 			func(i: int) -> void: _save_choice("minutes", LobbySession.DURATIONS[i]))
+	var bot_options := HBoxContainer.new()
+	bot_options.add_theme_constant_override("separation", 40)
+	column.add_child(bot_options)
+	_bot_stepper = _stepper(bot_options, "MENU_SECTION_BOTS", Stepper.new(1, c.max_bots(), c.clamp_bots(c.bots, false)),
+			func(n: int) -> void: _save_choice("bots", n))
+	_difficulty_chips = _option(bot_options, "MENU_SECTION_BOT_DIFFICULTY", MenuKit.difficulty_labels(),
+			c.bot_difficulty, func(i: int) -> void: _save_choice("bot_difficulty", BotBrain.DIFFICULTY_IDS[i]))
+	_ff_chips = _option(bot_options, "MENU_SECTION_FRIENDLY_FIRE", ["MENU_OFF", "MENU_ON"], 1 if c.friendly_fire else 0,
+			func(i: int) -> void: _save_choice("friendly_fire", i == 1))
 	var bottom := HBoxContainer.new()
 	column.add_child(bottom)
 	var hint := UiStyle.label("", &"DimLabel")
@@ -323,6 +333,17 @@ func _option(parent: Control, caption: String, labels: Array, selected: int, on_
 	var chips := MenuKit.chips(labels, selected, on_select)
 	box.add_child(chips)
 	return chips
+
+
+## A captioned stepper in `parent`; `on_change(value)`.
+func _stepper(parent: Control, caption: String, stepper: Stepper, on_change: Callable) -> Stepper:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	parent.add_child(box)
+	box.add_child(MenuKit.section(caption))
+	box.add_child(stepper)
+	stepper.changed.connect(on_change)
+	return stepper
 
 
 func _build_host() -> void:
@@ -527,7 +548,7 @@ func _player_name() -> String:
 	return ServerSession.sanitize_name(Platform.get_user_arg("--name", MatchConfig.profile_name()))
 
 
-# --- Single player: map, mode and duration (saved for next time) ---
+# --- Single player: map, mode, duration and bots (saved for next time) ---
 
 func _save_choice(key: String, value: Variant) -> void:
 	Settings.set_value("profile", key, value)
@@ -536,12 +557,22 @@ func _save_choice(key: String, value: Variant) -> void:
 
 
 func _update_solo() -> void:
-	var c := MatchConfig.make(MatchConfig.Mode.OFFLINE, "")
+	var c := MatchConfig.make(MatchConfig.Mode.OFFLINE, "", MatchConfig.profile_bots())
 	for i in _map_tiles.size():
 		_map_tiles[i].selected = Maps.PLAYABLE[i] == c.map
 	MenuKit.select_chip(_mode_chips, c.game_mode)
-	_solo_hint.text = tr("MENU_SOLO_HINT_WAVES") if c.game_mode == GameMode.WAVES else tr("MENU_SOLO_HINT") % OFFLINE_DUMMIES
+	var bots := c.clamp_bots(c.bots, false)
+	if c.game_mode == GameMode.WAVES:
+		_solo_hint.text = tr("MENU_SOLO_HINT_WAVES")
+	else:
+		_solo_hint.text = tr("MENU_SOLO_HINT_ONE") if bots == 1 else tr("MENU_SOLO_HINT") % bots
 	MenuKit.select_chip(_duration_chips, LobbySession.DURATIONS.find(c.minutes))
+	_bot_stepper.set_value(bots)
+	MenuKit.select_chip(_difficulty_chips, c.bot_difficulty)
+	MenuKit.select_chip(_ff_chips, 1 if c.friendly_fire else 0)
+	# Co-op waves bring their own bots; friendly fire needs teams.
+	_bot_stepper.set_enabled(c.game_mode != GameMode.WAVES)
+	MenuKit.set_chips_enabled(_ff_chips, MatchConfig.friendly_fire_applies(c.game_mode))
 
 
 ## After a match was lost to the network, a button rejoins it with our
@@ -723,21 +754,24 @@ func _join_manual() -> void:
 
 ## `watch`: spectator mode, bots only (a bot fills our place).
 func _start_solo(watch: bool = false) -> void:
-	var config := _config(MatchConfig.Mode.OFFLINE, OFFLINE_DUMMIES)
+	var config := _config(MatchConfig.Mode.OFFLINE, MatchConfig.profile_bots())
+	config.bots = config.clamp_bots(config.bots, false)
 	config.spectate = watch or Platform.user_args.has("--spectate")
 	_go(MATCH, config)
 
 
 func _host_lobby(online: bool) -> void:
-	var config := _config(MatchConfig.Mode.HOST, HOST_DUMMIES)
+	var config := _config(MatchConfig.Mode.HOST, MatchConfig.profile_bots())
 	config.online = online
+	config.bots = config.clamp_bots(config.bots, true)
 	_go(LOBBY, config)
 
 
 ## Dev quick launch: a hosted match without a lobby (soak tests).
 func _host_match(online: bool) -> void:
-	var config := _config(MatchConfig.Mode.HOST, HOST_DUMMIES)
+	var config := _config(MatchConfig.Mode.HOST, MatchConfig.profile_bots())
 	config.online = online
+	config.bots = config.clamp_bots(config.bots, true)
 	_go(MATCH, config)
 
 
