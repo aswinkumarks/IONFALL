@@ -292,11 +292,11 @@ The net graph (bytes/s, packets/s, loss, corrections/min, snapshot size max/p99)
 ```
 LOBBY ──start──▶ LOADING ──all acked / 30 s timeout──▶ COUNTDOWN (5 s) ──▶ PLAYING ──score/time──▶ POST_MATCH (15 s) ──▶ next match (new match_id) or LOBBY
 ```
-- **Transitions** are sent on the reliable control channel as `{match_id, phase_seq, phase, server_tick}`, and clients ack them. A client that missed transitions (e.g. after reconnecting) gets the current phase in the join/resync message
+- **Transitions** are sent on the reliable control channel as `{match_id, phase_seq, phase, server_tick, ends_tick, match_seed}` (the seed since protocol 9: a rematch gets a new spread seed, and clients need it to predict shots), and clients ack them. A client that missed transitions (e.g. after reconnecting) gets the current phase in the join/resync message
 - **Kills and events at the boundary**: anything that happened at or before the tick of the PLAYING → POST_MATCH transition counts toward that match's result. Damage stops at that tick
 - **LOBBY**: join, choose team (TDM, with auto-balance) and loadout. No damage
 - **LOADING**: the server sends `{map_id, mode, match_id, compat_hash}`. Clients load and ack. Clients that don't ack within 30 s return to the lobby with a reason. A wrong `compat_hash` is rejected before loading (§3.14)
-- **Warmup**: none in v1.0 (removed to keep the state machine small)
+- **Warmup**: none in v1.0 (removed to keep the state machine small). Players and bots can move during COUNTDOWN, so at COUNTDOWN → PLAYING everyone respawns at a fresh spawn point with spawn protection (added after 0.9.1: bots used to start the match mid-fight next to you)
 - **Late join** during PLAYING is allowed: load → ack → full snapshot → spawn. In TDM the player joins the smaller team
 - **Reconnect**: within 60 s, a client presenting its `reconnect_token` (issued at join) gets its score, team and stats back. After that, it is treated as a new join
 - **Disconnect cleanup**: the player entity is removed. Projectiles/grenades it already fired still resolve, and kills are credited. Held power weapons drop. Bots may backfill the slot (if enabled)

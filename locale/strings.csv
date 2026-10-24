@@ -23,7 +23,8 @@ TOUCH_RELOAD,Reload
 TOUCH_SWAP,Swap
 TOUCH_SCOPE,Scope
 MENU_NAME_PLACEHOLDER,Your name
-MENU_ADDRESS_PLACEHOLDER,Host address (e.g. 192.168.0.10) or invite code
+MENU_ADDRESS_PLACEHOLDER,IP address or invite code
+MENU_ADDRESS_PLACEHOLDER_LAN,Host IP address
 MENU_CONNECT,Connect
 MENU_BAD_ADDRESS,Enter the host's IP address or a 6-letter invite code
 PHASE_WAITING,Waiting for players

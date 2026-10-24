@@ -134,3 +134,33 @@ func test_tie_at_time_limit_goes_to_sudden_death_then_decides() -> void:
 	var results := server.drain_host_events().filter(func(e: Dictionary) -> bool: return e.type == "results")
 	assert_eq(results.size(), 1, "the host gets results")
 	assert_eq(results[0].players.size(), 2)
+
+
+func test_go_starts_everyone_from_a_fresh_spawn() -> void:
+	var server := ServerSession.new()
+	add_child_autofree(server)
+	assert_eq(server.start(-1, SimHarness.MOVEMENT, SimHarness.loadout(), TestArenaLayout.spawn_points()), OK)
+	server.add_local_player("Host")
+	server.bot_fill = 3
+	server.update_bot_fill()
+	server._set_phase(MatchPhase.COUNTDOWN, server.world.tick + 3)
+	# Roaming in the countdown ends up next to each other, protection spent.
+	var spot := Vector3(0, 0.05, 16.5)
+	for p: SimPlayer in server.world.players.values():
+		server.world.teleport(p, spot)
+		p.state.spawn_protection_ticks = 0
+		spot.x += 1.0
+	await wait_until(func() -> bool: return server.phase == MatchPhase.PLAYING, 2.0)
+	assert_eq(server.phase, MatchPhase.PLAYING)
+	var spawns := TestArenaLayout.spawn_points().map(func(t: Transform3D) -> Vector3: return t.origin)
+	for p: SimPlayer in server.world.players.values():
+		assert_gt(p.state.spawn_protection_ticks, 0, "%d is protected at GO" % p.net_id)
+		var nearest := 1e9
+		for o: Vector3 in spawns:
+			nearest = minf(nearest, Vector2(o.x - p.state.position.x, o.z - p.state.position.z).length())
+		assert_lt(nearest, 1.0, "%d starts at a spawn point" % p.net_id)
+
+
+func test_phase_messages_carry_the_match_seed() -> void:
+	var msg := Protocol.decode_phase(Protocol.encode_phase(7, 2, MatchPhase.PLAYING, 100, 200, 0xDEADBEEF))
+	assert_eq(msg.seed, 0xDEADBEEF, "a rematch's new spread seed reaches clients")

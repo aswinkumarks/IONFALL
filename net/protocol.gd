@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 8
+const VERSION := 9
 const MAGIC := 0x464E4F49  ## "IONF"
 ## HELLO flags.
 const HELLO_SPECTATE := 1
@@ -157,14 +157,15 @@ static func decode_welcome(data: PackedByteArray) -> Dictionary:
 	return out if r.ok else {}
 
 
-static func encode_phase(match_id: int, phase_seq: int, phase: int, tick: int, ends_tick: int) -> PackedByteArray:
-	return Wire.Writer.new().u8(Msg.PHASE).u32(match_id).u8(phase_seq).u8(phase).u32(tick).u32(ends_tick).data()
+## `seed`: the match's spread seed (SimWorld.match_seed), new each rematch.
+static func encode_phase(match_id: int, phase_seq: int, phase: int, tick: int, ends_tick: int, seed: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.PHASE).u32(match_id).u8(phase_seq).u8(phase).u32(tick).u32(ends_tick).u32(seed).data()
 
 
 static func decode_phase(data: PackedByteArray) -> Dictionary:
 	var r := Wire.Reader.new(data)
 	r.u8()
-	var out := {"match_id": r.u32(), "phase_seq": r.u8(), "phase": r.u8(), "tick": r.u32(), "ends": r.u32()}
+	var out := {"match_id": r.u32(), "phase_seq": r.u8(), "phase": r.u8(), "tick": r.u32(), "ends": r.u32(), "seed": r.u32()}
 	return out if r.ok else {}
 
 

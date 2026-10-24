@@ -390,7 +390,7 @@ func _build_join() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(hint)
 	_address_edit = LineEdit.new()
-	_address_edit.placeholder_text = "MENU_ADDRESS_PLACEHOLDER"
+	_address_edit.placeholder_text = "MENU_ADDRESS_PLACEHOLDER" if Online.available() else "MENU_ADDRESS_PLACEHOLDER_LAN"
 	_address_edit.select_all_on_focus = true
 	_address_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_URL
 	_address_edit.custom_minimum_size.y = 52

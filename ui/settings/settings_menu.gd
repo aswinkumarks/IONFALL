@@ -215,7 +215,12 @@ func _build_about_tab() -> Control:
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 10)
-	scroll.add_child(box)
+	# Keep the licence column clear of the scroll bar.
+	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_child(box)
+	scroll.add_child(margin)
 	box.add_child(UiStyle.label("MENU_TITLE", &"HeaderLabel"))
 	box.add_child(UiStyle.label(tr("ABOUT_VERSION") % BuildInfo.display_string(), &"DimLabel"))
 	var heading := UiStyle.label("ABOUT_CREDITS")

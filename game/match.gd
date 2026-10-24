@@ -1038,7 +1038,9 @@ func _update_match_ui(delta: float) -> void:
 			_results.footer.text = (_results.footer_extra + "\n" if not _results.footer_extra.is_empty() else "") \
 					+ tr("RESULTS_NEXT_MATCH") % maxi(ceili(_results_until - _time), 0)
 	var subtitle := tr(MatchPhase.label_key(phase)) if phase != MatchPhase.PLAYING else ""
-	var team_scores := _team_scores() if GameMode.is_team_mode(_game_mode()) else PackedInt32Array()
+	# Co-op waves has teams but no team score race (its progress is on the HUD).
+	var team_scores := _team_scores() if GameMode.is_team_mode(_game_mode()) and _game_mode() != GameMode.WAVES \
+			else PackedInt32Array()
 	if Input.is_action_pressed("scoreboard") and not _results.visible and not _paused:
 		_scoreboard.show_scoreboard(_roster(), local_id(), subtitle, team_scores)
 	else:
@@ -1428,7 +1430,7 @@ func _ask_leave() -> void:
 	if config.mode == MatchConfig.Mode.OFFLINE:
 		_leave()
 		return
-	var label: Label = _confirm_panel.get_node("Box/Text")
+	var label: Label = _confirm_panel.find_child("Text", true, false)
 	label.text = tr("LEAVE_CONFIRM_HOST") if config.mode == MatchConfig.Mode.HOST else tr("LEAVE_CONFIRM_CLIENT")
 	_confirm_panel.visible = true
 

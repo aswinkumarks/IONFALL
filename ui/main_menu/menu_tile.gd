@@ -92,9 +92,19 @@ func _draw() -> void:
 	var y := size.y - pad
 	var width := size.x - text_x - pad
 	if not subtitle.is_empty():
-		var sub_size := _fit(UiStyle.font_body, tr(subtitle), width, 17 if big else 15)
-		draw_string(UiStyle.font_body, Vector2(text_x, y), tr(subtitle), HORIZONTAL_ALIGNMENT_LEFT,
-				width, sub_size, Color(UiStyle.TEXT_DIM.lerp(UiStyle.TEXT, lit * 0.5), dim))
+		var sub := tr(subtitle)
+		var preferred := 17 if big else 15
+		var sub_size := _fit(UiStyle.font_body, sub, width, preferred)
+		var sub_color := Color(UiStyle.TEXT_DIM.lerp(UiStyle.TEXT, lit * 0.5), dim)
+		if UiStyle.font_body.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_size).x > width:
+			# Too long for one line even when smaller (narrow cards): two lines.
+			sub_size = roundi(preferred * 0.85)
+			var line := UiStyle.font_body.get_height(sub_size)
+			draw_multiline_string(UiStyle.font_body, Vector2(text_x, y - line), sub, HORIZONTAL_ALIGNMENT_LEFT,
+					width, sub_size, 2, sub_color, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_MANDATORY)
+			y -= line
+		else:
+			draw_string(UiStyle.font_body, Vector2(text_x, y), sub, HORIZONTAL_ALIGNMENT_LEFT, width, sub_size, sub_color)
 		y -= sub_size + 10
 	var title_size := _fit(UiStyle.font_display_bold, tr(title), width, (34 if size.y >= 200 else 30) if big else 26)
 	draw_string(UiStyle.font_display_bold, Vector2(text_x, y), tr(title), HORIZONTAL_ALIGNMENT_LEFT,
