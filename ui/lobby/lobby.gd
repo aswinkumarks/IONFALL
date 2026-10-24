@@ -386,6 +386,7 @@ func _build_ui() -> void:
 	columns.add_child(players)
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 6)
+	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	players.add_child(list)
 	var heading := HBoxContainer.new()
 	list.add_child(heading)
@@ -394,9 +395,15 @@ func _build_ui() -> void:
 	heading.add_child(title)
 	_count = MenuKit.section("")
 	heading.add_child(_count)
+	# Up to 16 players: the list scrolls rather than pushing the page down.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list.add_child(scroll)
 	_slots = VBoxContainer.new()
 	_slots.add_theme_constant_override("separation", 6)
-	list.add_child(_slots)
+	_slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_slots)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)

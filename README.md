@@ -66,8 +66,8 @@ as GitHub Pages can't open `ws://`), then use Join Game in the browser with the 
 ### Multiplayer
 
 - **LAN:** one player picks **Host Game**; others find it under **Join Game**, or join by IP or by
-  scanning the host's QR code. A phone can host up to 4 players and a PC up to 8. A dedicated
-  server takes up to 16.
+  scanning the host's QR code. A phone can host up to 4 players and a PC up to 16 (8 for
+  internet games). A dedicated server also takes up to 16.
 - **Internet:** **Host Game → Internet** gives a 6-letter invite code; friends enter it under
   **Join Game**. This runs through Epic Online Services relays, so no port forwarding is needed.
   See [docs/online.md](docs/online.md).

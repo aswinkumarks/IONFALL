@@ -47,13 +47,21 @@ static func open_rejoin() -> Dictionary:
 	return rejoin if not rejoin.is_empty() and Time.get_ticks_msec() < int(rejoin.until_ms) else {}
 
 
-## PLAN §3.5.1: a phone host takes 4 combatants, a PC host 8. Final for M4:
-## the Mi 11X failed the 20-minute 8-combatant host test (frame p95 ~26 ms,
-## tick p99 up to 5 ms; docs/perf/m4.md).
+## PLAN §3.5.1: a phone host takes 4 combatants (the Mi 11X failed the
+## 8-combatant host test, docs/perf/m4.md), a PC host 16 on LAN
+## (docs/perf/host-caps.md) and 8 online: 16 hasn't been measured through
+## the EOS relays.
+const PHONE_HOST_CAP := 4
+const PC_HOST_CAP := 16
+const PC_ONLINE_HOST_CAP := 8
+
+
 func max_combatants() -> int:
-	if Platform.get_user_arg("--host-cap").is_valid_int():  # dev: the phone host test
+	if Platform.get_user_arg("--host-cap").is_valid_int():  # dev: host tests
 		return clampi(Platform.get_user_arg("--host-cap").to_int(), 2, Protocol.MAX_PEERS)
-	return 4 if Platform.is_mobile() else 8
+	if Platform.is_mobile():
+		return PHONE_HOST_CAP
+	return PC_ONLINE_HOST_CAP if online else PC_HOST_CAP
 
 
 static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String = "") -> MatchConfig:

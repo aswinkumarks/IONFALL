@@ -4,6 +4,8 @@ extends GridContainer
 ## keys; rows are Arrays of cell strings. The local player's row is
 ## highlighted; bots are tagged by the caller.
 
+const DENSE_ROWS := 10
+
 
 ## `row_colors`: optional per-row colour (TDM teams); the highlighted row is
 ## then marked with a leading "›".
@@ -11,8 +13,11 @@ func set_rows(headers: Array, rows: Array, highlight_row: int, row_colors: Array
 	columns = headers.size()
 	for child in get_children():
 		child.queue_free()
+	# Big matches (up to 16 players) get compact rows, so the table, title
+	# and footer still fit a 720 px tall screen.
+	var dense := rows.size() > DENSE_ROWS
 	add_theme_constant_override("h_separation", 28)
-	add_theme_constant_override("v_separation", 8)
+	add_theme_constant_override("v_separation", 1 if dense else 8)
 	for h in headers:
 		add_child(_cell(tr(h).to_upper(), UiStyle.TEXT_DIM, 17, h == headers[0]))
 	for i in rows.size():
@@ -23,7 +28,7 @@ func set_rows(headers: Array, rows: Array, highlight_row: int, row_colors: Array
 			var text := str(rows[i][j])
 			if j == 0 and i == highlight_row and i < row_colors.size():
 				text = "› " + text
-			add_child(_cell(text, color, 24 if j > 0 else 21, j == 0))
+			add_child(_cell(text, color, (18 if dense else 24) if j > 0 else (17 if dense else 21), j == 0))
 
 
 func _cell(text: String, color: Color, size: int, left: bool) -> Label:
