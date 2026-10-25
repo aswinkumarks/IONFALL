@@ -22,8 +22,8 @@ var _handled_link: String = ""
 ## Desktop close (Alt+F4, the window's X): the time a normal quit gets before
 ## the process is ended (a network or EOS shutdown that blocks mustn't keep
 ## a closed game running).
-const QUIT_WATCHDOG_MS := 4000
-var _quit_watchdog: Thread
+const QUIT_WATCHDOG_SECONDS := 4
+var _quit_watchdog_started: bool = false
 
 
 const LAUNCH_ARGS_FILE := "user://launch_args.txt"
@@ -65,9 +65,9 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_android():
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and _quit_watchdog == null:
-		_quit_watchdog = Thread.new()
-		_quit_watchdog.start(_force_quit_later)
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and not _quit_watchdog_started:
+		_quit_watchdog_started = true
+		_start_quit_watchdog()
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		for pressed: bool in [true, false]:
 			var e := InputEventAction.new()
@@ -76,13 +76,23 @@ func _notification(what: int) -> void:
 			Input.parse_input_event(e)
 
 
-## Runs on its own thread: if the quit that the close request started hasn't
-## finished in time, end the process (it would otherwise linger after the
-## window is gone).
-func _force_quit_later() -> void:
-	OS.delay_msec(QUIT_WATCHDOG_MS)
-	printerr("Quit took over %d ms: ending the process" % QUIT_WATCHDOG_MS)
-	OS.kill(OS.get_process_id())
+## Starts a helper process that ends this one if the quit the close request
+## started hasn't finished in QUIT_WATCHDOG_SECONDS (it would otherwise
+## linger after the window is gone). A separate process rather than a
+## thread: the EOS SDK shuts down after every script is gone, and a thread
+## still waiting at exit is reported as leaked. The helper checks it is
+## still the same process (Linux: its start time; Windows: its executable
+## name) so a reused process ID is never killed.
+func _start_quit_watchdog() -> void:
+	var pid := OS.get_process_id()
+	if OS.has_feature("windows"):
+		var image := OS.get_executable_path().get_file()
+		OS.create_process("cmd.exe", ["/c", "ping -n %d 127.0.0.1 >nul & taskkill /F /FI \"PID eq %d\" /FI \"IMAGENAME eq %s\" >nul 2>&1"
+				% [QUIT_WATCHDOG_SECONDS + 1, pid, image]])
+	elif OS.has_feature("linux"):
+		var stat := "/proc/%d/stat" % pid
+		OS.create_process("/bin/sh", ["-c", "s=$(cut -d' ' -f22 %s); sleep %d; [ \"$(cut -d' ' -f22 %s 2>/dev/null)\" = \"$s\" ] && kill -9 %d"
+				% [stat, QUIT_WATCHDOG_SECONDS, stat, pid]])
 
 
 func is_dedicated_server() -> bool:
