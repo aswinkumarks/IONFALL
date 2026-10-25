@@ -41,6 +41,22 @@ enum FireMode { AUTO, SEMI, BURST, PROJECTILE }
 ## A full-screen scope overlay instead of the crosshair (sniper).
 @export var scope_overlay: bool = false
 
+@export_group("Recoil")
+## Each shot kicks the aim up this much (degrees). The camera follows, so
+## the player pulls down to stay on target.
+@export var recoil_kick_degrees: float = 0.0
+## And sideways, up to this much either way at random (degrees).
+@export var recoil_side_degrees: float = 0.0
+## The most the aim is kicked away in total (degrees).
+@export var recoil_max_degrees: float = 5.0
+## After the last shot the aim waits this long (ticks), then settles back
+## at `recoil_recovery_degrees_per_second`. Longer than the time between
+## shots makes held fire climb.
+@export var recoil_recovery_delay_ticks: int = 8
+@export var recoil_recovery_degrees_per_second: float = 14.0
+## Scoped, kicks are this fraction of the full kick.
+@export_range(0.0, 1.0) var recoil_scoped: float = 0.7
+
 @export_group("Ammo")
 @export var mag_size: int = 36
 @export var reserve: int = 180

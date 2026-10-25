@@ -11,6 +11,7 @@ var input: SimHarness.CommandScript
 
 
 func before_each() -> void:
+	_aim = Vector2.INF
 	add_child_autofree(SimHarness.make_arena())
 	world = SimHarness.make_world()
 	add_child_autofree(world)
@@ -27,16 +28,24 @@ func before_each() -> void:
 	world.drain_events()
 
 
+var _aim := Vector2.INF  ## (yaw, pitch) at the target; INF: aim left to the test
+
+
 func _aim_at(part_height: float) -> void:
 	var eye := shooter.eye_position()
 	var aim := target.state.position + Vector3(0, part_height, 0) - eye
-	input.yaw = atan2(-aim.x, -aim.z)
-	input.pitch = atan2(aim.y, Vector2(aim.x, aim.z).length())
+	_aim = Vector2(atan2(-aim.x, -aim.z), atan2(aim.y, Vector2(aim.x, aim.z).length()))
+	input.yaw = _aim.x
+	input.pitch = _aim.y
 
 
 func _fire_ticks(ticks: int, held: int = Held.FIRE, press: Array = []) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	for i in ticks:
+		# Held on target against the recoil, as a player pulls down.
+		if _aim != Vector2.INF:
+			input.yaw = _aim.x - shooter.state.recoil.x
+			input.pitch = _aim.y - shooter.state.recoil.y
 		world.step({1: input.cmd(world.tick, Vector2.ZERO, held, press if i == 0 else [])})
 		events.append_array(world.drain_events())
 	return events

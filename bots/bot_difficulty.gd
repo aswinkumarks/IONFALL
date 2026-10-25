@@ -16,3 +16,6 @@ extends Resource
 @export var moving_target_error_degrees: float = 0.52
 ## Chance to throw a grenade at a target seen in grenade range.
 @export_range(0.0, 1.0) var grenade_chance: float = 0.2
+## How much of its weapon's recoil the bot pulls back down (0: none, 1:
+## all of it), like a player holding a gun on target.
+@export_range(0.0, 1.0) var recoil_control: float = 0.5

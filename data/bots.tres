@@ -11,6 +11,7 @@ turn_speed_degrees_per_second = 206.26
 aim_error_degrees = 6.02
 moving_target_error_degrees = 1.03
 grenade_chance = 0.05
+recoil_control = 0.3
 
 [sub_resource type="Resource" id="Normal"]
 script = ExtResource("2")
@@ -20,6 +21,7 @@ turn_speed_degrees_per_second = 343.77
 aim_error_degrees = 3.04
 moving_target_error_degrees = 0.52
 grenade_chance = 0.2
+recoil_control = 0.55
 
 [sub_resource type="Resource" id="Hard"]
 script = ExtResource("2")
@@ -29,6 +31,7 @@ turn_speed_degrees_per_second = 481.28
 aim_error_degrees = 1.89
 moving_target_error_degrees = 0.34
 grenade_chance = 0.25
+recoil_control = 0.75
 
 [sub_resource type="Resource" id="Insane"]
 script = ExtResource("2")
@@ -38,6 +41,7 @@ turn_speed_degrees_per_second = 618.79
 aim_error_degrees = 1.2
 moving_target_error_degrees = 0.23
 grenade_chance = 0.3
+recoil_control = 0.9
 
 [resource]
 script = ExtResource("1")
