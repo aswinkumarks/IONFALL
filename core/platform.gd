@@ -20,10 +20,11 @@ var _multicast_lock: Variant = null
 var _latency_lock: Variant = null
 var _handled_link: String = ""
 ## Desktop close (Alt+F4, the window's X): the time a normal quit gets before
-## the process is ended (a network or EOS shutdown that blocks mustn't keep
-## a closed game running).
-const QUIT_WATCHDOG_SECONDS := 4
-var _quit_watchdog_started: bool = false
+## the process is ended (a teardown that blocks mustn't keep a closed game
+## running).
+const QUIT_WATCHDOG_MS := 4000
+var _quit_watchdog: Thread
+var _quit_finished: bool = false  ## set as this node is freed; the watchdog stops
 
 
 const LAUNCH_ARGS_FILE := "user://launch_args.txt"
@@ -65,15 +66,20 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_android():
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and not _quit_watchdog_started:
-		_quit_watchdog_started = true
-		_start_quit_watchdog()
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and _quit_watchdog == null:
+		_quit_watchdog = Thread.new()
+		_quit_watchdog.start(_force_quit_later)
 		# Gone at once for the player, however long the engine takes to tear
 		# the scene down: closing mid-match on Windows (AMD), on a new build's
 		# first run, stalled ~4 s after every script had finished, likely the
 		# engine waiting for shader pipelines still compiling.
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
 		AudioServer.set_bus_mute(0, true)
+	elif what == NOTIFICATION_PREDELETE and _quit_watchdog != null:
+		# Freed after the rest of the scene (the first autoload): the scene
+		# teardown is over, so the watchdog can stop and be joined.
+		_quit_finished = true
+		_quit_watchdog.wait_to_finish()
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		for pressed: bool in [true, false]:
 			var e := InputEventAction.new()
@@ -82,23 +88,21 @@ func _notification(what: int) -> void:
 			Input.parse_input_event(e)
 
 
-## Starts a helper process that ends this one if the quit the close request
-## started hasn't finished in QUIT_WATCHDOG_SECONDS (it would otherwise
-## linger after the window is gone). A separate process rather than a
-## thread: the EOS SDK shuts down after every script is gone, and a thread
-## still waiting at exit is reported as leaked. The helper checks it is
-## still the same process (Linux: its start time; Windows: its executable
-## name) so a reused process ID is never killed.
-func _start_quit_watchdog() -> void:
-	var pid := OS.get_process_id()
-	if OS.has_feature("windows"):
-		var image := OS.get_executable_path().get_file()
-		OS.create_process("cmd.exe", ["/c", "ping -n %d 127.0.0.1 >nul & taskkill /F /FI \"PID eq %d\" /FI \"IMAGENAME eq %s\" >nul 2>&1"
-				% [QUIT_WATCHDOG_SECONDS + 1, pid, image]])
-	elif OS.has_feature("linux"):
-		var stat := "/proc/%d/stat" % pid
-		OS.create_process("/bin/sh", ["-c", "s=$(cut -d' ' -f22 %s); sleep %d; [ \"$(cut -d' ' -f22 %s 2>/dev/null)\" = \"$s\" ] && kill -9 %d"
-				% [stat, QUIT_WATCHDOG_SECONDS, stat, pid]])
+## Runs on its own thread: ends the process if the quit that the close
+## request started hasn't torn the scene down in QUIT_WATCHDOG_MS (it would
+## otherwise linger). Stops as soon as this node is freed, so it never
+## outlives the scene (a thread still running at exit is reported as
+## leaked); the engine's own teardown after that isn't covered. A thread,
+## not a helper process: on Windows a child process inherits the console's
+## output handles, and whatever reads them waits for it.
+func _force_quit_later() -> void:
+	var deadline := Time.get_ticks_msec() + QUIT_WATCHDOG_MS
+	while Time.get_ticks_msec() < deadline:
+		if _quit_finished:
+			return
+		OS.delay_msec(20)
+	printerr("Quit took over %d ms: ending the process" % QUIT_WATCHDOG_MS)
+	OS.kill(OS.get_process_id())
 
 
 func is_dedicated_server() -> bool:
