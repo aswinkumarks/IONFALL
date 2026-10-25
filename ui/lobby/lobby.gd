@@ -44,6 +44,8 @@ var _players_card: Control
 var _team_cards: Array[PanelContainer] = []
 var _team_heads: Array[HBoxContainer] = []
 var _team_slots: Array[VBoxContainer] = []
+var _ping_labels: Dictionary = {}  ## member id -> its ping Label
+var _slots_key: String = ""  ## what the rows show, but the pings
 var _count: Label
 var _start_button: Button
 var _waiting: Label
@@ -198,7 +200,17 @@ func _refresh() -> void:
 
 
 ## One row per player who has joined; in the team modes, in their team's card.
+## Only the pings changed (every second): just those labels.
 func _fill_slots() -> void:
+	var rows := session.members.map(func(m: Dictionary) -> Array: return [m.id, m.name, m.host, m.team])
+	var key := str([rows, session.game_mode, session.team_names, session.team_colors, _starting])
+	if key == _slots_key:
+		for m: Dictionary in session.members:
+			if _ping_labels.has(m.id):
+				_set_ping(_ping_labels[m.id], m.get("ping", 0))
+		return
+	_slots_key = key
+	_ping_labels.clear()
 	for box: Control in [_slots] + _team_slots + _team_heads:
 		for child in box.get_children():
 			child.queue_free()
@@ -277,8 +289,24 @@ func _add_slot(list: VBoxContainer, m: Dictionary, color: Color = UiStyle.ACCENT
 	var tag := UiStyle.label(" · ".join(tags), &"DimLabel")
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(tag)
+	if not m.host:
+		var ping := UiStyle.label("", &"DimLabel")
+		ping.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ping.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		ping.custom_minimum_size.x = 64
+		_set_ping(ping, m.get("ping", 0))
+		_ping_labels[m.id] = ping
+		row.add_child(ping)
 	if _host and not m.host:
 		row.add_child(_kick_button(m.id))
+
+
+## A member's round trip to the host ("…" until measured): green when
+## quick, amber, then red.
+func _set_ping(l: Label, ms: int) -> void:
+	l.text = tr("LOBBY_PING") % ms if ms > 0 else "…"
+	l.add_theme_color_override("font_color", UiStyle.TEXT_DIM if ms <= 0
+			else (UiStyle.GOOD if ms < 60 else (UiStyle.WARN if ms < 120 else UiStyle.DANGER)))
 
 
 ## Host: Remove, then Confirm within KICK_CONFIRM_S, removes player `id`.

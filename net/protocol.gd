@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 10
+const VERSION := 11
 const MAGIC := 0x464E4F49  ## "IONF"
 ## HELLO flags.
 const HELLO_SPECTATE := 1
@@ -441,8 +441,9 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 # --- Pre-match lobby (LobbySession; server -> client, reliable) ---
 
 ## The host's settings and who is in the lobby. `members`: Array of
-## {id, name, host, team} in join order (`id` the member's transport peer id;
-## `team` 0 or 1, used in the team modes). `team_names`, `team_colors`: the
+## {id, name, host, team, ping} in join order (`id` the member's transport
+## peer id; `team` 0 or 1, used in the team modes; `ping` the member's round
+## trip to the host in ms, 0 for the host). `team_names`, `team_colors`: the
 ## host's names ("" = the default) and colours (GameMode.TEAM_PALETTE) for
 ## the teams.
 ## `bots`, `bot_difficulty`, `friendly_fire`: the host's bot settings, shown
@@ -454,7 +455,7 @@ static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: i
 			.u8(bots).u8(bot_difficulty).u8(1 if friendly_fire else 0).str8(team_names[0]).str8(team_names[1]) \
 			.u8(team_colors[0]).u8(team_colors[1]).u8(members.size())
 	for m in members:
-		w.u32(m.id).u8(1 if m.host else 0).u8(m.team).str8(m.name)
+		w.u32(m.id).u8(1 if m.host else 0).u8(m.team).u16(mini(m.get("ping", 0), 65535)).str8(m.name)
 	return w.data()
 
 
@@ -469,7 +470,7 @@ static func decode_lobby(data: PackedByteArray) -> Dictionary:
 	if n > MAX_PEERS or out.bots >= MAX_PEERS or out.bot_difficulty > 3:
 		return {}
 	for i in n:
-		var m := {"id": r.u32(), "host": r.u8() == 1, "team": r.u8(), "name": r.str8(MAX_NAME_BYTES)}
+		var m := {"id": r.u32(), "host": r.u8() == 1, "team": r.u8(), "ping": r.u16(), "name": r.str8(MAX_NAME_BYTES)}
 		if m.team > 1:
 			return {}
 		out.members.append(m)

@@ -23,6 +23,8 @@ const DEFAULT_MINUTES := 10
 const HOST_ID := 1  ## the host's id in `members` (a server's transport peer id)
 ## A removed player is told why before its connection closes.
 const KICK_CLOSE_S := 0.3
+## Host: pings every member this often, and sends everyone the latencies.
+const PING_INTERVAL_S := 1.0
 
 var transport := Transport.new()
 var is_host: bool = false
@@ -51,6 +53,8 @@ var _uuids: Dictionary = {}  ## host: peer id -> profile uuid
 var _accepted: Dictionary = {}  ## host: authenticated peer id -> name
 var _teams: Dictionary = {}  ## host: member id (HOST_ID for the host) -> team
 var _removed: Dictionary = {}  ## host: profile uuids the host removed; refused from now on
+var _pings: Dictionary = {}  ## host: member id -> smoothed round trip (ms)
+var _ping_timer: float = 0.0
 var _done: bool = false  ## client: started, redirected or closed; later signals are ignored
 
 
@@ -148,10 +152,10 @@ func kick(id: int) -> void:
 		_removed[uuid] = true
 	transport.send(id, Protocol.encode_notice(Protocol.Notice.KICKED), Protocol.CH_CONTROL, true)
 	_on_peer_left(id)
-	var t := transport
+	var t: WeakRef = weakref(transport)  # the lobby may be gone by then
 	get_tree().create_timer(KICK_CLOSE_S).timeout.connect(func() -> void:
-		if is_instance_valid(t):
-			t.kick(id))
+		if t.get_ref() != null:
+			(t.get_ref() as Transport).kick(id))
 
 
 ## Host: names team `team` (cleaned; "" for the default) and gives it palette
@@ -180,6 +184,20 @@ func team_plan_now() -> Dictionary:
 
 func _team_size(team: int) -> int:
 	return _teams.values().count(team)
+
+
+## Host: measures each member's round trip (PING / PONG, as in a match).
+func _process(delta: float) -> void:
+	if not is_host or _accepted.is_empty():
+		return
+	_ping_timer += delta
+	if _ping_timer < PING_INTERVAL_S:
+		return
+	_ping_timer = 0.0
+	var ping := Protocol.encode_ping(Time.get_ticks_msec() & 0xFFFFFFFF)
+	for id in _accepted:
+		transport.send(id, ping, Protocol.CH_GAME, false)
+	_update_members()
 
 
 func leave() -> void:
@@ -235,13 +253,15 @@ func _on_peer_left(id: int) -> void:
 	_uuids.erase(id)
 	_accepted.erase(id)
 	_teams.erase(id)
+	_pings.erase(id)
 	_update_members()
 
 
 func _update_members() -> void:
 	members = [{"id": HOST_ID, "name": _host_name, "host": true, "team": _teams.get(HOST_ID, 0)}]
 	for id in _accepted:
-		members.append({"id": id, "name": _accepted[id], "host": false, "team": _teams.get(id, 0)})
+		members.append({"id": id, "name": _accepted[id], "host": false, "team": _teams.get(id, 0),
+				"ping": maxi(roundi(_pings[id]), 1) if _pings.has(id) else 0})  # 0: not measured yet
 	_broadcast()
 
 
@@ -261,6 +281,12 @@ func _on_host_message(id: int, data: PackedByteArray) -> void:
 	match Protocol.message_type(data):
 		Protocol.Msg.TEAM_PICK:
 			set_team(id, Protocol.decode_team_pick(data))
+		Protocol.Msg.PONG:
+			var pong := Protocol.decode_pong(data)
+			if not pong.is_empty():
+				var rtt := float((Time.get_ticks_msec() - pong.echo) & 0xFFFFFFFF)
+				if rtt < 5000.0:
+					_pings[id] = rtt if not _pings.has(id) else lerpf(_pings[id], rtt, 0.4)
 
 
 func _on_message(_id: int, data: PackedByteArray) -> void:
@@ -283,6 +309,10 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 			var s := Protocol.decode_start(data)
 			if not s.is_empty():
 				_finish(s, started)
+		Protocol.Msg.PING:
+			var ping := Protocol.decode_ping(data)
+			if not ping.is_empty():
+				transport.send(HOST_ID, Protocol.encode_pong(ping.time, 0, 0.0), Protocol.CH_GAME, false)
 		Protocol.Msg.NOTICE:
 			if Protocol.decode_notice(data) == Protocol.Notice.KICKED:
 				_finish("LOBBY_KICKED", closed)
