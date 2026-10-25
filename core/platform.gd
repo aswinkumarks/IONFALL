@@ -20,10 +20,11 @@ var _multicast_lock: Variant = null
 var _latency_lock: Variant = null
 var _handled_link: String = ""
 ## Desktop close (Alt+F4, the window's X): the time a normal quit gets before
-## the process is ended (a network or EOS shutdown that blocks mustn't keep
-## a closed game running).
+## the process is ended (a teardown that blocks mustn't keep a closed game
+## running).
 const QUIT_WATCHDOG_MS := 4000
 var _quit_watchdog: Thread
+var _quit_finished: bool = false  ## set as this node is freed; the watchdog stops
 
 
 const LAUNCH_ARGS_FILE := "user://launch_args.txt"
@@ -68,6 +69,17 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and _quit_watchdog == null:
 		_quit_watchdog = Thread.new()
 		_quit_watchdog.start(_force_quit_later)
+		# Gone at once for the player, however long the engine takes to tear
+		# the scene down: closing mid-match on Windows (AMD), on a new build's
+		# first run, stalled ~4 s after every script had finished, likely the
+		# engine waiting for shader pipelines still compiling.
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
+		AudioServer.set_bus_mute(0, true)
+	elif what == NOTIFICATION_PREDELETE and _quit_watchdog != null:
+		# Freed after the rest of the scene (the first autoload): the scene
+		# teardown is over, so the watchdog can stop and be joined.
+		_quit_finished = true
+		_quit_watchdog.wait_to_finish()
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		for pressed: bool in [true, false]:
 			var e := InputEventAction.new()
@@ -76,11 +88,19 @@ func _notification(what: int) -> void:
 			Input.parse_input_event(e)
 
 
-## Runs on its own thread: if the quit that the close request started hasn't
-## finished in time, end the process (it would otherwise linger after the
-## window is gone).
+## Runs on its own thread: ends the process if the quit that the close
+## request started hasn't torn the scene down in QUIT_WATCHDOG_MS (it would
+## otherwise linger). Stops as soon as this node is freed, so it never
+## outlives the scene (a thread still running at exit is reported as
+## leaked); the engine's own teardown after that isn't covered. A thread,
+## not a helper process: on Windows a child process inherits the console's
+## output handles, and whatever reads them waits for it.
 func _force_quit_later() -> void:
-	OS.delay_msec(QUIT_WATCHDOG_MS)
+	var deadline := Time.get_ticks_msec() + QUIT_WATCHDOG_MS
+	while Time.get_ticks_msec() < deadline:
+		if _quit_finished:
+			return
+		OS.delay_msec(20)
 	printerr("Quit took over %d ms: ending the process" % QUIT_WATCHDOG_MS)
 	OS.kill(OS.get_process_id())
 
