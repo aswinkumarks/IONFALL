@@ -395,16 +395,11 @@ static func _particle_process(v_min: float, v_max: float, gravity: float, spread
 	return m
 
 
-## A frag grenade: the Kenney grenade model with a blinking orange light.
+## A frag grenade: the grenade model with a blinking orange light.
 func _grenade_node() -> MeshInstance3D:
 	var root := MeshInstance3D.new()
 	add_child(root)
-	var model: Node3D = (load("res://art/weapons/kenney/grenade-b.glb") as PackedScene).instantiate()
-	model.scale = Vector3.ONE * 0.35
-	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		mi.material_override = WeaponModels.material()
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(model)
+	root.add_child(WeaponModels.grenade(0.11))
 	if Settings.video("lights") != true:
 		return root
 	var blink := OmniLight3D.new()

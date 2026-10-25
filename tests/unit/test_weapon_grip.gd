@@ -1,7 +1,7 @@
 extends GutTest
-## Rigs that hold a weapon by its model origin (ArmoredRig, SentinelRig,
-## AstronautRig) shift it so every weapon's handle lands where the pulse
-## rifle's does: the Rail Sniper's origin is 37 cm ahead of its handle.
+## Every weapon model's handle sits where the pulse rifle's does, so the
+## rigs that hold a weapon by its model origin (ArmoredRig, MeshyRig,
+## AstronautRig) hold each one by its handle.
 
 
 func test_handles_line_up_with_the_pulse_rifle() -> void:

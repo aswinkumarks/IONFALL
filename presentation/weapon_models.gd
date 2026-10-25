@@ -1,36 +1,41 @@
 class_name WeaponModels
 extends RefCounted
-## Weapon meshes (Kenney Blaster Kit, CC0, recoloured to IONFALL's palette by
-## tools/recolor_colormap.py) and how each sits in the first-person view.
+## Weapon meshes (generated for IONFALL with Meshy, packed by
+## tools/pack_meshy_glb.py) and how each sits in the first-person view.
 ## Presentation only.
+##
+## Meshy models come normalised to ±0.95 along their length (x), muzzle at
+## -x, top +y. instantiate() turns them to point down -Z, scales them to
+## LENGTH and moves them so every handle sits at REFERENCE_GRIP: the rigs and
+## the first-person view hold all weapons the same way.
 
-const DIR := "res://art/weapons/kenney/"
-## id -> [model, scale, hip offset from the camera, muzzle (model space)]
+const DIR := "res://art/weapons/ionfall/"
+const SOURCE_HALF := 0.95  ## half the source models' length
+## Where every model's handle sits, in its root's space (the old Kenney pulse
+## rifle's, which the rigs' grips were tuned on).
+const REFERENCE_GRIP := Vector3(0.0, -0.048, 0.023)
+## id -> [length, hip offset from the camera, muzzle, handle]; muzzle and
+## handle are (fraction of the length from the muzzle end, height) in the
+## source model's units.
 const MODELS := {
-	&"pulse_rifle": ["blaster-n", 0.42, Vector3(0.2, -0.2, -0.46), Vector3(0, 0.03, -0.33)],
-	&"mag_pistol": ["blaster-a", 0.34, Vector3(0.19, -0.17, -0.42), Vector3(0, 0.08, -0.38)],
-	&"arc_launcher": ["blaster-h", 0.48, Vector3(0.21, -0.2, -0.46), Vector3(0, 0.03, -0.34)],
-	&"burst_rifle": ["blaster-g", 0.42, Vector3(0.2, -0.2, -0.46), Vector3(0, 0.03, -0.36)],
-	&"rail_sniper": ["blaster-e", 0.4, Vector3(0.19, -0.19, -0.8), Vector3(0, 0.02, -0.02)],
-	&"scatter_gun": ["blaster-l", 0.44, Vector3(0.2, -0.19, -0.44), Vector3(0, 0.02, -0.29)],
-	&"flux_smg": ["blaster-j", 0.4, Vector3(0.2, -0.2, -0.44), Vector3(0, 0.02, -0.31)],
+	&"pulse_rifle": [0.38, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.09), Vector2(0.69, -0.17)],
+	&"mag_pistol": [0.14, Vector3(0.17, -0.16, -0.36), Vector2(0.0, 0.36), Vector2(0.85, -0.31)],
+	&"arc_launcher": [0.41, Vector3(0.21, -0.2, -0.46), Vector2(0.0, 0.17), Vector2(0.67, -0.17)],
+	&"burst_rifle": [0.39, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.03), Vector2(0.61, -0.19)],
+	&"rail_sniper": [0.58, Vector3(0.19, -0.19, -0.48), Vector2(0.0, 0.04), Vector2(0.73, -0.14)],
+	&"scatter_gun": [0.41, Vector3(0.2, -0.19, -0.44), Vector2(0.0, 0.16), Vector2(0.69, -0.1)],
+	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.44), Vector2(0.0, 0.26), Vector2(0.65, -0.17)],
 }
-
-static var _material: StandardMaterial3D
-static var _reference_grip = null  ## the pulse rifle's Grip, once measured
+const GRENADE := "frag_grenade"
 
 
-static func material() -> StandardMaterial3D:
-	if _material == null:
-		_material = StandardMaterial3D.new()
-		_material.albedo_texture = load(DIR + "colormap_ion.png")
-		_material.emission_enabled = true
-		_material.emission_texture = load(DIR + "colormap_ion_emission.png")
-		_material.emission_energy_multiplier = 2.0
-		_material.roughness = 0.45
-		_material.metallic = 0.35
-		_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
-	return _material
+## Every model file, for loading ahead of a match.
+static func paths() -> PackedStringArray:
+	var out := PackedStringArray()
+	for id: StringName in MODELS:
+		out.append(DIR + String(id) + ".glb")
+	out.append(DIR + GRENADE + ".glb")
+	return out
 
 
 static func has(id: StringName) -> bool:
@@ -43,74 +48,57 @@ static func instantiate(id: StringName) -> Node3D:
 	if not MODELS.has(id):
 		return null
 	var def: Array = MODELS[id]
+	var s: float = float(def[0]) / (SOURCE_HALF * 2.0)
 	var root := Node3D.new()
-	var model: Node3D = (load(DIR + def[0] + ".glb") as PackedScene).instantiate()
-	model.scale = Vector3.ONE * float(def[1])
+	var model := _load(String(id))
+	model.rotation.y = -PI * 0.5  # source -x (muzzle) to -Z
+	model.scale = Vector3.ONE * s
+	model.position = REFERENCE_GRIP - model.basis * _source_point(def[3])
 	root.add_child(model)
-	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		mi.material_override = material()
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var muzzle := Node3D.new()
 	muzzle.name = "Muzzle"
-	muzzle.position = (def[3] as Vector3) * float(def[1])
+	muzzle.position = model.transform * _source_point(def[2])
 	root.add_child(muzzle)
 	var grip := Node3D.new()
 	grip.name = "Grip"
-	grip.position = _handle(model)
+	grip.position = REFERENCE_GRIP
 	root.add_child(grip)
 	return root
 
 
+## The frag grenade, `height` metres tall, standing on its origin.
+static func grenade(height: float) -> Node3D:
+	var root := Node3D.new()
+	var model := _load(GRENADE)
+	model.scale = Vector3.ONE * height / (SOURCE_HALF * 2.0)
+	model.position.y = height * 0.5
+	root.add_child(model)
+	return root
+
+
+static func _load(name: String) -> Node3D:
+	var model: Node3D = (load(DIR + name + ".glb") as PackedScene).instantiate()
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return model
+
+
+## (fraction from the muzzle end, height) -> source model space.
+static func _source_point(p: Vector2) -> Vector3:
+	return Vector3(-SOURCE_HALF + p.x * SOURCE_HALF * 2.0, p.y, 0.0)
+
+
 ## How far to move model `w` (from instantiate) so its handle sits where the
-## pulse rifle's does. The rigs that hold a weapon by its origin were placed
-## with that rifle; the Rail Sniper's origin is 37 cm ahead of its handle, so
-## other players saw it float in front of the hands.
+## pulse rifle's does. Every model is built that way, so this is zero; the
+## rigs that hold a weapon by its origin still ask.
 static func grip_shift(w: Node3D) -> Vector3:
 	return reference_grip() - (w.get_node("Grip") as Node3D).position
 
 
 ## The pulse rifle's Grip in its model root's space.
 static func reference_grip() -> Vector3:
-	if _reference_grip == null:
-		var ref := instantiate(&"pulse_rifle")
-		_reference_grip = (ref.get_node("Grip") as Node3D).position
-		ref.free()
-	return _reference_grip
-
-
-## The handle: the middle of the lowest third of the model (the pistol grip
-## hangs lowest on every blaster), in the model's parent's space.
-static func _handle(model: Node3D) -> Vector3:
-	var pts := PackedVector3Array()
-	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		var xf := model.transform * _local_to(model, mi)
-		for s in mi.mesh.get_surface_count():
-			for v: Vector3 in mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
-				pts.append(xf * v)
-	if pts.is_empty():
-		return Vector3.ZERO
-	var lo := INF
-	var hi := -INF
-	for p in pts:
-		lo = minf(lo, p.y)
-		hi = maxf(hi, p.y)
-	var c := Vector3.ZERO
-	var count := 0
-	for p in pts:
-		if p.y < lerpf(lo, hi, 0.35):
-			c += p
-			count += 1
-	return c / count
-
-
-static func _local_to(ancestor: Node3D, node: Node3D) -> Transform3D:
-	var xf := Transform3D.IDENTITY
-	var n: Node = node
-	while n != ancestor:
-		xf = (n as Node3D).transform * xf
-		n = n.get_parent()
-	return xf
+	return REFERENCE_GRIP
 
 
 static func hip_offset(id: StringName) -> Vector3:
-	return MODELS[id][2] if MODELS.has(id) else Vector3(0.17, -0.16, -0.5)
+	return MODELS[id][1] if MODELS.has(id) else Vector3(0.17, -0.16, -0.5)

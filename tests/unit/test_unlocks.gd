@@ -18,7 +18,7 @@ func test_locked_picks_fall_back() -> void:
 	var saved_color: Variant = Settings.get_value("profile", "color")
 	var saved_data: Dictionary = Profile.data.data.duplicate(true)
 	Profile.data = ProfileData.fresh()  # level 1
-	Settings.set_value("profile", "character", "skinned")
+	Settings.set_value("profile", "character", "operative")
 	Settings.set_value("profile", "color", 8)
 	assert_eq(MatchConfig.profile_character(), 0, "locked character: the default")
 	assert_eq(MatchConfig.profile_color(), 0, "locked colour: auto")
