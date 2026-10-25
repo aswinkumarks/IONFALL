@@ -1,3 +1,4 @@
+@tool
 class_name CharacterRig
 extends Node3D
 ## Third-person body of a player (presentation only; hitboxes come from the

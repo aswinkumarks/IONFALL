@@ -1,3 +1,4 @@
+@tool
 class_name WeaponModels
 extends RefCounted
 ## Weapon meshes (generated for IONFALL with Meshy, packed by
@@ -50,16 +51,22 @@ static func instantiate(id: StringName) -> Node3D:
 	if not MODELS.has(id):
 		return null
 	var def: Array = MODELS[id]
-	var s: float = float(def[0]) / (SOURCE_HALF * 2.0)
+	return instantiate_with(id, def[2], def[3], def[4])
+
+
+## instantiate() with the muzzle, handle and support points given (as in
+## MODELS) rather than taken from MODELS: tools/hold_preview tries them out.
+static func instantiate_with(id: StringName, p_muzzle: Vector2, p_handle: Vector2, p_support: Vector2) -> Node3D:
+	var s: float = float(MODELS[id][0]) / (SOURCE_HALF * 2.0)
 	var root := Node3D.new()
 	var model := _load(String(id))
 	model.rotation.y = -PI * 0.5  # source -x (muzzle) to -Z
 	model.scale = Vector3.ONE * s
-	model.position = REFERENCE_GRIP - model.basis * _source_point(def[3])
+	model.position = REFERENCE_GRIP - model.basis * _source_point(p_handle)
 	root.add_child(model)
 	var muzzle := Node3D.new()
 	muzzle.name = "Muzzle"
-	muzzle.position = model.transform * _source_point(def[2])
+	muzzle.position = model.transform * _source_point(p_muzzle)
 	root.add_child(muzzle)
 	var grip := Node3D.new()
 	grip.name = "Grip"
@@ -67,7 +74,7 @@ static func instantiate(id: StringName) -> Node3D:
 	root.add_child(grip)
 	var support := Node3D.new()
 	support.name = "Support"
-	support.position = model.transform * _source_point(def[4])
+	support.position = model.transform * _source_point(p_support)
 	root.add_child(support)
 	return root
 

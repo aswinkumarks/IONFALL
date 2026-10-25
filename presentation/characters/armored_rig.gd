@@ -1,3 +1,4 @@
+@tool
 class_name ArmoredRig
 extends CharacterRig
 ## Armoured soldier (default): the Quaternius Universal Base Characters
@@ -446,11 +447,15 @@ func set_weapon(id: StringName) -> void:
 	if id == _weapon_id or _hand == null:
 		return
 	_weapon_id = id
+	hold_model(WeaponModels.instantiate(id))
+
+
+## Holds weapon model `w` (from WeaponModels; null: empty hands).
+func hold_model(w: Node3D) -> void:
 	if _weapon_node != null:
 		_weapon_node.queue_free()
 		_weapon_node = null
-	var w := WeaponModels.instantiate(id)
-	if w == null:
+	if w == null or _hand == null:
 		return
 	# Placed every pose (_place_weapon): the handle in the right hand, the
 	# barrel where the player looks.

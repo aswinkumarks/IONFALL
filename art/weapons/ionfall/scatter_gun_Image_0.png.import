@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://nh0k3cw48eeb"
-path="res://.godot/imported/scatter_gun_Image_0.png-80e89c5fd8a68496d0a978831f4a47c3.ctex"
+path.s3tc="res://.godot/imported/scatter_gun_Image_0.png-80e89c5fd8a68496d0a978831f4a47c3.s3tc.ctex"
+path.etc2="res://.godot/imported/scatter_gun_Image_0.png-80e89c5fd8a68496d0a978831f4a47c3.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "9fa85434e75ace86e987d1458543b297"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://art/weapons/ionfall/scatter_gun_Image_0.png"
-dest_files=["res://.godot/imported/scatter_gun_Image_0.png-80e89c5fd8a68496d0a978831f4a47c3.ctex"]
+dest_files=["res://.godot/imported/scatter_gun_Image_0.png-80e89c5fd8a68496d0a978831f4a47c3.s3tc.ctex", "res://.godot/imported/scatter_gun_Image_0.png-80e89c5fd8a68496d0a978831f4a47c3.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +42,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

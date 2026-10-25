@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://busqgryuon7dh"
-path="res://.godot/imported/flux_smg_Image_0.png-b21c687cee908e3b7aae49855fc00fde.ctex"
+path.s3tc="res://.godot/imported/flux_smg_Image_0.png-b21c687cee908e3b7aae49855fc00fde.s3tc.ctex"
+path.etc2="res://.godot/imported/flux_smg_Image_0.png-b21c687cee908e3b7aae49855fc00fde.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "1c6fc73f8e3cd92baa86a4eb1be9a9c1"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://art/weapons/ionfall/flux_smg_Image_0.png"
-dest_files=["res://.godot/imported/flux_smg_Image_0.png-b21c687cee908e3b7aae49855fc00fde.ctex"]
+dest_files=["res://.godot/imported/flux_smg_Image_0.png-b21c687cee908e3b7aae49855fc00fde.s3tc.ctex", "res://.godot/imported/flux_smg_Image_0.png-b21c687cee908e3b7aae49855fc00fde.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +42,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

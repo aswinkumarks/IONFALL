@@ -1,3 +1,4 @@
+@tool
 class_name MeshyRig
 extends ArmoredRig
 ## The selectable characters (Sentinel, Vanguard, Operative, Spacer):
