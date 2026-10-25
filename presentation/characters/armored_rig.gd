@@ -408,14 +408,14 @@ func _level_head() -> void:
 ## direction. Held by the hand bone's own rotation, the aim clips (made for a
 ## pistol) turned it 90 degrees across the body.
 func _place_weapon() -> void:
-	if _weapon_node != null:
+	if _weapon_node != null and is_inside_tree():  # the skeleton updates once more while leaving
 		_weapon_node.global_transform = global_transform * _weapon_local
 
 
 ## The weapon shouldered along the aim (SHOULDER_TO_HANDLE), the right hand
 ## on its handle and the left on the fore-end. Runs after the animation.
 func _hold_weapon() -> void:
-	if _weapon_node == null or not _tree.active:
+	if _weapon_node == null or not _tree.active or not is_inside_tree():
 		return  # first person poses the arms itself (pose_first_person)
 	# Bladed stance: the chest turns right about the skeleton's up (+Y; it
 	# faces +Z, so a right turn is negative).
