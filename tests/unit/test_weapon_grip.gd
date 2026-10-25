@@ -30,7 +30,8 @@ func test_rail_sniper_handle_is_in_the_hand() -> void:
 
 ## Third person (ArmoredRig.HoldWeapon): the right wrist by the handle and
 ## the left at the weapon's Support marker (or, out of reach, further back
-## along the weapon), on every character and weapon.
+## along the weapon), on every character and weapon, the right arm clear of
+## the chest.
 ## Bone poses are read after the modifiers run.
 func test_both_hands_hold_the_weapon() -> void:
 	for style: String in CharacterRig.SELECTABLE:
@@ -47,7 +48,9 @@ func test_both_hands_hold_the_weapon() -> void:
 			var chains := rig._arm_chains()
 			sk.skeleton_updated.connect(func() -> void:
 				for k in 2:
-					wrists[k] = sk.global_transform * sk.get_bone_global_pose(sk.find_bone(chains[k][2])).origin)
+					wrists[k] = sk.global_transform * sk.get_bone_global_pose(sk.find_bone(chains[k][2])).origin
+				wrists["elbow"] = sk.global_transform * sk.get_bone_global_pose(sk.find_bone(chains[0][1])).origin
+				wrists["chest"] = sk.global_transform * sk.get_bone_global_pose(sk.find_bone(rig._chest_bone())).origin)
 			for i in 4:
 				rig.animate(s, 0.016, 1.8)
 				await wait_process_frames(1)
@@ -55,6 +58,13 @@ func test_both_hands_hold_the_weapon() -> void:
 			var grip := (w.get_node("Grip") as Node3D).global_position
 			var support := (w.get_node("Support") as Node3D).global_position
 			assert_lt((wrists[0] as Vector3).distance_to(grip), 0.12, "%s %s: right hand at the handle" % [style, id])
+			var forward := -rig.global_basis.z
+			var right := rig.global_basis.x
+			var chest: Vector3 = wrists["chest"]
+			# Clear of the torso: the right hand out in front of the chest and the
+			# elbow out to the side, not folded into the armour.
+			assert_gt(((wrists[0] as Vector3) - chest).dot(forward), 0.1, "%s %s: right hand in front of the chest" % [style, id])
+			assert_gt(((wrists["elbow"] as Vector3) - chest).dot(right), 0.14, "%s %s: right elbow out to the side" % [style, id])
 			# At the support, or (out of reach) further back along the weapon.
 			var on_gun := Geometry3D.get_closest_point_to_segment(wrists[1], grip, support)
 			assert_lt((wrists[1] as Vector3).distance_to(on_gun), 0.02, "%s %s: left hand on the weapon" % [style, id])
