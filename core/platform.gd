@@ -68,6 +68,12 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and not _quit_watchdog_started:
 		_quit_watchdog_started = true
 		_start_quit_watchdog()
+		# Gone at once for the player, however long the engine takes to tear
+		# the scene down: closing mid-match on Windows (AMD), on a new build's
+		# first run, stalled ~4 s after every script had finished, likely the
+		# engine waiting for shader pipelines still compiling.
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
+		AudioServer.set_bus_mute(0, true)
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		for pressed: bool in [true, false]:
 			var e := InputEventAction.new()
