@@ -38,6 +38,10 @@ var lag_compensation: bool = false
 var teams_enabled: bool = false
 var friendly_fire: bool = false
 var history: Dictionary = {}  ## net_id -> HitboxHistory
+## The same history and hitbox tests in native code (native/, PLAN §3.17)
+## when the extension is loaded; null otherwise (always on the web). It gives
+## the same hits (tests/unit/test_hitbox_native.gd), so either can run.
+var native_rewind: RefCounted = ClassDB.instantiate(&"HitboxRewindNative") if ClassDB.class_exists(&"HitboxRewindNative") else null
 
 ## Pickups (PLAN §2.3), run by the server only (clients learn the result
 ## from snapshots). Spots: {weapon (StringName, &"grenade"), position,
@@ -98,6 +102,19 @@ class Projectile:
 
 	func id() -> String:
 		return "%d:%d:%d" % [owner_id, owner_gen, action_seq]
+
+
+## The players one shot can hit (_targets), shared by all its pellets.
+class Targets:
+	var shooter: SimPlayer
+	var list: Array[SimPlayer] = []
+	var rewind: float = -1.0  ## view tick, or -1 for "now"
+	## native_rewind's inputs, in `list` order: ids and life_gens when
+	## rewinding, else the current feet and stances.
+	var ids := PackedInt32Array()
+	var life_gens := PackedInt32Array()
+	var feet := PackedVector3Array()
+	var stances := PackedInt32Array()
 
 
 func configure(seed_value: int, movement: MovementConfig, spawns: Array[Transform3D], spots: Array = []) -> void:
@@ -167,6 +184,8 @@ func remove_player(net_id: int) -> void:
 	players.erase(net_id)
 	scores.erase(net_id)
 	history.erase(net_id)
+	if native_rewind != null:
+		native_rewind.remove(net_id)
 	p.queue_free()
 
 
@@ -232,7 +251,9 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 		Health.tick_regen(s)
 		if s.spawn_protection_ticks > 0:
 			s.spawn_protection_ticks -= 1
-		if lag_compensation:
+		if lag_compensation and native_rewind != null:
+			native_rewind.record(id, tick, s.position, s.stance, s.alive, s.life_gen, s.discontinuity_gen)
+		elif lag_compensation:
 			if not history.has(id):
 				history[id] = HitboxHistory.new()
 			history[id].record(tick, s)
@@ -336,8 +357,9 @@ func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
 	# Hitscan: every pellet traced; damage summed per target (one hit each).
 	var dealt := {}  ## target -> [amount, headshot]
 	var first: Array = []
+	var targets := _targets(p)
 	for dir: Vector3 in (shot.pellets if not shot.pellets.is_empty() else [shot.direction]):
-		var t := _trace(p, shot.origin, dir, w.max_range)
+		var t := _trace(targets, shot.origin, dir, w.max_range)
 		if first.is_empty():
 			first = t
 		if t[0] != null:
@@ -351,15 +373,34 @@ func _resolve_shot(p: SimPlayer, shot: WeaponSim.Shot) -> void:
 		"end": first[2], "hit_player": first[0] != null,
 		"hit_world": first[0] == null and first[3], "normal": first[4],
 	})
-	var targets := dealt.keys()
-	targets.sort_custom(func(a: SimPlayer, b: SimPlayer) -> bool: return a.net_id < b.net_id)
-	for target: SimPlayer in targets:
+	var hit_players := dealt.keys()
+	hit_players.sort_custom(func(a: SimPlayer, b: SimPlayer) -> bool: return a.net_id < b.net_id)
+	for target: SimPlayer in hit_players:
 		_damage(target, p.net_id, dealt[target][0], dealt[target][1], w, shot.action_seq)
 
 
-## One ray against the world and the (rewound) players:
+## The players `p`'s shot can hit, worked out once for all its pellets.
+func _targets(p: SimPlayer) -> Targets:
+	var t := Targets.new()
+	t.shooter = p
+	t.rewind = _rewind_tick(p)
+	for other: SimPlayer in players.values():
+		if other != p and other.state.alive and _can_hurt(p.net_id, other):
+			t.list.append(other)
+	if native_rewind != null:
+		for other in t.list:
+			if t.rewind < 0.0:
+				t.feet.append(other.state.position)
+				t.stances.append(other.state.stance)
+			else:
+				t.ids.append(other.net_id)
+				t.life_gens.append(other.state.life_gen)
+	return t
+
+
+## One ray against the world and the (rewound) `targets`:
 ## [target or null, Hitbox.Hit, end point, hit the world, world normal].
-func _trace(p: SimPlayer, origin: Vector3, dir: Vector3, max_range: float) -> Array:
+func _trace(targets: Targets, origin: Vector3, dir: Vector3, max_range: float) -> Array:
 	var world_hit := _ray(origin, origin + dir * max_range)
 	var max_dist := max_range
 	var normal := Vector3.ZERO
@@ -368,16 +409,27 @@ func _trace(p: SimPlayer, origin: Vector3, dir: Vector3, max_range: float) -> Ar
 		normal = world_hit.normal
 	var target: SimPlayer = null
 	var best: Hitbox.Hit = null
-	for other: SimPlayer in players.values():
-		if other == p or not other.state.alive or not _can_hurt(p.net_id, other):
-			continue
-		var pose := _pose(p, other)
-		if pose.is_empty():
-			continue
-		var hit := Hitbox.intersect(pose[0], pose[1], origin, dir, max_dist)
-		if hit != null and (best == null or hit.distance < best.distance):
-			best = hit
-			target = other
+	if native_rewind != null:
+		# [index into targets.list, distance, part] or [].
+		var r: PackedFloat64Array
+		if targets.rewind < 0.0:
+			r = native_rewind.trace_poses(targets.feet, targets.stances, origin, dir, max_dist)
+		else:
+			r = native_rewind.trace(targets.ids, targets.life_gens, targets.rewind, origin, dir, max_dist)
+		if not r.is_empty():
+			target = targets.list[int(r[0])]
+			best = Hitbox.Hit.new()
+			best.distance = r[1]
+			best.part = int(r[2])
+	else:
+		for other in targets.list:
+			var pose := _pose(targets.shooter, other)
+			if pose.is_empty():
+				continue
+			var hit := Hitbox.intersect(pose[0], pose[1], origin, dir, max_dist)
+			if hit != null and (best == null or hit.distance < best.distance):
+				best = hit
+				target = other
 	var dist := best.distance if best != null else max_dist
 	return [target, best, origin + dir * dist, not world_hit.is_empty(), normal]
 
@@ -388,6 +440,9 @@ func _pose(shooter: SimPlayer, other: SimPlayer) -> Array:
 	var rewind := _rewind_tick(shooter)
 	if rewind < 0.0:
 		return [other.state.position, other.state.stance]
+	if native_rewind != null:
+		var n: Array = native_rewind.sample(other.net_id, rewind)
+		return [] if n.is_empty() or n[2] != other.state.life_gen else [n[0], n[1]]
 	var pose := (history[other.net_id] as HitboxHistory).sample(rewind) if history.has(other.net_id) else null
 	if pose == null or pose.life_gen != other.state.life_gen:
 		return []

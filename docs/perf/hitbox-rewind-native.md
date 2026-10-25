@@ -1,10 +1,10 @@
-# Native hitbox rewind prototype (2026-10-25)
+# Native hitbox rewind (2026-10-25)
 
-PLAN §3.17 names hitbox rewind as a likely GDExtension candidate. This is a
-prototype of it with a benchmark, to decide whether wiring it into the
-simulation is worth the native build cost. **It isn't used by the game yet**:
-nothing loads it until `native/build.sh` is run, and `SimWorld` still calls
-the GDScript code.
+PLAN §3.17 names hitbox rewind as a likely GDExtension candidate. This is
+that extension, measured on its own and inside `SimWorld`. It's **opt-in**:
+nothing loads it until `native/build.sh` is run. Without it (CI, release
+builds today, always on the web) `SimWorld` runs the GDScript code, which
+gives the same hits.
 
 ## What it is
 
@@ -26,7 +26,45 @@ same**. `tests/unit/test_hitbox_native.gd` checks that for `sample()`,
 (about 32,000 asserts). Without the extension those tests pass as skipped, so
 CI is unchanged.
 
-## Results
+## In SimWorld
+
+`SimWorld.native_rewind` holds a `HitboxRewindNative` when the class exists,
+else null. When set, the tick records history into it instead of
+`HitboxHistory`, and `_pose` samples it. Hitscan shots now gather their
+possible targets once per shot (`_targets`, shared by all pellets) and
+`_trace` hands them to `trace()`, or to `trace_poses()` when not rewinding.
+The GDScript path uses the same `_targets` list, so it no longer re-checks
+`_can_hurt` per pellet. To force the GDScript path, set `native_rewind` to
+null before the first step.
+
+`test_match_is_identical_with_native_rewind` runs a scripted 8-player,
+30-second lag-compensated fight on each path. Every event matches, tick for
+tick. Bot matches can't be compared this way: two bot runs in one process
+diverge after a few ticks even on the same path.
+
+### Server tick, scripted fight
+
+`tools/bench/bench_sim_tick.gd`: `RewindFixture`'s fight on the test arena
+(every primary, held and pressed fire, view ticks 3–9 ticks back), timing
+`SimWorld.step()` only. Release export, same Xeon VM, 60 s per run, three
+rounds alternating the two paths. Both paths fired and hit the same number of
+times in every run.
+
+| Players | Path | p50 (ms) | p95 (ms) | p99 (ms) |
+|---|---|---|---|---|
+| 4 | GDScript | 0.18–0.21 | 0.26–0.38 | 0.42–0.55 |
+| | native | 0.18–0.19 | 0.28–0.36 | 0.36–0.47 |
+| 8 | GDScript | 0.42–0.45 | 0.71–0.84 | 1.05–1.30 |
+| | native | 0.41–0.46 | 0.63–0.75 | 0.79–0.93 |
+| 16 | GDScript | 0.89–1.10 | 1.79–2.24 | 2.44–3.29 |
+| | native | 0.82–0.95 | 1.32–1.79 | 1.71–2.44 |
+
+Typical ticks barely change. The saving is in the busy ticks where shots
+land: **p99 drops by about a quarter** (≈0.1 ms at 4 players, 0.3 ms at 8,
+0.7 ms at 16). `max` is left out: single 3–87 ms spikes appear on both paths
+on this shared VM.
+
+## Microbenchmark
 
 Exported Linux **release** template (Godot 4.7.2), extension built
 `template_release`, Intel Xeon @ 2.1 GHz (4 vCPUs, shared cloud VM).
@@ -60,16 +98,13 @@ are built once and reused for all ten pellets.
   world ray per pellet (already native, in Jolt) and per candidate runs
   `_can_hurt` and `_rewind_tick`. So the real GDScript cost is if anything
   higher than measured here.
-- This is a microbenchmark. Whether it moves **tick p99** in a real match
-  depends on how often hitscan shots land in the same tick. That needs the
-  integration below and a host soak (the `host-caps.md` setup).
+- This is a microbenchmark. In a whole tick the saving is smaller, because
+  movement, physics and the rest stay the same; see "In SimWorld" above.
 
 ## Not done yet
 
-- **Wiring into `SimWorld`**: build `ids`/`life_gens` once per shot in
-  `_resolve_shot`, call `trace()` per pellet, keep the GDScript path when
-  `ClassDB.class_exists("HitboxRewindNative")` is false. The web build
-  always takes that fallback (§3.17 browser rule).
+- **A phone-host soak** (PLAN §3.5.1): 4 and 8 combatants on the Mi 11X,
+  tick p99 against the 4 ms budget. That needs the Android build below.
 - **Builds for other platforms**: only Linux x86_64 was built and run.
   Windows and Android (arm64, pinned NDK, 16 KB alignment, §3.18) need
   `native/build.sh` entries and CI jobs.
@@ -89,11 +124,14 @@ native/build.sh template_debug          # the library the editor binary loads
 godot --headless --import
 godot --headless -s addons/gut/gut_cmdln.gd -gconfig=.gutconfig.json -gselect=test_hitbox_native.gd
 godot --headless -s tools/bench/bench_hitbox_rewind.gd -- --players 16
+godot --headless -s tools/bench/bench_sim_tick.gd -- --players 16 --seconds 60
 ```
 
 The editor runs GDScript slower than a release export (at 16 players: ray
 83 µs vs 7.6 native, shot 945 µs vs 18.6), so its numbers overstate the gain
 a little. Export templates ignore `-s`, so for release numbers,
 export a pack whose main scene calls
-`preload("res://tools/bench/bench_hitbox_rewind.gd").run(OS.get_cmdline_user_args())`.
-Include `tools/` and `tests/rewind_fixture.gd`, which the presets exclude.
+`preload("res://tools/bench/bench_hitbox_rewind.gd").run(OS.get_cmdline_user_args())`
+or `await preload("res://tools/bench/bench_sim_tick.gd").run(get_tree(), args)`.
+Include `tools/`, `tests/` and `maps/test_arena/`; the presets exclude the
+first two.

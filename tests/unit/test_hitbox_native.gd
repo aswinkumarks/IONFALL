@@ -1,5 +1,5 @@
 extends GutTest
-## The native rewind prototype (native/, PLAN §3.17) must give exactly the
+## The native rewind (native/, PLAN §3.17) must give exactly the
 ## GDScript hits. Skipped when the extension isn't built (CI, the web).
 
 const Stance := PlayerSimState.Stance
@@ -78,3 +78,44 @@ func test_removed_player_has_no_pose() -> void:
 	assert_eq(n.sample(4, 10.0), [Vector3(1, 0, 1), Stance.CROUCH, 0])
 	n.remove(4)
 	assert_eq(n.sample(4, 10.0), [])
+
+
+## SimWorld with native_rewind against SimWorld on the GDScript path: the
+## same scripted fight (every primary, lag-compensated view ticks) gives the
+## same events, tick for tick.
+func test_match_is_identical_with_native_rewind() -> void:
+	if _skipped():
+		return
+	var arena := SimHarness.make_arena()
+	add_child_autofree(arena)
+	await wait_physics_frames(2)
+	var with_native: Array = await _scripted_match(true)
+	var gdscript: Array = await _scripted_match(false)
+	assert_gt(with_native[1], 30, "the script should land hits")
+	assert_eq(with_native[1], gdscript[1], "hits")
+	assert_eq(with_native[0].size(), gdscript[0].size(), "events")
+	for i in mini(with_native[0].size(), gdscript[0].size()):
+		if with_native[0][i] != gdscript[0][i]:
+			assert_eq(with_native[0][i], gdscript[0][i], "event %d" % i)
+			return
+
+
+## [event log, hit count] of RewindFixture's scripted fight, 8 players, 30 s.
+func _scripted_match(native: bool) -> Array:
+	var world := SimHarness.make_world(5)
+	if not native:
+		world.native_rewind = null
+	add_child(world)
+	var inputs := RewindFixture.start_fight(world, 8)
+	var log: Array[String] = []
+	var hits := 0
+	for t in 1800:
+		world.step(RewindFixture.fight_commands(world, inputs, t))
+		for e in world.drain_events():
+			log.append("%d %s" % [world.tick, e])
+			if e.type == "hit":
+				hits += 1
+	remove_child(world)
+	world.free()
+	await wait_physics_frames(1)
+	return [log, hits]

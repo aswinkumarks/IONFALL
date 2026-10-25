@@ -1,6 +1,6 @@
 #pragma once
 
-// Native lag-compensation rewind (prototype, PLAN §3.17): the per-player
+// Native lag-compensation rewind (PLAN §3.17): the per-player
 // hitbox history of sim/hitbox_history.gd plus the capsule ray tests of
 // sim/hitbox.gd, behind one batched trace() call. It mirrors the GDScript
 // arithmetic exactly (Vector3 in float, scalars in double), so both give the
