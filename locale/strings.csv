@@ -286,6 +286,9 @@ LOBBY_PLAYERS,%d / %d
 LOBBY_HOST_TAG,Host
 LOBBY_YOU_TAG,You
 LOBBY_TEAM,%s · %d / %d
+LOBBY_KICK,Remove
+LOBBY_KICK_CONFIRM,Confirm?
+LOBBY_KICKED,The host removed you from the lobby
 LOBBY_JOIN_TEAM,Join
 LOBBY_EDIT_TEAM,Edit
 LOBBY_EDIT_TEAM_TITLE,Team name and colour

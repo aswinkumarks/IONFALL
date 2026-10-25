@@ -157,6 +157,25 @@ func test_back_from_a_match_players_keep_their_teams() -> void:
 	assert_eq(_teams(again), [0, 1, 1])
 
 
+func test_the_host_removes_a_player_who_cannot_return() -> void:
+	var a := _join("Alpha")
+	var b := _join("Bravo")
+	await wait_until(func() -> bool: return b.members.size() == 3, 5.0)
+	watch_signals(a)
+	host.kick(a.my_id())
+	assert_eq(host.members.size(), 2, "off the list at once")
+	await wait_until(func() -> bool: return get_signal_emit_count(a, "closed") > 0, 3.0)
+	assert_signal_emitted_with_parameters(a, "closed", ["LOBBY_KICKED"])
+	await wait_until(func() -> bool: return b.members.size() == 2, 3.0)
+	assert_eq(b.members.map(func(m: Dictionary) -> String: return m.name), ["Hosty", "Bravo"])
+	var again := _join("Alpha")
+	watch_signals(again)
+	await wait_until(func() -> bool: return get_signal_emit_count(again, "closed") > 0, 5.0)
+	assert_signal_emitted_with_parameters(again, "closed", ["LOBBY_KICKED"])  # refused when rejoining
+	b.kick(LobbySession.HOST_ID)
+	assert_eq(host.members.size(), 2, "only the host removes players")
+
+
 func test_the_host_names_and_colours_the_teams() -> void:
 	var a := _join("Alpha")
 	await wait_until(func() -> bool: return a.members.size() == 2, 5.0)

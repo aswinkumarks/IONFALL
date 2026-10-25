@@ -2,7 +2,8 @@ extends Control
 ## Multiplayer lobby: the host picks map, mode and duration and sees who has
 ## joined; players see the same, read-only. In the team modes the players
 ## list shows the two teams, each with Join for whoever isn't on it; the host
-## names the teams and picks their colours (Edit, by the team's name). The host's Start sends everyone
+## names the teams and picks their colours (Edit, by the team's name) and can
+## remove a player (press Remove twice). The host's Start sends everyone
 ## into the match (LobbySession). Reached from the menu with
 ## `MatchConfig.pending` in HOST or JOIN mode (LAN address, invite code, or
 ## an online host from the browser).
@@ -18,6 +19,7 @@ const CONNECT_TIMEOUT_S := 15.0
 ## failed), so the reconnect is retried before giving up.
 const HANDOVER_ATTEMPTS := 5
 const HANDOVER_RETRY_S := 2.0
+const KICK_CONFIRM_S := 3.0  ## the host's second press on Remove must come within this
 
 var config: MatchConfig
 var session := LobbySession.new()
@@ -275,6 +277,31 @@ func _add_slot(list: VBoxContainer, m: Dictionary, color: Color = UiStyle.ACCENT
 	var tag := UiStyle.label(" · ".join(tags), &"DimLabel")
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(tag)
+	if _host and not m.host:
+		row.add_child(_kick_button(m.id))
+
+
+## Host: Remove, then Confirm within KICK_CONFIRM_S, removes player `id`.
+func _kick_button(id: int) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"ChipButton"
+	b.text = tr("LOBBY_KICK")
+	b.disabled = _starting
+	b.pressed.connect(func() -> void:
+		if b.has_meta("armed"):
+			session.kick(id)
+			return
+		b.set_meta("armed", true)
+		b.text = tr("LOBBY_KICK_CONFIRM")
+		for c: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+			b.add_theme_color_override(c, UiStyle.DANGER)
+		get_tree().create_timer(KICK_CONFIRM_S).timeout.connect(func() -> void:
+			if is_instance_valid(b):
+				b.remove_meta("armed")
+				b.text = tr("LOBBY_KICK")
+				for c: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+					b.remove_theme_color_override(c)))
+	return b
 
 
 func _process(delta: float) -> void:
