@@ -92,6 +92,12 @@ func set_slot(slot: int, index: int, p_mag: int, p_reserve: int) -> void:
 	burst_timer[slot] = 0
 
 
+## Whether slot `slot`'s weapon can reload: an infinite reserve, or rounds left.
+func has_reserve(slot: int) -> bool:
+	var w := weapon(slot)
+	return w != null and (w.infinite_reserve or reserve[slot] > 0)
+
+
 ## The weapon in `slot` (default: the held one), or null.
 func weapon(slot: int = -1) -> WeaponData:
 	var i := weapon_slot if slot < 0 else slot

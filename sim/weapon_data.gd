@@ -44,6 +44,9 @@ enum FireMode { AUTO, SEMI, BURST, PROJECTILE }
 @export_group("Ammo")
 @export var mag_size: int = 36
 @export var reserve: int = 180
+## Reloads never run the reserve down (loadout weapons); off for the power
+## weapons picked up on the map, whose ammo is `mag_size` + `reserve`.
+@export var infinite_reserve: bool = true
 ## Reload one round per `reload_ticks` until full (shells), instead of the
 ## whole magazine at once.
 @export var reload_per_round: bool = false

@@ -6,7 +6,7 @@ fields are grouped and each has a tooltip. You can also edit the `.tres` files a
 
 | File | What it tunes |
 |---|---|
-| `data/weapons/<weapon>.tres` | One per weapon: damage, headshot multiplier, range falloff, spread, pellets, fire rate, bursts, reload, magazine and reserve, scope zoom and spread, projectile speed, splash and self-damage, grenade fuse and bounce. Melee is `melee.tres`, grenades `frag_grenade.tres`. |
+| `data/weapons/<weapon>.tres` | One per weapon: damage, headshot multiplier, range falloff, spread, pellets, fire rate, bursts, reload, magazine and reserve (`infinite_reserve`: loadout weapons never run out; the map's power weapons have limited ammo), scope zoom and spread, projectile speed, splash and self-damage, grenade fuse and bounce. Melee is `melee.tres`, grenades `frag_grenade.tres`. |
 | `data/player.tres` | Shield and health maxima, regeneration delays and rates, spawn protection, grenades per life and throw cooldown, melee cone and back-stab angle, assists, pickup radius, dropped-weapon lifetime. |
 | `data/movement_config.tres` | Walk, sprint and crouch speeds, acceleration, gravity, jumps and double jump, slide, mantle, body size. |
 | `data/modes.tres` | Score limits per mode, respawn delays, countdown, post-match, default time limit, sudden death, Capture the Flag (flag return, capture points), co-op wave count and size. |

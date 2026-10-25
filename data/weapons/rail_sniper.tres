@@ -26,3 +26,4 @@ scope_zoom = 4.0
 scope_spread = 0.0
 scope_move_speed = 0.5
 scope_overlay = true
+infinite_reserve = false

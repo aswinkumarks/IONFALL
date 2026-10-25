@@ -36,7 +36,7 @@ var _slot: int = 0
 var _weapon_name: String = ""
 var _mag: int = 0
 var _mag_size: int = 1
-var _reserve: int = 0
+var _reserve: int = 0  ## -1: infinite
 var _grenades: int = 0
 var _prompt: String = ""
 var _team: int = GameMode.NO_TEAM
@@ -233,7 +233,7 @@ func update_state(s: PlayerSimState, weapon: WeaponData, score: int, ticks_to_re
 	_weapon_name = tr(weapon.display_name).to_upper()
 	_mag = s.mag[w]
 	_mag_size = maxi(weapon.mag_size, 1)
-	_reserve = s.reserve[w]
+	_reserve = -1 if weapon.infinite_reserve else s.reserve[w]
 	_grenades = s.grenades
 	_reload = 1.0 - float(s.reload[w]) / weapon.reload_ticks if s.reload[w] > 0 else 0.0
 	_score = score
@@ -496,10 +496,12 @@ func _draw_weapon() -> void:
 		_text(Vector2(right, base - 30 * s), tr("HUD_RELOADING").to_upper(), 34, UiStyle.ACCENT,
 				HORIZONTAL_ALIGNMENT_RIGHT, UiStyle.font_display_bold)
 	else:
-		var reserve := " / %d" % _reserve
-		var rf := UiStyle.font_display
-		var rw := rf.get_string_size(reserve, HORIZONTAL_ALIGNMENT_LEFT, -1, roundi(26 * s)).x
-		_text(Vector2(right, base - 24 * s), reserve, 26, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+		# Rajdhani has no ∞: the body font draws it.
+		var reserve := " / ∞" if _reserve < 0 else " / %d" % _reserve
+		var rf: Font = UiStyle.font_body if _reserve < 0 else UiStyle.font_display
+		var rsize := 34.0 if _reserve < 0 else 26.0  # ∞ is a small glyph
+		var rw := rf.get_string_size(reserve, HORIZONTAL_ALIGNMENT_LEFT, -1, roundi(rsize * s)).x
+		_text(Vector2(right, base - 24 * s), reserve, rsize, UiStyle.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT, rf)
 		var low := _mag <= ceili(_mag_size * 0.25)
 		_text(Vector2(right - rw - 4 * s, base - 22 * s), str(_mag), 60,
 				UiStyle.DANGER if _mag == 0 else (UiStyle.WARN if low else UiStyle.TEXT), HORIZONTAL_ALIGNMENT_RIGHT,

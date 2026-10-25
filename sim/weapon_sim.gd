@@ -68,11 +68,14 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 	if s.reload[w] > 0:
 		s.reload[w] -= 1
 		if s.reload[w] == 0:
-			var take := mini(data.mag_size - s.mag[w], s.reserve[w])
+			var take := data.mag_size - s.mag[w]
+			if not data.infinite_reserve:
+				take = mini(take, s.reserve[w])
 			if data.reload_per_round:
 				take = mini(take, 1)
 			s.mag[w] += take
-			s.reserve[w] -= take
+			if not data.infinite_reserve:
+				s.reserve[w] -= take
 			if data.reload_per_round:
 				_start_reload(s, w, data)  # next shell
 
@@ -118,7 +121,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 
 
 static func _start_reload(s: PlayerSimState, w: int, data: WeaponData) -> void:
-	if s.reload[w] == 0 and s.mag[w] < data.mag_size and s.reserve[w] > 0:
+	if s.reload[w] == 0 and s.mag[w] < data.mag_size and (data.infinite_reserve or s.reserve[w] > 0):
 		s.reload[w] = data.reload_ticks
 		s.burst_left[w] = 0
 
