@@ -89,3 +89,31 @@ func test_sentinel_fingers() -> void:
 			return
 	for name: String in ["RightHandIndex3", "RightHandPinky2", "RightHandThumb3", "LeftHandMiddle3"]:
 		assert_true(on_fingers.has(name), "%s moves vertices" % name)
+
+
+## The pistol-aim clips bow the neck; ArmoredRig.HeadLevel keeps the head
+## upright (rest orientation) when looking straight ahead.
+func test_head_stays_level_while_aiming() -> void:
+	for style: String in ["armored", "sentinel"]:
+		var rig := CharacterRig.create(style)
+		add_child_autofree(rig)
+		rig.setup(Color.WHITE)
+		var s := PlayerSimState.new()
+		s.alive = true
+		s.move_state = PlayerSimState.Move.GROUND
+		s.velocity = Vector3(0, 0, -4)
+		var sk: Skeleton3D = rig._skeleton
+		var head := sk.find_bone("Head")
+		var final_up := [Vector3.ZERO]
+		# Read after the modifiers (HeadLevel) have run.
+		sk.skeleton_updated.connect(func() -> void: final_up[0] = sk.get_bone_global_pose(head).basis.orthonormalized().y)
+		for i in 30:
+			rig.animate(s, 1.0 / 60.0, 1.8)
+			await wait_process_frames(1)
+		var up_rest := sk.get_bone_global_rest(head).basis.orthonormalized().y
+		assert_lt(rad_to_deg((final_up[0] as Vector3).angle_to(up_rest)), 3.0, "%s: head upright while running and aiming" % style)
+		# And the weapon points where the player looks (the body's forward).
+		rig.set_weapon(&"pulse_rifle")
+		await wait_process_frames(2)
+		var barrel: Vector3 = -(rig._weapon_node as Node3D).global_basis.z.normalized()
+		assert_lt(rad_to_deg(barrel.angle_to(-rig.global_basis.z)), 3.0, "%s: weapon points forward" % style)
