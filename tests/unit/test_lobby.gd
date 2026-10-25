@@ -21,8 +21,8 @@ func _join(player_name: String) -> LobbySession:
 
 
 func test_lobby_and_start_round_trip() -> void:
-	var members := [{"id": 1, "name": "Hosty", "host": true, "team": 0},
-			{"id": 123456789, "name": "Alpha", "host": false, "team": 1}]
+	var members := [{"id": 1, "name": "Hosty", "host": true, "team": 0, "ping": 0},
+			{"id": 123456789, "name": "Alpha", "host": false, "team": 1, "ping": 37}]
 	var l := Protocol.decode_lobby(Protocol.encode_lobby("spire", GameMode.TDM, 15, 8, members))
 	assert_eq(l.map, "spire")
 	assert_eq(l.mode, GameMode.TDM)
@@ -75,7 +75,7 @@ func test_full_lobby_rejects_and_unknown_settings_fall_back() -> void:
 
 
 func test_lobby_carries_the_bot_settings() -> void:
-	var members := [{"id": 1, "name": "Host", "host": true, "team": 0}]
+	var members := [{"id": 1, "name": "Host", "host": true, "team": 0, "ping": 0}]
 	var l := Protocol.decode_lobby(Protocol.encode_lobby("foundry", GameMode.CTF, 10, 16, members, 7, 2, true))
 	assert_eq(l.bots, 7)
 	assert_eq(l.bot_difficulty, 2)
@@ -196,3 +196,14 @@ func test_the_host_names_and_colours_the_teams() -> void:
 	assert_eq(GameMode.clean_team_colors(PackedInt32Array([2, 2])), GameMode.DEFAULT_TEAM_COLORS)
 	assert_eq(GameMode.clean_team_colors(PackedInt32Array([0, 99])), GameMode.DEFAULT_TEAM_COLORS)
 	assert_eq(GameMode.clean_team_name("x".repeat(40)).length(), GameMode.MAX_TEAM_NAME)
+
+
+func test_members_see_each_others_latency() -> void:
+	var a := _join("Alpha")
+	var b := _join("Bravo")
+	await wait_until(func() -> bool: return b.members.size() == 3, 5.0)
+	await wait_until(func() -> bool: return b.members.all(func(m: Dictionary) -> bool: return m.host or m.ping > 0), 5.0)
+	assert_eq(b.members[0].ping, 0, "the host has no latency to itself")
+	for m: Dictionary in b.members.slice(1):
+		assert_between(m.ping, 1, 1000, "%s's round trip to the host" % m.name)
+	assert_eq(a.members.size(), 3)
