@@ -37,6 +37,7 @@ func _widest_spread(p: SimPlayer, held: int, shots: int) -> float:
 		var w := p.state.weapon_slot
 		p.state.cooldown[w] = 0
 		p.state.mag[w] = 10
+		p.state.recoil = Vector2.ZERO  # spread only: test_recoil covers the kick
 		for shot in WeaponSim.step(p, c, 1 << Action.FIRE, 99):
 			widest = maxf(widest, rad_to_deg(aim.angle_to(shot.direction)))
 	return widest

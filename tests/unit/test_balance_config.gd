@@ -19,5 +19,6 @@ func test_bot_levels_get_harder() -> void:
 		var harder := levels[i]
 		assert_true(harder.reaction_ticks <= easier.reaction_ticks, "%s reacts no slower" % harder.name)
 		assert_true(harder.aim_error_degrees <= easier.aim_error_degrees, "%s aims no worse" % harder.name)
+		assert_true(harder.recoil_control >= easier.recoil_control, "%s holds recoil no worse" % harder.name)
 		assert_true(harder.turn_speed_degrees_per_second >= easier.turn_speed_degrees_per_second,
 				"%s turns no slower" % harder.name)

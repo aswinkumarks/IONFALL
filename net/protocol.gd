@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 9
+const VERSION := 10
 const MAGIC := 0x464E4F49  ## "IONF"
 ## HELLO flags.
 const HELLO_SPECTATE := 1

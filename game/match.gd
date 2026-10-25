@@ -551,8 +551,9 @@ func _render_host(delta: float) -> void:
 	_update_scope(s)
 	if s.alive:
 		input.confirm_slot(s.weapon_slot)
-	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw,
-			input.look_pitch, s, me.current_weapon(), delta)
+	var kick := from.recoil.lerp(s.recoil, alpha)
+	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw + kick.x,
+			input.look_pitch + kick.y, s, me.current_weapon(), delta)
 	var seen := {}
 	for id in world.players:
 		if id == me.net_id:
@@ -764,7 +765,9 @@ func _render_client(delta: float) -> void:
 	_update_scope(s)
 	if s.alive:
 		input.confirm_slot(s.weapon_slot)
-	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw, input.look_pitch, s, me.current_weapon(), delta)
+	var kick := from.recoil.lerp(s.recoil, client.alpha())
+	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw + kick.x, input.look_pitch + kick.y, s,
+			me.current_weapon(), delta)
 	var names := {}
 	for p in client.roster:
 		names[p.id] = p
