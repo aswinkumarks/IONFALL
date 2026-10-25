@@ -14,17 +14,19 @@ const SOURCE_HALF := 0.95  ## half the source models' length
 ## Where every model's handle sits, in its root's space (the old Kenney pulse
 ## rifle's, which the rigs' grips were tuned on).
 const REFERENCE_GRIP := Vector3(0.0, -0.048, 0.023)
-## id -> [length, hip offset from the camera, muzzle, handle]; muzzle and
-## handle are (fraction of the length from the muzzle end, height) in the
-## source model's units.
+## id -> [length, hip offset from the camera, muzzle, handle, support];
+## muzzle, handle and support (where the other hand's wrist goes: under the
+## handguard or pump, on a front grip, or by the gun hand for the pistol) are
+## (fraction of the length from the muzzle end, height) in the source
+## model's units.
 const MODELS := {
-	&"pulse_rifle": [0.38, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.09), Vector2(0.69, -0.17)],
-	&"mag_pistol": [0.14, Vector3(0.17, -0.16, -0.36), Vector2(0.0, 0.36), Vector2(0.85, -0.31)],
-	&"arc_launcher": [0.41, Vector3(0.21, -0.2, -0.46), Vector2(0.0, 0.17), Vector2(0.67, -0.17)],
-	&"burst_rifle": [0.39, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.03), Vector2(0.61, -0.19)],
-	&"rail_sniper": [0.58, Vector3(0.19, -0.19, -0.48), Vector2(0.0, 0.04), Vector2(0.73, -0.14)],
-	&"scatter_gun": [0.41, Vector3(0.2, -0.19, -0.44), Vector2(0.0, 0.16), Vector2(0.69, -0.1)],
-	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.44), Vector2(0.0, 0.26), Vector2(0.65, -0.17)],
+	&"pulse_rifle": [0.38, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.09), Vector2(0.69, -0.17), Vector2(0.38, -0.04)],
+	&"mag_pistol": [0.14, Vector3(0.17, -0.16, -0.36), Vector2(0.0, 0.36), Vector2(0.85, -0.31), Vector2(0.8, -0.45)],
+	&"arc_launcher": [0.41, Vector3(0.21, -0.2, -0.46), Vector2(0.0, 0.17), Vector2(0.67, -0.17), Vector2(0.27, -0.22)],
+	&"burst_rifle": [0.39, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.03), Vector2(0.61, -0.19), Vector2(0.38, -0.08)],
+	&"rail_sniper": [0.58, Vector3(0.19, -0.19, -0.48), Vector2(0.0, 0.04), Vector2(0.73, -0.14), Vector2(0.45, -0.04)],
+	&"scatter_gun": [0.41, Vector3(0.2, -0.19, -0.44), Vector2(0.0, 0.16), Vector2(0.69, -0.1), Vector2(0.28, -0.07)],
+	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.44), Vector2(0.0, 0.26), Vector2(0.65, -0.17), Vector2(0.3, 0.1)],
 }
 const GRENADE := "frag_grenade"
 
@@ -42,8 +44,8 @@ static func has(id: StringName) -> bool:
 	return MODELS.has(id)
 
 
-## A ready-to-add model for `id` (markers as children "Muzzle" and "Grip",
-## the middle of the handle), or null.
+## A ready-to-add model for `id` (markers as children "Muzzle", "Grip", the
+## middle of the handle, and "Support", for the other hand), or null.
 static func instantiate(id: StringName) -> Node3D:
 	if not MODELS.has(id):
 		return null
@@ -63,6 +65,10 @@ static func instantiate(id: StringName) -> Node3D:
 	grip.name = "Grip"
 	grip.position = REFERENCE_GRIP
 	root.add_child(grip)
+	var support := Node3D.new()
+	support.name = "Support"
+	support.position = model.transform * _source_point(def[4])
+	root.add_child(support)
 	return root
 
 

@@ -138,6 +138,14 @@ static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
 			sk.set_bone_pose_rotation(bone, Quaternion(dir.cross(PALM).normalized(), deg_to_rad(curl[finger][k])))
 
 
+## The animation tree resets the fingers (it has no tracks for them) each
+## frame in third person: curl them again after the clips.
+func _hold_weapon() -> void:
+	super()
+	if _tree.active:
+		_curl_hands()
+
+
 func make_first_person() -> bool:
 	var ok := super()
 	_curl_hands()
@@ -174,11 +182,15 @@ func _grip_local() -> Transform3D:
 ## First person: the palm against the handle, fingers curled round it
 ## (GRIP_CURL). Hand bone space (cm): fingers +Y, palm -Z, thumb -X.
 func _fp_hand() -> Array:
-	return [Vector3.UP, Vector3.FORWARD, Vector3(-1.0, 8.0, -4.0)]
+	return [Vector3.UP, Vector3.FORWARD, Vector3(-1.0, 8.0, -2.0)]
 
 
 func _arm_chains() -> Array:
 	return [["RightArm", "RightForeArm", "RightHand"], ["LeftArm", "LeftForeArm", "LeftHand"]]
+
+
+func _chest_bone() -> String:
+	return "Spine"
 
 
 func _grip_scale() -> float:
