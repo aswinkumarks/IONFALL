@@ -146,9 +146,13 @@ static func decode_pong(data: PackedByteArray) -> Dictionary:
 
 # --- Control messages (server -> client, reliable) ---
 
-static func encode_welcome(your_id: int, match_id: int, phase: int, phase_seq: int, tick: int, seed_value: int, map_id: String, token: int) -> PackedByteArray:
+## `team_names`, `team_colors`: the host's names ("" = the default) and
+## colours (GameMode.TEAM_PALETTE indices) for the two teams.
+static func encode_welcome(your_id: int, match_id: int, phase: int, phase_seq: int, tick: int, seed_value: int, map_id: String, token: int,
+		team_names := PackedStringArray(["", ""]), team_colors := GameMode.DEFAULT_TEAM_COLORS) -> PackedByteArray:
 	return Wire.Writer.new().u8(Msg.WELCOME).u16(your_id).u32(match_id).u8(phase).u8(phase_seq) \
-			.u32(tick).u32(seed_value).str8(map_id).u32(token >> 32).u32(token & 0xFFFFFFFF).data()
+			.u32(tick).u32(seed_value).str8(map_id).u32(token >> 32).u32(token & 0xFFFFFFFF) \
+			.str8(team_names[0]).str8(team_names[1]).u8(team_colors[0]).u8(team_colors[1]).data()
 
 
 static func decode_welcome(data: PackedByteArray) -> Dictionary:
@@ -157,6 +161,8 @@ static func decode_welcome(data: PackedByteArray) -> Dictionary:
 	var out := {"id": r.u16(), "match_id": r.u32(), "phase": r.u8(), "phase_seq": r.u8(),
 			"tick": r.u32(), "seed": r.u32(), "map": r.str8()}
 	out["token"] = (r.u32() << 32) | r.u32()
+	out["team_names"] = PackedStringArray([GameMode.clean_team_name(r.str8(64)), GameMode.clean_team_name(r.str8(64))])
+	out["team_colors"] = GameMode.clean_team_colors(PackedInt32Array([r.u8(), r.u8()]))
 	return out if r.ok else {}
 
 
@@ -436,13 +442,17 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 
 ## The host's settings and who is in the lobby. `members`: Array of
 ## {id, name, host, team} in join order (`id` the member's transport peer id;
-## `team` 0 or 1, used in the team modes).
+## `team` 0 or 1, used in the team modes). `team_names`, `team_colors`: the
+## host's names ("" = the default) and colours (GameMode.TEAM_PALETTE) for
+## the teams.
 ## `bots`, `bot_difficulty`, `friendly_fire`: the host's bot settings, shown
 ## read-only to members.
 static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: int, members: Array,
-		bots: int = 0, bot_difficulty: int = 1, friendly_fire: bool = false) -> PackedByteArray:
+		bots: int = 0, bot_difficulty: int = 1, friendly_fire: bool = false,
+		team_names := PackedStringArray(["", ""]), team_colors := GameMode.DEFAULT_TEAM_COLORS) -> PackedByteArray:
 	var w := Wire.Writer.new().u8(Msg.LOBBY).str8(map_id).u8(mode).u8(minutes).u8(max_players) \
-			.u8(bots).u8(bot_difficulty).u8(1 if friendly_fire else 0).u8(members.size())
+			.u8(bots).u8(bot_difficulty).u8(1 if friendly_fire else 0).str8(team_names[0]).str8(team_names[1]) \
+			.u8(team_colors[0]).u8(team_colors[1]).u8(members.size())
 	for m in members:
 		w.u32(m.id).u8(1 if m.host else 0).u8(m.team).str8(m.name)
 	return w.data()
@@ -453,6 +463,8 @@ static func decode_lobby(data: PackedByteArray) -> Dictionary:
 	r.u8()
 	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8(), "max": r.u8(), "bots": r.u8(),
 			"bot_difficulty": r.u8(), "friendly_fire": r.u8() == 1, "members": []}
+	out["team_names"] = PackedStringArray([GameMode.clean_team_name(r.str8(64)), GameMode.clean_team_name(r.str8(64))])
+	out["team_colors"] = GameMode.clean_team_colors(PackedInt32Array([r.u8(), r.u8()]))
 	var n := r.u8()
 	if n > MAX_PEERS or out.bots >= MAX_PEERS or out.bot_difficulty > 3:
 		return {}

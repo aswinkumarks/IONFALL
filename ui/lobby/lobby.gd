@@ -1,8 +1,8 @@
 extends Control
 ## Multiplayer lobby: the host picks map, mode and duration and sees who has
 ## joined; players see the same, read-only. In the team modes the players
-## list shows the two teams: everyone can switch their own team and the host
-## can move anyone. The host's Start sends everyone
+## list shows the two teams, each with Join for whoever isn't on it; the host
+## names the teams and picks their colours (Edit, by the team's name). The host's Start sends everyone
 ## into the match (LobbySession). Reached from the menu with
 ## `MatchConfig.pending` in HOST or JOIN mode (LAN address, invite code, or
 ## an online host from the browser).
@@ -40,6 +40,11 @@ var _slots: VBoxContainer
 var _count: Label
 var _start_button: Button
 var _waiting: Label
+var _team_editor: Control
+var _editing_team: int = 0
+var _team_name_edit: LineEdit
+var _swatches: HBoxContainer
+var _swatch_pick: int = 0
 var _dots: float = 0.0
 
 
@@ -76,6 +81,8 @@ func _open() -> void:
 	var max_players := config.max_combatants()
 	session.team_plan = config.team_plan
 	session.host_uuid = MatchConfig.profile_uuid()
+	session.team_names = config.team_names
+	session.team_colors = config.team_colors
 	session.configure(config.map, config.game_mode, config.minutes, config.bots, config.bot_difficulty,
 			config.friendly_fire)
 	var err := OK
@@ -189,31 +196,52 @@ func _fill_slots() -> void:
 		child.queue_free()
 	if not LobbySession.has_teams(session.game_mode):
 		for m: Dictionary in session.members:
-			_add_slot(m, -1)
+			_add_slot(m)
 		return
+	var mine := session.team_of(session.my_id())
 	for team in 2:
 		var on_team := session.members.filter(func(m: Dictionary) -> bool: return m.team == team)
+		var color := GameMode.team_color(team, session.team_colors)
 		var heading := HBoxContainer.new()
 		heading.add_theme_constant_override("separation", 8)
 		_slots.add_child(heading)
 		var shape := TextureRect.new()
 		shape.texture = UiStyle.team_shape_texture(team, 20)
-		shape.modulate = GameMode.TEAM_COLORS[team]
+		shape.modulate = color
 		shape.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 		heading.add_child(shape)
-		var title := MenuKit.section(tr("LOBBY_TEAM") % [tr(GameMode.TEAM_KEYS[team]), on_team.size(), session.team_cap()])
-		title.add_theme_color_override("font_color", GameMode.TEAM_COLORS[team])
+		var title := MenuKit.section(tr("LOBBY_TEAM") % [GameMode.team_name(team, session.team_names).to_upper(),
+				on_team.size(), session.team_cap()])
+		title.add_theme_color_override("font_color", color)
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		heading.add_child(title)
+		if _host:
+			var edit := _chip("LOBBY_EDIT_TEAM")
+			edit.disabled = _starting
+			edit.pressed.connect(_open_team_editor.bind(team))
+			heading.add_child(edit)
+		if mine != team:
+			var join := _chip("LOBBY_JOIN_TEAM")
+			join.disabled = _starting or on_team.size() >= session.team_cap()
+			join.pressed.connect(session.set_team.bind(session.my_id(), team))
+			heading.add_child(join)
 		for m: Dictionary in on_team:
-			_add_slot(m, team)
+			_add_slot(m, color)
 
 
-## A player's row; `team` (-1: no teams) adds a switch button for whoever may
-## move them (the player, or the host).
-func _add_slot(m: Dictionary, team: int) -> void:
+func _chip(text: String) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"ChipButton"
+	b.text = text
+	b.custom_minimum_size.y = 40
+	return b
+
+
+## A player's row, outlined in its team's `color` (or the accent).
+func _add_slot(m: Dictionary, color: Color = UiStyle.ACCENT) -> void:
 	var slot := PanelContainer.new()
 	slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85),
-			Color(GameMode.TEAM_COLORS[team] if team >= 0 else UiStyle.ACCENT, 0.35), 1, UiStyle.SKEW, 12, 4))
+			Color(color, 0.35), 1, UiStyle.SKEW, 12, 4))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	slot.add_child(row)
@@ -238,15 +266,6 @@ func _add_slot(m: Dictionary, team: int) -> void:
 	var tag := UiStyle.label(" · ".join(tags), &"DimLabel")
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(tag)
-	if team >= 0 and (me or _host):
-		var other := 1 - team
-		var move := Button.new()
-		move.theme_type_variation = &"ChipButton"
-		move.text = tr("LOBBY_MOVE_TO") % tr(GameMode.TEAM_KEYS[other])
-		move.disabled = _starting or session.members.filter(
-				func(o: Dictionary) -> bool: return o.team == other).size() >= session.team_cap()
-		move.pressed.connect(session.set_team.bind(m.id, other))
-		row.add_child(move)
 
 
 func _process(delta: float) -> void:
@@ -300,6 +319,8 @@ func _on_started(settings: Dictionary) -> void:
 	config.bot_difficulty = session.bot_difficulty
 	config.friendly_fire = session.friendly_fire
 	config.from_lobby = true
+	config.team_names = session.team_names
+	config.team_colors = session.team_colors
 	if _host:
 		config.team_plan = session.team_plan_now()
 	config.spectate = false  # lobby members play; spectating is for games already playing
@@ -371,7 +392,79 @@ func _go(scene: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		_back()
+		if _team_editor.visible:
+			_team_editor.visible = false
+		else:
+			_back()
+
+
+# --- Host: a team's name and colour ---
+
+func _open_team_editor(team: int) -> void:
+	_editing_team = team
+	_team_name_edit.text = session.team_names[team]
+	_team_name_edit.placeholder_text = tr(GameMode.TEAM_KEYS[team])
+	_swatch_pick = session.team_colors[team]
+	_show_swatches()
+	_team_editor.visible = true
+	_team_name_edit.grab_focus()
+
+
+## The palette, the current pick outlined; the other team's colour is taken.
+func _show_swatches() -> void:
+	var taken := session.team_colors[1 - _editing_team]
+	for i in _swatches.get_child_count():
+		var b := _swatches.get_child(i) as Button
+		var c: Color = GameMode.TEAM_PALETTE[i]
+		var border := Color.WHITE if i == _swatch_pick else Color(c, 0.0)
+		for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+			var fill := Color(c, 0.2) if i == taken else c
+			b.add_theme_stylebox_override(state, UiStyle.box(fill, border if state != "focus" else Color.WHITE,
+					3 if i == _swatch_pick or state == "focus" else 0, UiStyle.SKEW, 0, 0))
+		b.disabled = i == taken
+
+
+func _save_team() -> void:
+	session.set_team_style(_editing_team, _team_name_edit.text, _swatch_pick)
+	_team_editor.visible = false
+	Settings.set_value("profile", "team_names", Array(session.team_names))
+	Settings.set_value("profile", "team_colors", Array(session.team_colors))
+	Settings.save_settings()
+
+
+func _make_team_editor() -> Control:
+	var parts := UiStyle.menu_overlay(520.0)
+	var root: Control = parts[0]
+	var box: VBoxContainer = parts[1]
+	root.visible = false
+	box.add_child(UiStyle.label("LOBBY_EDIT_TEAM_TITLE", &"HeaderLabel"))
+	box.add_child(MenuKit.section("LOBBY_TEAM_NAME"))
+	_team_name_edit = LineEdit.new()
+	_team_name_edit.max_length = GameMode.MAX_TEAM_NAME
+	_team_name_edit.custom_minimum_size.y = 52
+	_team_name_edit.text_submitted.connect(func(_t: String) -> void: _save_team())
+	box.add_child(_team_name_edit)
+	box.add_child(MenuKit.section("LOBBY_TEAM_COLOUR"))
+	_swatches = HBoxContainer.new()
+	_swatches.add_theme_constant_override("separation", 8)
+	box.add_child(_swatches)
+	for i in GameMode.TEAM_PALETTE.size():
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(52, 44)
+		b.pressed.connect(func() -> void:
+			_swatch_pick = i
+			_show_swatches())
+		_swatches.add_child(b)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 12)
+	box.add_child(buttons)
+	var save := UiStyle.menu_button("LOBBY_TEAM_SAVE", &"PrimaryButton")
+	save.pressed.connect(_save_team)
+	buttons.add_child(save)
+	var cancel := UiStyle.menu_button("LOBBY_TEAM_CANCEL")
+	cancel.pressed.connect(func() -> void: _team_editor.visible = false)
+	buttons.add_child(cancel)
+	return root
 
 
 # --- Layout: header with the invite code; map, mode, length and bots on the left,
@@ -508,6 +601,8 @@ func _build_ui() -> void:
 	actions.add_child(_start_button)
 	if _host:
 		_start_button.grab_focus.call_deferred()
+	_team_editor = _make_team_editor()
+	add_child(_team_editor)
 
 
 ## A captioned chip row; read-only for players.

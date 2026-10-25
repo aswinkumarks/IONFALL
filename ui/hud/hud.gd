@@ -343,7 +343,7 @@ func _draw_top() -> void:
 		# score under them.
 		for t in 2:
 			var tx := x + (-44.0 if t == 0 else 44.0) * s
-			var col: Color = GameMode.TEAM_COLORS[t]
+			var col: Color = GameMode.team_color(t)
 			_text(Vector2(tx, y + 28 * s), str(_team_scores[t]), 30, col, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 			# Team shape (◆ cyan, ▲ orange) so teams aren't told apart by colour alone.
 			UiStyle.draw_team_shape(self, t, Vector2(tx + (-30.0 if t == 0 else 30.0) * s, y + 18 * s), 9.0 * s, col)

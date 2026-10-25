@@ -86,6 +86,10 @@ var lobby_after_match: bool = false
 ## Team modes: the teams picked in the lobby, profile uuid -> team. Players
 ## not in it join the smaller team.
 var team_plan: Dictionary = {}
+## The host's names ("" = the default) and colours (GameMode.TEAM_PALETTE)
+## for the two teams, sent in WELCOME.
+var team_names := PackedStringArray(["", ""])
+var team_colors := GameMode.DEFAULT_TEAM_COLORS
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
 ## When 0 or more (the host's bot count): this many bots play alongside
@@ -748,7 +752,8 @@ func _on_peer_joined(id: int) -> void:
 	if c == null:
 		transport.kick(id)
 		return
-	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, map_id, c.token),
+	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, map_id, c.token,
+			team_names, team_colors),
 			Protocol.CH_CONTROL, true)
 	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick, world.match_seed),
 			Protocol.CH_CONTROL, true)

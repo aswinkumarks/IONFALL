@@ -55,7 +55,7 @@ func sync(flags: Array, bases: Array, carrier_pos: Callable) -> void:
 
 func _make_base(team: int) -> Node3D:
 	var root := Node3D.new()
-	var color: Color = GameMode.TEAM_COLORS[team]
+	var color: Color = GameMode.team_color(team)
 	var pad := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
 	disc.top_radius = 1.3
@@ -87,7 +87,7 @@ func _make_base(team: int) -> Node3D:
 
 func _make_flag(team: int) -> Node3D:
 	var root := Node3D.new()
-	var color: Color = GameMode.TEAM_COLORS[team]
+	var color: Color = GameMode.team_color(team)
 	var pole := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.035
