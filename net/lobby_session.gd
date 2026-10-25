@@ -5,6 +5,11 @@ extends Node
 ## ENet or an online peer. Only the host sends: LOBBY on every change, START
 ## when the match begins. Then everyone leaves the lobby and joins the match,
 ## which the host serves on the same port or online socket.
+##
+## Team modes: every member is on a team (a joiner on the smaller one); a
+## player can switch (TEAM_PICK) and the host can move anyone, while a team
+## has room. The host takes the teams into the match by profile uuid
+## (team_plan()).
 
 signal changed
 signal started(settings: Dictionary)  ## {map, mode, minutes}
@@ -13,6 +18,7 @@ signal in_match(map_id: String)  ## client: the host is already playing
 
 const DURATIONS := [5, 10, 15, 20]  ## match length choices (minutes)
 const DEFAULT_MINUTES := 10
+const HOST_ID := 1  ## the host's id in `members` (a server's transport peer id)
 
 var transport := Transport.new()
 var is_host: bool = false
@@ -25,11 +31,17 @@ var bots: int = 0
 var bot_difficulty: int = 1
 var friendly_fire: bool = false
 var max_players: int = Protocol.MAX_PEERS
-## [{name, host}], the host first, then in join order.
+## [{id, name, host, team}], the host first, then in join order.
 var members: Array = []
+## Host: the profile uuid -> team to seat players on as they join (the
+## teams of the last match, when back from one).
+var team_plan: Dictionary = {}
+var host_uuid: String = ""
 var _host_name: String = ""
 var _names: Dictionary = {}  ## host: peer id -> name, in join order
+var _uuids: Dictionary = {}  ## host: peer id -> profile uuid
 var _accepted: Dictionary = {}  ## host: authenticated peer id -> name
+var _teams: Dictionary = {}  ## host: member id (HOST_ID for the host) -> team
 var _done: bool = false  ## client: started, redirected or closed; later signals are ignored
 
 
@@ -42,8 +54,10 @@ func host(host_name: String, p_max: int, port: int, peer: MultiplayerPeer = null
 	transport.auth_validator = _validate_hello
 	transport.peer_joined.connect(_on_peer_joined)
 	transport.peer_left.connect(_on_peer_left)
+	transport.message.connect(_on_host_message)
 	var err := transport.host_peer(peer) if peer != null else transport.host(port, max_players)
 	if err == OK:
+		_teams[HOST_ID] = clampi(int(team_plan.get(host_uuid, 0)), 0, 1)
 		_update_members()
 	return err
 
@@ -79,6 +93,56 @@ func start() -> void:
 	started.emit({"map": map_id, "mode": game_mode, "minutes": minutes})
 
 
+## The modes where players pick sides (co-op puts every human on one team).
+static func has_teams(mode: int) -> bool:
+	return GameMode.is_team_mode(mode) and mode != GameMode.WAVES
+
+
+## The most players one team takes.
+func team_cap() -> int:
+	return ceili(max_players / 2.0)
+
+
+## Our own member id: HOST_ID when hosting, else our transport peer id.
+func my_id() -> int:
+	return HOST_ID if is_host else transport.local_id()
+
+
+func team_of(id: int) -> int:
+	for m: Dictionary in members:
+		if m.id == id:
+			return m.team
+	return -1
+
+
+## Puts member `id` on `team` if it has room. The host moves anyone; a
+## player asks the host to move itself.
+func set_team(id: int, team: int) -> void:
+	if team < 0 or team > 1:
+		return
+	if not is_host:
+		if id == my_id():
+			transport.send(HOST_ID, Protocol.encode_team_pick(team), Protocol.CH_CONTROL, true)
+		return
+	if not _teams.has(id) or _teams[id] == team or _team_size(team) >= team_cap():
+		return
+	_teams[id] = team
+	_update_members()
+
+
+## Host: profile uuid -> team for everyone in the lobby, for the match.
+func team_plan_now() -> Dictionary:
+	var plan := {host_uuid: _teams.get(HOST_ID, 0)}
+	for id in _accepted:
+		plan[_uuids.get(id, "")] = _teams.get(id, 0)
+	plan.erase("")
+	return plan
+
+
+func _team_size(team: int) -> int:
+	return _teams.values().count(team)
+
+
 func leave() -> void:
 	transport.close()
 
@@ -108,6 +172,7 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 	if 1 + _names.size() >= max_players:
 		return "server full"
 	_names[id] = ServerSession.sanitize_name(hello.name)
+	_uuids[id] = hello.uuid
 	return ""
 
 
@@ -116,19 +181,26 @@ func _on_peer_joined(id: int) -> void:
 		transport.kick(id)
 		return
 	_accepted[id] = _names[id]
+	# Back on the team of the last match, else the smaller team.
+	var team: int = team_plan.get(_uuids.get(id, ""), -1)
+	if team < 0 or team > 1 or _team_size(team) >= team_cap():
+		team = 0 if _team_size(0) <= _team_size(1) else 1
+	_teams[id] = team
 	_update_members()
 
 
 func _on_peer_left(id: int) -> void:
 	_names.erase(id)
+	_uuids.erase(id)
 	_accepted.erase(id)
+	_teams.erase(id)
 	_update_members()
 
 
 func _update_members() -> void:
-	members = [{"name": _host_name, "host": true}]
+	members = [{"id": HOST_ID, "name": _host_name, "host": true, "team": _teams.get(HOST_ID, 0)}]
 	for id in _accepted:
-		members.append({"name": _accepted[id], "host": false})
+		members.append({"id": id, "name": _accepted[id], "host": false, "team": _teams.get(id, 0)})
 	_broadcast()
 
 
@@ -138,6 +210,15 @@ func _broadcast() -> void:
 		for id in _accepted:
 			transport.send(id, msg, Protocol.CH_CONTROL, true)
 	changed.emit()
+
+
+## Host: requests from members.
+func _on_host_message(id: int, data: PackedByteArray) -> void:
+	if not _accepted.has(id):
+		return
+	match Protocol.message_type(data):
+		Protocol.Msg.TEAM_PICK:
+			set_team(id, Protocol.decode_team_pick(data))
 
 
 func _on_message(_id: int, data: PackedByteArray) -> void:

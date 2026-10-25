@@ -4,7 +4,7 @@ extends RefCounted
 ## may only send HELLO (during auth), CMD, PING, PONG and LOADED; the server
 ## rejects anything else (PLAN §3.7 whitelist).
 
-const VERSION := 9
+const VERSION := 10
 const MAGIC := 0x464E4F49  ## "IONF"
 ## HELLO flags.
 const HELLO_SPECTATE := 1
@@ -13,7 +13,7 @@ const DEFAULT_PORT := 47710
 const DEFAULT_WEB_PORT := 47711
 const MAX_PEERS := 16
 
-enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27, LOBBY = 28, START = 29 }
+enum Msg { CMD = 10, PING = 11, PONG = 12, SNAPSHOT = 13, WELCOME = 20, PHASE = 21, ROSTER = 22, EVENT = 23, LOADED = 24, NOTICE = 25, RESULTS = 26, LOADOUT = 27, LOBBY = 28, START = 29, TEAM_PICK = 30 }
 ## NOTICE codes: host lifecycle hints (PLAN §3.5.1, best effort).
 enum Notice { HOST_PAUSED = 1, HOST_RESUMED = 2, RETURN_TO_LOBBY = 3, SERVER_SHUTDOWN = 4 }
 const CLIENT_MESSAGES := [Msg.CMD, Msg.PING, Msg.PONG, Msg.LOADED, Msg.LOADOUT]
@@ -435,7 +435,8 @@ static func read_event(r: Wire.Reader) -> Dictionary:
 # --- Pre-match lobby (LobbySession; server -> client, reliable) ---
 
 ## The host's settings and who is in the lobby. `members`: Array of
-## {name, host} in join order.
+## {id, name, host, team} in join order (`id` the member's transport peer id;
+## `team` 0 or 1, used in the team modes).
 ## `bots`, `bot_difficulty`, `friendly_fire`: the host's bot settings, shown
 ## read-only to members.
 static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: int, members: Array,
@@ -443,7 +444,7 @@ static func encode_lobby(map_id: String, mode: int, minutes: int, max_players: i
 	var w := Wire.Writer.new().u8(Msg.LOBBY).str8(map_id).u8(mode).u8(minutes).u8(max_players) \
 			.u8(bots).u8(bot_difficulty).u8(1 if friendly_fire else 0).u8(members.size())
 	for m in members:
-		w.u8(1 if m.host else 0).str8(m.name)
+		w.u32(m.id).u8(1 if m.host else 0).u8(m.team).str8(m.name)
 	return w.data()
 
 
@@ -456,7 +457,10 @@ static func decode_lobby(data: PackedByteArray) -> Dictionary:
 	if n > MAX_PEERS or out.bots >= MAX_PEERS or out.bot_difficulty > 3:
 		return {}
 	for i in n:
-		out.members.append({"host": r.u8() == 1, "name": r.str8(MAX_NAME_BYTES)})
+		var m := {"id": r.u32(), "host": r.u8() == 1, "team": r.u8(), "name": r.str8(MAX_NAME_BYTES)}
+		if m.team > 1:
+			return {}
+		out.members.append(m)
 	return out if r.ok and r.remaining() == 0 and out.mode < GameMode.IDS.size() else {}
 
 
@@ -470,6 +474,19 @@ static func decode_start(data: PackedByteArray) -> Dictionary:
 	r.u8()
 	var out := {"map": r.str8(32), "mode": r.u8(), "minutes": r.u8()}
 	return out if r.ok and r.remaining() == 0 and out.mode < GameMode.IDS.size() else {}
+
+
+## Lobby, client -> host: put me on `team` (0 or 1) in the team modes.
+static func encode_team_pick(team: int) -> PackedByteArray:
+	return Wire.Writer.new().u8(Msg.TEAM_PICK).u8(team).data()
+
+
+## The team, or -1 if malformed.
+static func decode_team_pick(data: PackedByteArray) -> int:
+	var r := Wire.Reader.new(data)
+	r.u8()
+	var team := r.u8()
+	return team if r.ok and r.remaining() == 0 and team <= 1 else -1
 
 
 static func message_type(data: PackedByteArray) -> int:

@@ -198,13 +198,15 @@ func _ready() -> void:
 		# The host's bots stay as players join; a spectator's place goes to one more.
 		server.bot_count = config.bots + (1 if config.spectate else 0)
 		server.lobby_after_match = config.from_lobby
+		server.team_plan = config.team_plan
 		server.match_over.connect(_back_to_lobby)
 		if config.spectate:
 			server.add_local_spectator()
 			input.enabled = false
 			touch.visible = false
 		else:
-			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
+			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary,
+					MatchConfig.profile_uuid())
 			input.look_yaw = me.state.yaw
 		if config.online:
 			_info.text = tr("NET_ONLINE_HOSTING") % _online_code

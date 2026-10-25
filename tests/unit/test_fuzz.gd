@@ -27,7 +27,8 @@ func test_decoders_survive_random_bytes() -> void:
 	var decoders: Array[Callable] = [Protocol.decode_hello, Protocol.decode_hello_reply, Protocol.decode_commands,
 			Protocol.decode_ping, Protocol.decode_pong, Protocol.decode_welcome, Protocol.decode_phase,
 			Protocol.decode_roster, Protocol.decode_results, Protocol.decode_notice, Protocol.decode_loadout,
-			Protocol.decode_loaded, Protocol.decode_event_message, Protocol.decode_lobby, Protocol.decode_start]
+			Protocol.decode_loaded, Protocol.decode_event_message, Protocol.decode_lobby, Protocol.decode_start,
+			Protocol.decode_team_pick]
 	var types: Array = Protocol.Msg.values()
 	var decoded := 0
 	for i in ROUNDS:
