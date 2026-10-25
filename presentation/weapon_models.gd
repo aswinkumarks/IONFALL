@@ -17,6 +17,7 @@ const MODELS := {
 }
 
 static var _material: StandardMaterial3D
+static var _reference_grip = null  ## the pulse rifle's Grip, once measured
 
 
 static func material() -> StandardMaterial3D:
@@ -58,6 +59,23 @@ static func instantiate(id: StringName) -> Node3D:
 	grip.position = _handle(model)
 	root.add_child(grip)
 	return root
+
+
+## How far to move model `w` (from instantiate) so its handle sits where the
+## pulse rifle's does. The rigs that hold a weapon by its origin were placed
+## with that rifle; the Rail Sniper's origin is 37 cm ahead of its handle, so
+## other players saw it float in front of the hands.
+static func grip_shift(w: Node3D) -> Vector3:
+	return reference_grip() - (w.get_node("Grip") as Node3D).position
+
+
+## The pulse rifle's Grip in its model root's space.
+static func reference_grip() -> Vector3:
+	if _reference_grip == null:
+		var ref := instantiate(&"pulse_rifle")
+		_reference_grip = (ref.get_node("Grip") as Node3D).position
+		ref.free()
+	return _reference_grip
 
 
 ## The handle: the middle of the lowest third of the model (the pistol grip

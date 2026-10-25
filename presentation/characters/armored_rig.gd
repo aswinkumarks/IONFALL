@@ -362,7 +362,7 @@ func set_weapon(id: StringName) -> void:
 	var w := WeaponModels.instantiate(id)
 	if w == null:
 		return
-	w.transform = _grip_local()
+	w.transform = _grip_local() * Transform3D(Basis.IDENTITY, WeaponModels.grip_shift(w))
 	_hand.add_child(w)
 	_weapon_node = w
 
@@ -411,8 +411,12 @@ func pose_first_person(weapon: Transform3D, handle: Vector3, support: Vector3) -
 	var fp := _fp_hand()
 	if fp.is_empty():
 		# The hand that holds `weapon`: undo the grip, keeping metres for the offset.
-		hand_basis = weapon.basis.orthonormalized() * grip.basis.orthonormalized().inverse()
-		hand_pos = weapon.origin - hand_basis * (grip.origin / unit)
+		# The weapon is held as in third person, moved so its handle sits
+		# where the pulse rifle's does (WeaponModels.grip_shift).
+		var w := weapon.basis.orthonormalized()
+		hand_basis = w * grip.basis.orthonormalized().inverse()
+		var shift := weapon.basis * WeaponModels.reference_grip() - (handle - weapon.origin)
+		hand_pos = weapon.origin - hand_basis * (grip.origin / unit) - shift
 	else:
 		# Fingers forward and a little down, palm against the handle's right
 		# side; the rig curls the fingers around it.

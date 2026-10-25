@@ -84,6 +84,7 @@ func set_weapon(id: StringName) -> void:
 	if pistol != null:
 		w.transform.basis = pistol.transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * Basis.from_scale(w.scale)
 		w.position = pistol.position
+	w.position += w.basis * WeaponModels.grip_shift(w)
 	_hand.add_child(w)
 	_weapon_node = w
 
