@@ -23,6 +23,12 @@ const MAX_LEG_TWIST := deg_to_rad(50.0)
 const GRIP_EULER := Vector3(0.0, PI * 0.5, PI * 0.5)
 const GRIP_OFFSET := Vector3(0.0, 0.08, 0.03)
 const GRIP_SCALE := 2.6
+## How much of the look pitch the head follows (the rest is the aim pose's
+## arms and spine).
+const HEAD_PITCH := 0.6
+## Third person: the handle sits this far from the wrist (look-direction
+## axes: right, up, forward is -Z), in the palm.
+const HAND_TO_HANDLE := Vector3(0.0, -0.03, -0.07)
 ## First-person grip (_fp_hand): how far the fingers point down from the
 ## barrel (tan of the angle), and where the palm centre goes relative to the
 ## handle (metres, weapon axes: to its right).
@@ -47,6 +53,20 @@ var _color := Color.WHITE
 var _glow: float = 0.0
 var _flash: float = 0.0
 var _state_name: String = ""
+var _look_pitch: float = 0.0
+## The aim blend's upper end: 1 uses the aim-up clip fully.
+var _aim_up: float = 1.0
+
+
+## Keeps the head upright after the animation: the library's pistol-aim
+## clips bow the neck to sight down a pistol, which read as a head tilted
+## forward. The head keeps its rest (upright) orientation in the skeleton,
+## turned by the look pitch.
+class HeadLevel extends SkeletonModifier3D:
+	var rig: ArmoredRig
+
+	func _process_modification_with_delta(_delta: float) -> void:
+		rig._level_head()
 
 
 func setup(color: Color) -> void:
@@ -276,6 +296,10 @@ func _build_tree(library: AnimationLibrary, upper_bones: Array) -> void:
 	_tree.anim_player = _tree.get_path_to(player)
 	_tree.set("parameters/upper/blend_amount", 1.0)
 	_tree.active = true
+	var level := HeadLevel.new()
+	level.rig = self
+	_skeleton.add_child(level)
+	_skeleton.skeleton_updated.connect(_place_weapon)
 
 
 ## The animation-library clips for this body: rotations only, except the
@@ -331,7 +355,8 @@ func animate(state: PlayerSimState, delta: float, _height: float) -> void:
 	_tree.set("parameters/loco/blend_position", speed)
 	_tree.set("parameters/loco_ts/scale", -1.0 if backwards else 1.0)
 	_tree.set("parameters/crouch/blend_position", speed)
-	_tree.set("parameters/aim/blend_position", clampf(state.pitch / 1.2, -1.0, 1.0))
+	_tree.set("parameters/aim/blend_position", clampf(state.pitch / 1.2, -1.0, _aim_up))
+	_look_pitch = state.pitch
 	var twist := 0.0
 	if speed > 0.6:
 		twist = clampf(atan2(-local.x, absf(local.z) + 0.001) * (-1.0 if backwards else 1.0), -MAX_LEG_TWIST, MAX_LEG_TWIST)
@@ -340,6 +365,34 @@ func animate(state: PlayerSimState, delta: float, _height: float) -> void:
 	if _flash > 0.0:
 		_flash = maxf(_flash - delta * 8.0, 0.0)
 		_apply_emission()
+
+
+func _level_head() -> void:
+	var head := _skeleton.find_bone("Head")
+	var parent := _skeleton.get_bone_parent(head)
+	if head < 0 or parent < 0:
+		return
+	# The skeleton faces +Z (the model is turned to face -Z), so its right is -X.
+	var upright := Basis(Vector3.LEFT, _look_pitch * HEAD_PITCH) * _skeleton.get_bone_global_rest(head).basis.orthonormalized()
+	var local := _skeleton.get_bone_global_pose(parent).basis.orthonormalized().inverse() * upright
+	_skeleton.set_bone_pose_rotation(head, local.get_rotation_quaternion())
+
+
+## Third person: the handle at the right palm and the barrel along the look
+## direction (the body's facing, tilted by the look pitch). Held by the hand
+## bone's own rotation, the aim clips (made for a pistol) turned the weapon
+## 90 degrees across the body.
+func _place_weapon() -> void:
+	if _weapon_node == null:
+		return
+	var hand := _skeleton.find_bone(_arm_chains()[0][2])
+	if hand < 0:
+		return
+	var wrist := _skeleton.global_transform * _skeleton.get_bone_global_pose(hand).origin
+	var aim := global_basis.orthonormalized() * Basis(Vector3.RIGHT, _look_pitch)
+	var held := aim.scaled_local(Vector3.ONE * _grip_scale())
+	var handle := (_weapon_node.get_node("Grip") as Node3D).position
+	_weapon_node.global_transform = Transform3D(held, wrist + aim * HAND_TO_HANDLE - held * handle)
 
 
 ## Fire: the upper body plays a recoil.
@@ -362,9 +415,12 @@ func set_weapon(id: StringName) -> void:
 	var w := WeaponModels.instantiate(id)
 	if w == null:
 		return
-	w.transform = _grip_local()
+	# Placed every pose (_place_weapon): the handle in the right hand, the
+	# barrel where the player looks.
+	w.top_level = true
 	_hand.add_child(w)
 	_weapon_node = w
+	_place_weapon()
 
 
 ## The weapon's transform in the hand bone's space: grip in the right hand,
@@ -411,8 +467,12 @@ func pose_first_person(weapon: Transform3D, handle: Vector3, support: Vector3) -
 	var fp := _fp_hand()
 	if fp.is_empty():
 		# The hand that holds `weapon`: undo the grip, keeping metres for the offset.
-		hand_basis = weapon.basis.orthonormalized() * grip.basis.orthonormalized().inverse()
-		hand_pos = weapon.origin - hand_basis * (grip.origin / unit)
+		# The weapon is held as in third person, moved so its handle sits
+		# where the pulse rifle's does (WeaponModels.grip_shift).
+		var w := weapon.basis.orthonormalized()
+		hand_basis = w * grip.basis.orthonormalized().inverse()
+		var shift := weapon.basis * WeaponModels.reference_grip() - (handle - weapon.origin)
+		hand_pos = weapon.origin - hand_basis * (grip.origin / unit) - shift
 	else:
 		# Fingers forward and a little down, palm against the handle's right
 		# side; the rig curls the fingers around it.

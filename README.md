@@ -56,7 +56,8 @@ as GitHub Pages can't open `ws://`), then use Join Game in the browser with the 
   as sidearm; the Rail Sniper and Arc Launcher are power weapons picked up on the map. Plus frag
   grenades and melee. Scope in on any gun for a tighter spread.
 - **Movement:** sprint, slide, double jump and mantle.
-- **Bots:** four difficulties from Easy to Insane. Bots fill empty places in multiplayer too.
+- **Bots:** four difficulties from Easy to Insane. In multiplayer the host picks how many bots play
+  alongside everyone; they give up their places only when the match is full.
 - **Progress:** a local profile with stats, XP, levels and cosmetic unlocks.
 - **Accessibility:** remappable keys, hold or toggle for crouch, sprint and aim, separate
   sensitivities, FOV, HUD scale, captions, damage and gunfire indicators, team shapes as well as

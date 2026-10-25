@@ -195,7 +195,8 @@ func _ready() -> void:
 		nav.build(gameplay)  # async: bots wait until it's ready
 		server.bot_nav = nav
 		server.max_combatants = config.max_combatants()
-		server.bot_fill = 1 + config.bots
+		# The host's bots stay as players join; a spectator's place goes to one more.
+		server.bot_count = config.bots + (1 if config.spectate else 0)
 		server.lobby_after_match = config.from_lobby
 		server.match_over.connect(_back_to_lobby)
 		if config.spectate:

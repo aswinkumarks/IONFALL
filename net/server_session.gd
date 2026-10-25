@@ -85,6 +85,9 @@ var max_combatants: int = Protocol.MAX_PEERS
 var lobby_after_match: bool = false
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
+## When 0 or more (the host's bot count): this many bots play alongside
+## however many humans join, giving way only when the match is full.
+var bot_count: int = -1
 ## Co-op waves: spawns and clears the waves (null in other modes).
 var waves: WaveDirector
 ## Recent (claimed - expected) view tick errors, for diagnostics and tests.
@@ -253,7 +256,6 @@ func combatants() -> int:
 	return _humans() + bots.size()
 
 
-## Adds or removes training dummies so the match has `bot_fill` combatants.
 ## TDM: a new player joins the smaller team (ties: the one behind), and
 ## respawns there so it starts on its own side.
 func _join_team(p: SimPlayer, team: int = -1) -> void:
@@ -277,11 +279,13 @@ func team_counts(except: int = 0) -> PackedInt32Array:
 	return counts
 
 
+## Adds or removes bots to match _bots_wanted().
 func update_bot_fill() -> void:
 	if waves != null:  # co-op: the waves bring their own bots
 		_broadcast_roster()
 		return
-	while bots.size() > 0 and combatants() > maxi(bot_fill, _humans()):
+	var wanted := _bots_wanted()
+	while bots.size() > wanted:
 		var id: int = bots.keys().max()
 		if GameMode.is_team_mode(game_mode):
 			# Make room on the larger team.
@@ -293,7 +297,7 @@ func update_bot_fill() -> void:
 		bots.erase(id)
 		world.remove_player(id)
 		stats.remove_player(id, world.tick)
-	while combatants() < mini(bot_fill, max_combatants):
+	while bots.size() < wanted:
 		var bot_name: String = BOT_NAMES[_bot_seq % BOT_NAMES.size()]
 		var id := 1000 + _bot_seq
 		if bot_nav != null:
@@ -301,6 +305,15 @@ func update_bot_fill() -> void:
 		else:
 			add_bot(bot_name, TargetDummyDriver.new(_bot_seq * 50))
 	_broadcast_roster()
+
+
+## How many bots the match should have now: bot_count beside the humans
+## (fewer once the match is full), else enough to make bot_fill combatants.
+func _bots_wanted() -> int:
+	var room := maxi(max_combatants - _humans(), 0)
+	if bot_count >= 0:
+		return mini(bot_count, room)
+	return clampi(bot_fill - _humans(), 0, room)
 
 
 ## LAN discovery beacon describing this session (PLAN §3.6).

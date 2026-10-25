@@ -39,9 +39,9 @@ func test_host_and_client_see_each_other() -> void:
 	await wait_until(func() -> bool: return joiner.client != null and joiner.client.is_predicting(), 5.0)
 	assert_true(joiner.client.is_predicting(), "client joined and predicts")
 	await wait_seconds(1.0)
-	assert_eq(host.server.world.players.size(), 3, "host + client + one dummy (the other gave way)")
-	assert_eq(host._visuals.size(), 2, "host sees the dummy and the client")
-	assert_eq(joiner._visuals.size(), 2, "client sees the host and the dummy")
+	assert_eq(host.server.world.players.size(), 4, "host + client + both of the host's bots")
+	assert_eq(host._visuals.size(), 3, "host sees both bots and the client")
+	assert_eq(joiner._visuals.size(), 3, "client sees the host and both bots")
 	var names := []
 	for p in joiner.client.roster:
 		names.append(p.name)

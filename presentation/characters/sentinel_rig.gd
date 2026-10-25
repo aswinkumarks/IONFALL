@@ -54,6 +54,9 @@ var _mat: ShaderMaterial
 
 
 func setup(color: Color) -> void:
+	# The aim-up clip retargets badly onto this skeleton (the right hand drops
+	# to the hip): looking up keeps the level aim pose; the weapon still tilts.
+	_aim_up = 0.0
 	_color = color
 	_model = (load(SENTINEL_SCENE) as PackedScene).instantiate()
 	_model.rotation.y = PI  # faces +Z; Godot forward is -Z

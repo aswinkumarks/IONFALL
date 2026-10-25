@@ -184,6 +184,18 @@ func test_map_flag_bases_stand_on_the_floor() -> void:
 			assert_false(hit.is_empty(), "%s: floor under %s" % [id, b])
 			if not hit.is_empty():
 				assert_almost_eq(hit.position.y, b.y, 0.05, "%s: base %s sits on the floor" % [id, b])
+			# A player can stand on the base (a ray from inside a solid block
+			# misses it: Station's bases were once inside its end modules).
+			var body := CapsuleShape3D.new()
+			body.radius = 0.4
+			body.height = 1.8
+			var q := PhysicsShapeQueryParameters3D.new()
+			q.shape = body
+			q.collision_mask = Sim.LAYER_WORLD
+			q.transform = Transform3D(Basis(), b + Vector3.UP * 0.95)
+			var in_the_way := space.intersect_shape(q, 8).filter(func(h: Dictionary) -> bool:
+				return gameplay.is_ancestor_of(h.collider))  # not the test arena from before_each
+			assert_true(in_the_way.is_empty(), "%s: room to stand on base %s" % [id, b])
 		gameplay.queue_free()
 		await wait_physics_frames(1)
 
