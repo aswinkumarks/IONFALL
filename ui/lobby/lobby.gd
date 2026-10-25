@@ -39,6 +39,11 @@ var _bot_stepper: Stepper
 var _difficulty_chips: HBoxContainer
 var _ff_chips: HBoxContainer
 var _slots: VBoxContainer
+var _players_card: Control
+## Team modes: one card per team, edged in its colour, instead of _players_card.
+var _team_cards: Array[PanelContainer] = []
+var _team_heads: Array[HBoxContainer] = []
+var _team_slots: Array[VBoxContainer] = []
 var _count: Label
 var _start_button: Button
 var _waiting: Label
@@ -192,21 +197,25 @@ func _refresh() -> void:
 		_start.call_deferred()
 
 
-## One row per player who has joined; in the team modes, under their team.
+## One row per player who has joined; in the team modes, in their team's card.
 func _fill_slots() -> void:
-	for child in _slots.get_children():
-		child.queue_free()
-	if not LobbySession.has_teams(session.game_mode):
+	for box: Control in [_slots] + _team_slots + _team_heads:
+		for child in box.get_children():
+			child.queue_free()
+	var teams := LobbySession.has_teams(session.game_mode)
+	_players_card.visible = not teams
+	for card in _team_cards:
+		card.visible = teams
+	if not teams:
 		for m: Dictionary in session.members:
-			_add_slot(m)
+			_add_slot(_slots, m)
 		return
 	var mine := session.team_of(session.my_id())
 	for team in 2:
 		var on_team := session.members.filter(func(m: Dictionary) -> bool: return m.team == team)
 		var color := GameMode.team_color(team, session.team_colors)
-		var heading := HBoxContainer.new()
-		heading.add_theme_constant_override("separation", 8)
-		_slots.add_child(heading)
+		_team_cards[team].add_theme_stylebox_override("panel", UiStyle.panel(UiStyle.PANEL_LIGHT, color, 16))
+		var heading := _team_heads[team]
 		var shape := TextureRect.new()
 		shape.texture = UiStyle.team_shape_texture(team, 20)
 		shape.modulate = color
@@ -228,7 +237,7 @@ func _fill_slots() -> void:
 			join.pressed.connect(session.set_team.bind(session.my_id(), team))
 			heading.add_child(join)
 		for m: Dictionary in on_team:
-			_add_slot(m, color)
+			_add_slot(_team_slots[team], m, color)
 
 
 func _chip(text: String) -> Button:
@@ -239,15 +248,15 @@ func _chip(text: String) -> Button:
 	return b
 
 
-## A player's row, outlined in its team's `color` (or the accent).
-func _add_slot(m: Dictionary, color: Color = UiStyle.ACCENT) -> void:
+## A player's row in `list`, outlined in its team's `color` (or the accent).
+func _add_slot(list: VBoxContainer, m: Dictionary, color: Color = UiStyle.ACCENT) -> void:
 	var slot := PanelContainer.new()
 	slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85),
 			Color(color, 0.35), 1, UiStyle.SKEW, 12, 4))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	slot.add_child(row)
-	_slots.add_child(slot)
+	list.add_child(slot)
 	var me: bool = m.id == session.my_id()
 	var initial := UiStyle.label(m.name.left(1).to_upper(), &"BadgeLabel", HORIZONTAL_ALIGNMENT_CENTER)
 	initial.add_theme_font_size_override("font_size", 20)
@@ -587,10 +596,15 @@ func _build_ui() -> void:
 	_ff_chips = _option(bot_row, "MENU_SECTION_FRIENDLY_FIRE", ["MENU_OFF", "MENU_ON"],
 			func(i: int) -> void: _apply({"friendly_fire": i == 1}))
 
+	var side := VBoxContainer.new()
+	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side.add_theme_constant_override("separation", 12)
+	columns.add_child(side)
 	var players := PanelContainer.new()
 	players.theme_type_variation = &"CardPanel"
-	players.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_child(players)
+	players.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side.add_child(players)
+	_players_card = players
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 6)
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -611,6 +625,28 @@ func _build_ui() -> void:
 	_slots.add_theme_constant_override("separation", 6)
 	_slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_slots)
+	for team in 2:
+		var card := PanelContainer.new()
+		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		card.visible = false
+		side.add_child(card)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 6)
+		card.add_child(box)
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 8)
+		box.add_child(head)
+		var team_scroll := ScrollContainer.new()
+		team_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		team_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		box.add_child(team_scroll)
+		var team_slots := VBoxContainer.new()
+		team_slots.add_theme_constant_override("separation", 6)
+		team_slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		team_scroll.add_child(team_slots)
+		_team_cards.append(card)
+		_team_heads.append(head)
+		_team_slots.append(team_slots)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
