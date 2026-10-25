@@ -9,7 +9,8 @@ extends Node
 ## Team modes: every member is on a team (a joiner on the smaller one); a
 ## player can switch (TEAM_PICK) and the host can move anyone, while a team
 ## has room. The host takes the teams into the match by profile uuid
-## (team_plan()).
+## (team_plan()). The host can remove a player, who can't come back to this
+## lobby.
 
 signal changed
 signal started(settings: Dictionary)  ## {map, mode, minutes}
@@ -19,6 +20,8 @@ signal in_match(map_id: String)  ## client: the host is already playing
 const DURATIONS := [5, 10, 15, 20]  ## match length choices (minutes)
 const DEFAULT_MINUTES := 10
 const HOST_ID := 1  ## the host's id in `members` (a server's transport peer id)
+## A removed player is told why before its connection closes.
+const KICK_CLOSE_S := 0.3
 
 var transport := Transport.new()
 var is_host: bool = false
@@ -42,6 +45,7 @@ var _names: Dictionary = {}  ## host: peer id -> name, in join order
 var _uuids: Dictionary = {}  ## host: peer id -> profile uuid
 var _accepted: Dictionary = {}  ## host: authenticated peer id -> name
 var _teams: Dictionary = {}  ## host: member id (HOST_ID for the host) -> team
+var _removed: Dictionary = {}  ## host: profile uuids the host removed; refused from now on
 var _done: bool = false  ## client: started, redirected or closed; later signals are ignored
 
 
@@ -130,6 +134,21 @@ func set_team(id: int, team: int) -> void:
 	_update_members()
 
 
+## Host: removes member `id` from the lobby; it can't rejoin this lobby.
+func kick(id: int) -> void:
+	if not is_host or not _accepted.has(id):
+		return
+	var uuid: String = _uuids.get(id, "")
+	if not uuid.is_empty():
+		_removed[uuid] = true
+	transport.send(id, Protocol.encode_notice(Protocol.Notice.KICKED), Protocol.CH_CONTROL, true)
+	_on_peer_left(id)
+	var t := transport
+	get_tree().create_timer(KICK_CLOSE_S).timeout.connect(func() -> void:
+		if is_instance_valid(t):
+			t.kick(id))
+
+
 ## Host: profile uuid -> team for everyone in the lobby, for the match.
 func team_plan_now() -> Dictionary:
 	var plan := {host_uuid: _teams.get(HOST_ID, 0)}
@@ -169,6 +188,8 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 		return "protocol mismatch (server %d, client %d)" % [Protocol.VERSION, hello.version]
 	if hello.compat != BuildInfo.compat_hash:
 		return "version mismatch: server runs %s" % BuildInfo.display_string()
+	if _removed.has(hello.uuid):
+		return "LOBBY_KICKED"
 	if 1 + _names.size() >= max_players:
 		return "server full"
 	_names[id] = ServerSession.sanitize_name(hello.name)
@@ -239,6 +260,9 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 			var s := Protocol.decode_start(data)
 			if not s.is_empty():
 				_finish(s, started)
+		Protocol.Msg.NOTICE:
+			if Protocol.decode_notice(data) == Protocol.Notice.KICKED:
+				_finish("LOBBY_KICKED", closed)
 		Protocol.Msg.WELCOME:
 			# A match server answered: the host has already started.
 			_finish(Protocol.decode_welcome(data).get("map", ""), in_match)

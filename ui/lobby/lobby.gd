@@ -2,7 +2,7 @@ extends Control
 ## Multiplayer lobby: the host picks map, mode and duration and sees who has
 ## joined; players see the same, read-only. In the team modes the players
 ## list shows the two teams: everyone can switch their own team and the host
-## can move anyone. The host's Start sends everyone
+## can move anyone. The host can remove a player (press Remove twice). The host's Start sends everyone
 ## into the match (LobbySession). Reached from the menu with
 ## `MatchConfig.pending` in HOST or JOIN mode (LAN address, invite code, or
 ## an online host from the browser).
@@ -18,6 +18,7 @@ const CONNECT_TIMEOUT_S := 15.0
 ## failed), so the reconnect is retried before giving up.
 const HANDOVER_ATTEMPTS := 5
 const HANDOVER_RETRY_S := 2.0
+const KICK_CONFIRM_S := 3.0  ## the host's second press on Remove must come within this
 
 var config: MatchConfig
 var session := LobbySession.new()
@@ -247,6 +248,29 @@ func _add_slot(m: Dictionary, team: int) -> void:
 				func(o: Dictionary) -> bool: return o.team == other).size() >= session.team_cap()
 		move.pressed.connect(session.set_team.bind(m.id, other))
 		row.add_child(move)
+	if _host and not m.host:
+		row.add_child(_kick_button(m.id))
+
+
+## Host: Remove, then Confirm within KICK_CONFIRM_S, removes player `id`.
+func _kick_button(id: int) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"ChipButton"
+	b.text = tr("LOBBY_KICK")
+	b.disabled = _starting
+	b.pressed.connect(func() -> void:
+		if b.has_meta("armed"):
+			session.kick(id)
+			return
+		b.set_meta("armed", true)
+		b.text = tr("LOBBY_KICK_CONFIRM")
+		b.add_theme_color_override("font_color", UiStyle.DANGER)
+		get_tree().create_timer(KICK_CONFIRM_S).timeout.connect(func() -> void:
+			if is_instance_valid(b):
+				b.remove_meta("armed")
+				b.text = tr("LOBBY_KICK")
+				b.remove_theme_color_override("font_color")))
+	return b
 
 
 func _process(delta: float) -> void:
