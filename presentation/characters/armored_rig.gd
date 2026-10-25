@@ -41,10 +41,15 @@ const BLADE := deg_to_rad(30.0)
 ## round a slim grip.
 const FP_FINGER_DROP := 0.45
 const FP_PALM_AT := Vector3(-0.02, 0.0, 0.0)
-## The left hand under the fore-end (weapon axes): fingers forward and
-## across to the right, palm up and turned in.
+## The left hand on the fore-end (weapon axes): fingers forward and across
+## to the right, palm against its left side. (Palm up would roll the forearm
+## half a turn from the rest pose and wring the elbow.)
 const SUPPORT_FINGERS := Vector3(0.6, 0.0, -1.0)
-const SUPPORT_PALM := Vector3(0.4, 1.0, 0.0)
+const SUPPORT_PALM := Vector3(1.0, -0.3, 0.0)
+## The most a forearm rolls about its own axis (radians); the wrist takes
+## the rest. The forearm turns whole from the elbow, so more twists the
+## elbow's skin.
+const MAX_FOREARM_TWIST := deg_to_rad(90.0)
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
 static var _library: AnimationLibrary
@@ -539,8 +544,8 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		hand_basis = Basis(fingers.cross(palm), fingers, palm) * local.inverse()
 		var centre: Vector3 = fp[2]
 		hand_pos = handle + w * FP_PALM_AT - hand_basis * (centre / unit)
-		# The left hand under the fore-end: palm up and in, fingers forward
-		# and across, curled round it.
+		# The left hand on the fore-end: palm against its side, fingers
+		# forward and across, curled round it.
 		var s_fingers := (w * SUPPORT_FINGERS).normalized()
 		var s_palm := w * SUPPORT_PALM
 		s_palm = (s_palm - s_fingers * s_palm.dot(s_fingers)).normalized()
@@ -589,6 +594,10 @@ func _reach(chain: Array, target: Vector3, hand_basis: Basis, pole: Vector3) -> 
 		var axis := (fore.inverse() * (Basis(swing_f) * fore_dir)).normalized()
 		var proj := axis * Vector3(rel.x, rel.y, rel.z).dot(axis)
 		var twist := Quaternion(proj.x, proj.y, proj.z, rel.w).normalized()
+		if twist.w < 0.0:
+			twist = -twist  # the shorter way round
+		if twist.get_angle() > MAX_FOREARM_TWIST:
+			twist = Quaternion(twist.get_axis(), MAX_FOREARM_TWIST)
 		fore = fore * Basis(twist)
 		sk.set_bone_pose_rotation(f, (upper.inverse() * fore).get_rotation_quaternion())
 		sk.set_bone_pose_rotation(h, (fore.inverse() * hand_basis).get_rotation_quaternion())
