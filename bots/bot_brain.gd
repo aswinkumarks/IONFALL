@@ -74,6 +74,7 @@ func go_to(pos: Vector3) -> void:
 
 
 var _reaction_ticks: int = 15
+var _recoil_control: float = 0.5  ## share of the recoil pulled back down
 var _max_turn: float = 0.1
 var _aim_error: float = 0.035
 var _aim_speed_error: float = 0.006
@@ -93,6 +94,7 @@ func _init(world: SimWorld, nav: BotNavigation, id: int, seed_value: int, p_diff
 	_aim_error = deg_to_rad(t.aim_error_degrees)
 	_aim_speed_error = deg_to_rad(t.moving_target_error_degrees)
 	_grenade_chance = t.grenade_chance
+	_recoil_control = t.recoil_control
 	_noise_phase = Vector4(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU)
 
 
@@ -166,6 +168,9 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 		var to := look_at - p.eye_position()
 		want_yaw = atan2(-to.x, -to.z)
 		want_pitch = atan2(to.y, Vector2(to.x, to.z).length())
+		# Hold the weapon down against its recoil (shots go along look + recoil).
+		want_yaw -= p.state.recoil.x * _recoil_control
+		want_pitch -= p.state.recoil.y * _recoil_control
 	elif move.length_squared() > 0.01:
 		want_yaw = atan2(-move.x, -move.z)
 	_yaw += clampf(wrapf(want_yaw - _yaw, -PI, PI), -_max_turn, _max_turn)

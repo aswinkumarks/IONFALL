@@ -22,13 +22,17 @@ const SLIDE_FOV := 9.0
 ## the head joint).
 const EYE_FROM_HEAD := Vector3(0.0, 0.12, 0.0)
 ## Bladed stance: the (hidden) body turns towards the weapon side, bringing
-## the left shoulder forward so the support arm comes up from below.
-const STANCE_YAW := -0.45
+## the left shoulder forward so the support arm comes up from below and
+## reaches the fore-end.
+const STANCE_YAW := -0.75
 ## First-person weapons are drawn this much larger than their hip offsets
 ## were tuned for, to sit in life-size hands.
 const WEAPON_SCALE := 1.5
-## Left-hand support: this far from the grip towards the muzzle, and below the barrel.
-const SUPPORT_ALONG := 0.55
+## The weapon and its hip offset are both scaled by this about the eye: the
+## same picture, but near enough for life-size arms to hold it with both hands.
+const VIEW_DEPTH := 0.85
+## Left-hand support: as far along the weapon as its Support marker (the
+## third-person hold), this far below the barrel.
 const SUPPORT_DROP := 0.035
 ## Melee bash and grenade throw motions (seconds).
 ## Seconds to scope fully in or out.
@@ -197,7 +201,7 @@ func _show_weapon(id: StringName) -> void:
 		var m := WeaponModels.instantiate(id)
 		if m == null:
 			return
-		m.scale = Vector3.ONE * WEAPON_SCALE
+		m.scale = Vector3.ONE * WEAPON_SCALE * VIEW_DEPTH
 		_viewmodel.add_child(m)
 		_models[id] = m
 	var model: Node3D = _models[id]
@@ -279,7 +283,7 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 
 	if weapon != null:
 		_show_weapon(weapon.id)
-	var hip := WeaponModels.hip_offset(_current_id)
+	var hip := WeaponModels.hip_offset(_current_id) * VIEW_DEPTH
 	var pos := hip
 	pos += Vector3(-_sway.x * 0.03, _sway.y * 0.03, 0.0)
 	pos += Vector3(bob.x, bob.y, 0.0)
@@ -329,9 +333,11 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 			_arms.position = _arms_rest + Vector3(-0.07, 0.04, -0.15) * maxf(_bash, 0.0)
 			var weapon_node: Node3D = _models[_current_id]
 			var to_rig := _arms.global_transform.affine_inverse()
-			var grip := weapon_node.global_position
-			var support := grip.lerp(_muzzle.global_position, SUPPORT_ALONG) - camera.global_basis.y * SUPPORT_DROP
 			var handle := (weapon_node.get_node("Grip") as Node3D).global_position
+			var along := _muzzle.global_position - handle
+			var marker := (weapon_node.get_node("Support") as Node3D).global_position
+			var support := handle + along * clampf((marker - handle).dot(along) / along.length_squared(), 0.0, 1.0) \
+					- camera.global_basis.y * SUPPORT_DROP
 			_arms.pose_first_person(to_rig * weapon_node.global_transform, to_rig * handle, to_rig * support)
 
 

@@ -142,6 +142,7 @@ static func write_owner(w: Wire.Writer, s: PlayerSimState) -> void:
 	w.bytes(s.last_presses).bytes(s.pending_presses)
 	w.f32(s.shield).f32(s.health).u8(s.life_gen & 0xFF).u8(s.discontinuity_gen & 0xFF)
 	w.u8(mini(s.spawn_protection_ticks, 255)).u32(s.respawn_tick)
+	w.f32(s.recoil.x).f32(s.recoil.y).u8(mini(s.recoil_hold, 255))
 
 
 static func read_owner(r: Wire.Reader) -> PlayerSimState:
@@ -201,4 +202,6 @@ static func read_owner(r: Wire.Reader) -> PlayerSimState:
 	s.discontinuity_gen = r.u8()
 	s.spawn_protection_ticks = r.u8()
 	s.respawn_tick = r.u32()
+	s.recoil = Vector2(r.f32(), r.f32())
+	s.recoil_hold = r.u8()
 	return s

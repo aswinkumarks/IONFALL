@@ -51,6 +51,10 @@ var burst_timer := PackedInt32Array()
 var grenades: int = 0
 var throw_cooldown: int = 0
 var melee_cooldown: int = 0
+## Recoil (PLAN §2.3): how far shots have kicked the aim off yaw and pitch
+## (radians), and the ticks until it starts to settle back.
+var recoil := Vector2.ZERO
+var recoil_hold: int = 0
 
 # Input bookkeeping
 var last_presses := PackedByteArray([0, 0, 0, 0, 0, 0, 0])
@@ -79,6 +83,8 @@ func init_weapons(loadout: Array[WeaponData]) -> void:
 	grenades = Balance.PLAYER.grenades_per_life
 	throw_cooldown = 0
 	melee_cooldown = 0
+	recoil = Vector2.ZERO
+	recoil_hold = 0
 
 
 ## Puts weapon `index` (Weapons.ALL) in `slot` with the given ammo.
@@ -102,6 +108,15 @@ func has_reserve(slot: int) -> bool:
 func weapon(slot: int = -1) -> WeaponData:
 	var i := weapon_slot if slot < 0 else slot
 	return Weapons.at(weapons[i]) if i >= 0 and i < weapons.size() else null
+
+
+## Where the player is aiming: the look direction kicked by recoil.
+func aim_yaw() -> float:
+	return yaw + recoil.x
+
+
+func aim_pitch() -> float:
+	return clampf(pitch + recoil.y, -PI * 0.49, PI * 0.49)
 
 
 func copy() -> PlayerSimState:

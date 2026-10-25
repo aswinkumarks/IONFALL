@@ -41,10 +41,22 @@ const BLADE := deg_to_rad(30.0)
 ## round a slim grip.
 const FP_FINGER_DROP := 0.45
 const FP_PALM_AT := Vector3(-0.02, 0.0, 0.0)
-## The left hand under the fore-end (weapon axes): fingers forward and
-## across to the right, palm up and turned in.
+## The left hand on the fore-end (weapon axes): fingers forward and across
+## to the right, palm against its left side. (Palm up would roll the forearm
+## half a turn from the rest pose and wring the elbow.)
 const SUPPORT_FINGERS := Vector3(0.6, 0.0, -1.0)
-const SUPPORT_PALM := Vector3(0.4, 1.0, 0.0)
+const SUPPORT_PALM := Vector3(1.0, -0.3, 0.0)
+## The most a forearm rolls about its own axis (radians); the wrist takes
+## the rest. The forearm turns whole from the elbow, so more twists the
+## elbow's skin.
+const MAX_FOREARM_TWIST := deg_to_rad(90.0)
+## The support hand reaches at most this much of its arm's length; past it,
+## it holds the weapon further back towards the handle (_within_reach)
+## rather than stretching into the air in front of it.
+const SUPPORT_REACH := 0.96
+## First person: the top of each upper arm (this fraction, from the
+## shoulder) is cut away with the body, so the stance never shows its edge.
+const FP_SHOULDER_CUT := 0.3
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
 static var _library: AnimationLibrary
@@ -539,16 +551,41 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		hand_basis = Basis(fingers.cross(palm), fingers, palm) * local.inverse()
 		var centre: Vector3 = fp[2]
 		hand_pos = handle + w * FP_PALM_AT - hand_basis * (centre / unit)
-		# The left hand under the fore-end: palm up and in, fingers forward
-		# and across, curled round it.
+		# The left hand on the fore-end: palm against its side, fingers
+		# forward and across, curled round it.
 		var s_fingers := (w * SUPPORT_FINGERS).normalized()
 		var s_palm := w * SUPPORT_PALM
 		s_palm = (s_palm - s_fingers * s_palm.dot(s_fingers)).normalized()
 		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * local.inverse()
 	var chains := _arm_chains()
+	support = to_skel.affine_inverse() * _within_reach(chains[1], to_skel * support, to_skel * handle)
 	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
 	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
 	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
+
+
+## The point nearest `want` along the weapon (from `handle` towards `want`)
+## that arm `chain` reaches (SUPPORT_REACH), skeleton space.
+func _within_reach(chain: Array, want: Vector3, handle: Vector3) -> Vector3:
+	var sk := _skeleton
+	var joints: Array[Vector3] = []
+	for bone: String in chain:
+		joints.append(sk.get_bone_global_rest(sk.find_bone(bone)).origin)
+	var u := sk.find_bone(chain[0])
+	var shoulder := sk.get_bone_global_pose(sk.get_bone_parent(u)) * sk.get_bone_rest(u).origin
+	var reach := (joints[0].distance_to(joints[1]) + joints[1].distance_to(joints[2])) * SUPPORT_REACH
+	if want.distance_to(shoulder) <= reach:
+		return want
+	# The far end of the weapon line within the reach sphere:
+	# |handle + t (want - handle) - shoulder| = reach.
+	var d := want - handle
+	var f := handle - shoulder
+	var a := d.length_squared()
+	var b := 2.0 * f.dot(d)
+	var disc := b * b - 4.0 * a * (f.length_squared() - reach * reach)
+	if a < 1e-8 or disc < 0.0:
+		return handle
+	return handle + d * clampf((-b + sqrt(disc)) / (2.0 * a), 0.0, 1.0)
 
 
 ## Two-bone IK in skeleton space: upper arm and forearm bend in the plane
@@ -589,6 +626,10 @@ func _reach(chain: Array, target: Vector3, hand_basis: Basis, pole: Vector3) -> 
 		var axis := (fore.inverse() * (Basis(swing_f) * fore_dir)).normalized()
 		var proj := axis * Vector3(rel.x, rel.y, rel.z).dot(axis)
 		var twist := Quaternion(proj.x, proj.y, proj.z, rel.w).normalized()
+		if twist.w < 0.0:
+			twist = -twist  # the shorter way round
+		if twist.get_angle() > MAX_FOREARM_TWIST:
+			twist = Quaternion(twist.get_axis(), MAX_FOREARM_TWIST)
 		fore = fore * Basis(twist)
 		sk.set_bone_pose_rotation(f, (upper.inverse() * fore).get_rotation_quaternion())
 		sk.set_bone_pose_rotation(h, (fore.inverse() * hand_basis).get_rotation_quaternion())
@@ -612,13 +653,15 @@ func make_first_person() -> bool:
 			continue
 		var key := mi.mesh.get_instance_id()
 		if not _arms_cache.has(key):
-			_arms_cache[key] = _arms_only(mi.mesh, mi.skin, _skeleton, keep)
+			_arms_cache[key] = _arms_only(mi.mesh, mi.skin, _skeleton, keep, _arm_chains())
 		mi.mesh = _arms_cache[key]
 	return true
 
 
-## `mesh` keeping only triangles mostly weighted to `keep` bones.
-static func _arms_only(mesh: Mesh, skin: Skin, sk: Skeleton3D, keep: Dictionary) -> ArrayMesh:
+## `mesh` keeping only triangles mostly weighted to `keep` bones, less the
+## top FP_SHOULDER_CUT of each upper arm (`chains`: upper arm, forearm and
+## hand bone names). Kept vertices follow only the kept bones.
+static func _arms_only(mesh: Mesh, skin: Skin, sk: Skeleton3D, keep: Dictionary, chains: Array = []) -> ArrayMesh:
 	var kept_bind := PackedByteArray()
 	kept_bind.resize(skin.get_bind_count())
 	for i in skin.get_bind_count():
@@ -626,6 +669,17 @@ static func _arms_only(mesh: Mesh, skin: Skin, sk: Skeleton3D, keep: Dictionary)
 		if bone_name.is_empty():
 			bone_name = sk.get_bone_name(skin.get_bind_bone(i))
 		kept_bind[i] = 1 if keep.has(bone_name) else 0
+	# Each upper arm, shoulder to elbow, in the mesh's bind space.
+	var upper_arms := []
+	for chain: Array in chains:
+		var ends := []
+		for bone_name: String in [chain[0], chain[1]]:
+			for i in skin.get_bind_count():
+				var n := String(skin.get_bind_name(i))
+				if (n if not n.is_empty() else sk.get_bone_name(skin.get_bind_bone(i))) == bone_name:
+					ends.append(skin.get_bind_pose(i).affine_inverse().origin)
+		if ends.size() == 2:
+			upper_arms.append(ends)
 	var out := ArrayMesh.new()
 	for s in mesh.get_surface_count():
 		var arrays := mesh.surface_get_arrays(s)
@@ -642,7 +696,21 @@ static func _arms_only(mesh: Mesh, skin: Skin, sk: Skeleton3D, keep: Dictionary)
 			for k in per:
 				if kept_bind[bones[v * per + k]]:
 					w += weights[v * per + k]
-			on_arm[v] = 1 if w > 0.5 else 0
+			on_arm[v] = 1 if w > 0.5 and not _near_shoulder(verts[v], upper_arms) else 0
+		# Kept vertices follow the kept bones only, so nothing stretches back
+		# to the (hidden) body.
+		for v in verts.size():
+			if not on_arm[v]:
+				continue
+			var total := 0.0
+			for k in per:
+				if kept_bind[bones[v * per + k]]:
+					total += weights[v * per + k]
+				else:
+					weights[v * per + k] = 0.0
+			for k in per:
+				weights[v * per + k] /= total
+		arrays[Mesh.ARRAY_WEIGHTS] = weights
 		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 		var kept := PackedInt32Array()
 		for t in range(0, indices.size(), 3):
@@ -655,6 +723,18 @@ static func _arms_only(mesh: Mesh, skin: Skin, sk: Skeleton3D, keep: Dictionary)
 				mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 		out.surface_set_material(out.get_surface_count() - 1, mesh.surface_get_material(s))
 	return out
+
+
+## Whether bind-space point `v` is in the top FP_SHOULDER_CUT of one of the
+## `upper_arms` ([shoulder, elbow] pairs).
+static func _near_shoulder(v: Vector3, upper_arms: Array) -> bool:
+	for seg: Array in upper_arms:
+		var a: Vector3 = seg[0]
+		var ab: Vector3 = seg[1] - a
+		var t := (v - a).dot(ab) / ab.length_squared()
+		if t < FP_SHOULDER_CUT and (v - a - ab * clampf(t, 0.0, 1.0)).length() < ab.length() * 0.6:
+			return true
+	return false
 
 
 func set_glow(amount: float) -> void:

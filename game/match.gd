@@ -198,13 +198,19 @@ func _ready() -> void:
 		# The host's bots stay as players join; a spectator's place goes to one more.
 		server.bot_count = config.bots + (1 if config.spectate else 0)
 		server.lobby_after_match = config.from_lobby
+		server.team_plan = config.team_plan
+		server.team_names = config.team_names
+		server.team_colors = config.team_colors
+		GameMode.team_names = config.team_names
+		GameMode.team_colors = config.team_colors
 		server.match_over.connect(_back_to_lobby)
 		if config.spectate:
 			server.add_local_spectator()
 			input.enabled = false
 			touch.visible = false
 		else:
-			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
+			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary,
+					MatchConfig.profile_uuid())
 			input.look_yaw = me.state.yaw
 		if config.online:
 			_info.text = tr("NET_ONLINE_HOSTING") % _online_code
@@ -386,7 +392,7 @@ func _ensure_arms() -> void:
 				character = p.character
 				pick = p.color
 	var team := _team_of(local_id())
-	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(local_id(), pick)
+	var color: Color = GameMode.team_color(team) if team < 2 else PlayerVisual.color_for(local_id(), pick)
 	if _arms_ready and color == _arms_color:
 		return
 	_arms_ready = true
@@ -551,8 +557,9 @@ func _render_host(delta: float) -> void:
 	_update_scope(s)
 	if s.alive:
 		input.confirm_slot(s.weapon_slot)
-	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw,
-			input.look_pitch, s, me.current_weapon(), delta)
+	var kick := from.recoil.lerp(s.recoil, alpha)
+	view.update_view(from.position.lerp(s.position, alpha), me.config.eye_for(s.stance), input.look_yaw + kick.x,
+			input.look_pitch + kick.y, s, me.current_weapon(), delta)
 	var seen := {}
 	for id in world.players:
 		if id == me.net_id:
@@ -570,7 +577,7 @@ func _render_host(delta: float) -> void:
 	pickups.sync(world.items, spot_ticks)
 	if _game_mode() == GameMode.CTF:
 		flag_visuals.sync(world.flags, _flag_bases, _flag_carrier_at)
-	_update_pickup_hud(s, world.items, spot_ticks)
+	_update_pickup_prompt(s, world.items)
 	hud.update_state(s, me.current_weapon(), world.scores.get(me.net_id, 0), s.respawn_tick - world.tick)
 
 
@@ -684,9 +691,8 @@ func _cycle_spectator(step: int) -> void:
 	_arms_ready = false
 
 
-## The interact prompt for the nearest item that needs one, and the power
-## weapon timers (PLAN §2.3: the HUD shows the countdown).
-func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32Array) -> void:
+## The interact prompt for the nearest item that needs one.
+func _update_pickup_prompt(s: PlayerSimState, items: Array) -> void:
 	var prompt := ""
 	var best := Balance.PLAYER.pickup_radius + 0.3
 	for it in items:
@@ -699,16 +705,6 @@ func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32
 			prompt = tr("HUD_PICKUP_SWAP") % [InputAdapter.key_name("interact"), tr(Weapons.at(weapon).display_name).to_upper()]
 	hud.set_prompt(prompt)
 	touch.show_interact = not prompt.is_empty()
-	var timers := PackedStringArray()
-	for i in pickups.spots.size():
-		var def: Dictionary = pickups.spots[i]
-		if def.weapon == &"grenade":
-			continue
-		var tag: String = KillFeed.weapon_tag(def.weapon)
-		var ticks: int = spot_ticks[i] if i < spot_ticks.size() else 0
-		var secs := ceili(ticks / float(Sim.TICK_RATE))
-		timers.append("%s %s" % [tag, tr("HUD_PICKUP_READY") if ticks == 0 else "%d:%02d" % [floori(secs / 60.0), secs % 60]])
-	hud.set_pickup_timers(" · ".join(timers))
 
 
 ## Touch has no melee button: holding fire on an enemy within arm's reach,
@@ -764,7 +760,9 @@ func _render_client(delta: float) -> void:
 	_update_scope(s)
 	if s.alive:
 		input.confirm_slot(s.weapon_slot)
-	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw, input.look_pitch, s, me.current_weapon(), delta)
+	var kick := from.recoil.lerp(s.recoil, client.alpha())
+	view.update_view(feet, me.config.eye_for(s.stance), input.look_yaw + kick.x, input.look_pitch + kick.y, s,
+			me.current_weapon(), delta)
 	var names := {}
 	for p in client.roster:
 		names[p.id] = p
@@ -788,7 +786,7 @@ func _render_client(delta: float) -> void:
 	pickups.sync(client.items, client.spot_ticks)
 	if _game_mode() == GameMode.CTF:
 		flag_visuals.sync(client.flags, _flag_bases, _flag_carrier_at)
-	_update_pickup_hud(s, client.items, client.spot_ticks)
+	_update_pickup_prompt(s, client.items)
 	var server_state := client.server_state if client.server_state != null else s
 	# Health, shield and death come from the server; movement and ammo are predicted.
 	var shown := s.copy()
@@ -947,13 +945,13 @@ func _update_objective() -> void:
 		var own: Variant = flags[my_team]
 		var enemy: Variant = flags[1 - my_team]
 		if enemy.carrier == local_id():
-			hud.set_objective(tr("CTF_CARRYING"), GameMode.TEAM_COLORS[1 - my_team])
+			hud.set_objective(tr("CTF_CARRYING"), GameMode.team_color(1 - my_team))
 		elif own.carrier != 0:
 			hud.set_objective(tr("CTF_OUR_FLAG_TAKEN") % _display_name(own.carrier), UiStyle.WARN)
 		elif _flag_dropped(own):
 			hud.set_objective(tr("CTF_OUR_FLAG_DROPPED") % ceili(_flag_return_ticks(own) / float(Sim.TICK_RATE)), UiStyle.WARN)
 		elif enemy.carrier != 0:
-			hud.set_objective(tr("CTF_WE_HAVE_FLAG") % _display_name(enemy.carrier), GameMode.TEAM_COLORS[my_team])
+			hud.set_objective(tr("CTF_WE_HAVE_FLAG") % _display_name(enemy.carrier), GameMode.team_color(my_team))
 		else:
 			hud.set_objective(tr("CTF_GOAL"), UiStyle.TEXT_DIM)
 	elif mode == GameMode.WAVES:
@@ -1078,7 +1076,7 @@ func _visual_for(id: int, display_name: String, is_bot: bool, character: int, co
 	var v: PlayerVisual = _visuals.get(id)
 	var style := CharacterRig.selectable_style(character)
 	var team := _team_of(id)
-	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(id, color_pick, is_bot)
+	var color: Color = GameMode.team_color(team) if team < 2 else PlayerVisual.color_for(id, color_pick, is_bot)
 	if v != null and (v.rig_style != style or v.color != color):
 		v.queue_free()
 		v = null
@@ -1236,16 +1234,16 @@ func _on_flag_event(e: Dictionary, me: int) -> void:
 	var who := _display_name(e.player) if e.player != 0 else tr("CTF_NOBODY")
 	var mine := team == _team_of(me)
 	var keys := {"take": "CTF_FEED_TAKE", "drop": "CTF_FEED_DROP", "return": "CTF_FEED_RETURN", "capture": "CTF_FEED_CAPTURE"}
-	var what: String = tr(keys[e.action]) % tr(GameMode.TEAM_KEYS[team])
+	var what: String = tr(keys[e.action]) % GameMode.team_name(team)
 	var carrier_team: int = 1 - team if e.action in ["take", "drop", "capture"] else team
-	_kill_feed.add_note(who, what, GameMode.TEAM_COLORS[carrier_team], e.player == me)
+	_kill_feed.add_note(who, what, GameMode.team_color(carrier_team), e.player == me)
 	if e.action == "take":
 		audio.cue("shield_break", "CAPTION_OUR_FLAG_TAKEN" if mine else "CAPTION_FLAG_TAKEN")
 	elif e.action == "capture":
 		audio.cue("kill_confirm", "CAPTION_FLAG_LOST" if mine else "CAPTION_FLAG_CAPTURED")
 	elif e.action == "return":
 		audio.cue("pickup", "CAPTION_FLAG_RETURNED")
-	effects.pickup_burst(e.position + Vector3(0.0, 0.8, 0.0), GameMode.TEAM_COLORS[team])
+	effects.pickup_burst(e.position + Vector3(0.0, 0.8, 0.0), GameMode.team_color(team))
 
 
 func _net_info() -> String:

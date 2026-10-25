@@ -1,6 +1,9 @@
 extends Control
 ## Multiplayer lobby: the host picks map, mode and duration and sees who has
-## joined; players see the same, read-only. The host's Start sends everyone
+## joined; players see the same, read-only. In the team modes the players
+## list shows the two teams, each with Join for whoever isn't on it; the host
+## names the teams and picks their colours (Edit, by the team's name) and can
+## remove a player (press Remove twice). The host's Start sends everyone
 ## into the match (LobbySession). Reached from the menu with
 ## `MatchConfig.pending` in HOST or JOIN mode (LAN address, invite code, or
 ## an online host from the browser).
@@ -16,6 +19,7 @@ const CONNECT_TIMEOUT_S := 15.0
 ## failed), so the reconnect is retried before giving up.
 const HANDOVER_ATTEMPTS := 5
 const HANDOVER_RETRY_S := 2.0
+const KICK_CONFIRM_S := 3.0  ## the host's second press on Remove must come within this
 
 var config: MatchConfig
 var session := LobbySession.new()
@@ -35,9 +39,21 @@ var _bot_stepper: Stepper
 var _difficulty_chips: HBoxContainer
 var _ff_chips: HBoxContainer
 var _slots: VBoxContainer
+var _players_card: Control
+## Team modes: one card per team, edged in its colour, instead of _players_card.
+var _team_cards: Array[PanelContainer] = []
+var _team_heads: Array[HBoxContainer] = []
+var _team_slots: Array[VBoxContainer] = []
+var _ping_labels: Dictionary = {}  ## member id -> its ping Label
+var _slots_key: String = ""  ## what the rows show, but the pings
 var _count: Label
 var _start_button: Button
 var _waiting: Label
+var _team_editor: Control
+var _editing_team: int = 0
+var _team_name_edit: LineEdit
+var _swatches: HBoxContainer
+var _swatch_pick: int = 0
 var _dots: float = 0.0
 
 
@@ -72,6 +88,10 @@ func _exit_tree() -> void:
 ## Host: listens on the LAN port or opens an online game with an invite code.
 func _open() -> void:
 	var max_players := config.max_combatants()
+	session.team_plan = config.team_plan
+	session.host_uuid = MatchConfig.profile_uuid()
+	session.team_names = config.team_names
+	session.team_colors = config.team_colors
 	session.configure(config.map, config.game_mode, config.minutes, config.bots, config.bot_difficulty,
 			config.friendly_fire)
 	var err := OK
@@ -179,42 +199,137 @@ func _refresh() -> void:
 		_start.call_deferred()
 
 
-## One row per player who has joined.
+## One row per player who has joined; in the team modes, in their team's card.
+## Only the pings changed (every second): just those labels.
 func _fill_slots() -> void:
-	for child in _slots.get_children():
-		child.queue_free()
-	var me_seen := false
-	for i in session.members.size():
-		var slot := PanelContainer.new()
-		slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85),
-				Color(UiStyle.ACCENT, 0.25), 1, UiStyle.SKEW, 12, 4))
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		slot.add_child(row)
-		_slots.add_child(slot)
-		var m: Dictionary = session.members[i]
-		# Names aren't unique; the host is us when hosting, else our first match.
-		var me: bool = (_host and m.host) or (not _host and not m.host and not me_seen and m.name == config.player_name)
-		me_seen = me_seen or me
-		var initial := UiStyle.label(m.name.left(1).to_upper(), &"BadgeLabel", HORIZONTAL_ALIGNMENT_CENTER)
-		initial.add_theme_font_size_override("font_size", 20)
-		initial.custom_minimum_size = Vector2(36, 30)
-		row.add_child(initial)
-		var name_label := UiStyle.label(m.name)
-		name_label.add_theme_font_override("font", UiStyle.font_display_bold)
-		name_label.add_theme_font_size_override("font_size", 22)
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if me:
-			name_label.add_theme_color_override("font_color", UiStyle.ACCENT)
-		row.add_child(name_label)
-		var tags := PackedStringArray()
-		if m.host:
-			tags.append(tr("LOBBY_HOST_TAG"))
-		if me:
-			tags.append(tr("LOBBY_YOU_TAG"))
-		var tag := UiStyle.label(" · ".join(tags), &"DimLabel")
-		tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		row.add_child(tag)
+	var rows := session.members.map(func(m: Dictionary) -> Array: return [m.id, m.name, m.host, m.team])
+	var key := str([rows, session.game_mode, session.team_names, session.team_colors, _starting])
+	if key == _slots_key:
+		for m: Dictionary in session.members:
+			if _ping_labels.has(m.id):
+				_set_ping(_ping_labels[m.id], m.get("ping", 0))
+		return
+	_slots_key = key
+	_ping_labels.clear()
+	for box: Control in [_slots] + _team_slots + _team_heads:
+		for child in box.get_children():
+			child.queue_free()
+	var teams := LobbySession.has_teams(session.game_mode)
+	_players_card.visible = not teams
+	for card in _team_cards:
+		card.visible = teams
+	if not teams:
+		for m: Dictionary in session.members:
+			_add_slot(_slots, m)
+		return
+	var mine := session.team_of(session.my_id())
+	for team in 2:
+		var on_team := session.members.filter(func(m: Dictionary) -> bool: return m.team == team)
+		var color := GameMode.team_color(team, session.team_colors)
+		_team_cards[team].add_theme_stylebox_override("panel", UiStyle.panel(UiStyle.PANEL_LIGHT, color, 16))
+		var heading := _team_heads[team]
+		var shape := TextureRect.new()
+		shape.texture = UiStyle.team_shape_texture(team, 20)
+		shape.modulate = color
+		shape.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		heading.add_child(shape)
+		var title := MenuKit.section(tr("LOBBY_TEAM") % [GameMode.team_name(team, session.team_names).to_upper(),
+				on_team.size(), session.team_cap()])
+		title.add_theme_color_override("font_color", color)
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		heading.add_child(title)
+		if _host:
+			var edit := _chip("LOBBY_EDIT_TEAM")
+			edit.disabled = _starting
+			edit.pressed.connect(_open_team_editor.bind(team))
+			heading.add_child(edit)
+		if mine != team:
+			var join := _chip("LOBBY_JOIN_TEAM")
+			join.disabled = _starting or on_team.size() >= session.team_cap()
+			join.pressed.connect(session.set_team.bind(session.my_id(), team))
+			heading.add_child(join)
+		for m: Dictionary in on_team:
+			_add_slot(_team_slots[team], m, color)
+
+
+func _chip(text: String) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"ChipButton"
+	b.text = text
+	b.custom_minimum_size.y = 40
+	return b
+
+
+## A player's row in `list`, outlined in its team's `color` (or the accent).
+func _add_slot(list: VBoxContainer, m: Dictionary, color: Color = UiStyle.ACCENT) -> void:
+	var slot := PanelContainer.new()
+	slot.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.09, 0.14, 0.85),
+			Color(color, 0.35), 1, UiStyle.SKEW, 12, 4))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	slot.add_child(row)
+	list.add_child(slot)
+	var me: bool = m.id == session.my_id()
+	var initial := UiStyle.label(m.name.left(1).to_upper(), &"BadgeLabel", HORIZONTAL_ALIGNMENT_CENTER)
+	initial.add_theme_font_size_override("font_size", 20)
+	initial.custom_minimum_size = Vector2(36, 30)
+	row.add_child(initial)
+	var name_label := UiStyle.label(m.name)
+	name_label.add_theme_font_override("font", UiStyle.font_display_bold)
+	name_label.add_theme_font_size_override("font_size", 22)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if me:
+		name_label.add_theme_color_override("font_color", UiStyle.ACCENT)
+	row.add_child(name_label)
+	var tags := PackedStringArray()
+	if m.host:
+		tags.append(tr("LOBBY_HOST_TAG"))
+	if me:
+		tags.append(tr("LOBBY_YOU_TAG"))
+	var tag := UiStyle.label(" · ".join(tags), &"DimLabel")
+	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(tag)
+	if not m.host:
+		var ping := UiStyle.label("", &"DimLabel")
+		ping.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ping.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		ping.custom_minimum_size.x = 64
+		_set_ping(ping, m.get("ping", 0))
+		_ping_labels[m.id] = ping
+		row.add_child(ping)
+	if _host and not m.host:
+		row.add_child(_kick_button(m.id))
+
+
+## A member's round trip to the host ("…" until measured): green when
+## quick, amber, then red.
+func _set_ping(l: Label, ms: int) -> void:
+	l.text = tr("LOBBY_PING") % ms if ms > 0 else "…"
+	l.add_theme_color_override("font_color", UiStyle.TEXT_DIM if ms <= 0
+			else (UiStyle.GOOD if ms < 60 else (UiStyle.WARN if ms < 120 else UiStyle.DANGER)))
+
+
+## Host: Remove, then Confirm within KICK_CONFIRM_S, removes player `id`.
+func _kick_button(id: int) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"ChipButton"
+	b.text = tr("LOBBY_KICK")
+	b.disabled = _starting
+	b.pressed.connect(func() -> void:
+		if b.has_meta("armed"):
+			session.kick(id)
+			return
+		b.set_meta("armed", true)
+		b.text = tr("LOBBY_KICK_CONFIRM")
+		for c: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+			b.add_theme_color_override(c, UiStyle.DANGER)
+		get_tree().create_timer(KICK_CONFIRM_S).timeout.connect(func() -> void:
+			if is_instance_valid(b):
+				b.remove_meta("armed")
+				b.text = tr("LOBBY_KICK")
+				for c: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+					b.remove_theme_color_override(c)))
+	return b
 
 
 func _process(delta: float) -> void:
@@ -268,6 +383,10 @@ func _on_started(settings: Dictionary) -> void:
 	config.bot_difficulty = session.bot_difficulty
 	config.friendly_fire = session.friendly_fire
 	config.from_lobby = true
+	config.team_names = session.team_names
+	config.team_colors = session.team_colors
+	if _host:
+		config.team_plan = session.team_plan_now()
 	config.spectate = false  # lobby members play; spectating is for games already playing
 	_starting = true
 	_waiting.text = tr("LOADING")
@@ -337,7 +456,79 @@ func _go(scene: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		_back()
+		if _team_editor.visible:
+			_team_editor.visible = false
+		else:
+			_back()
+
+
+# --- Host: a team's name and colour ---
+
+func _open_team_editor(team: int) -> void:
+	_editing_team = team
+	_team_name_edit.text = session.team_names[team]
+	_team_name_edit.placeholder_text = tr(GameMode.TEAM_KEYS[team])
+	_swatch_pick = session.team_colors[team]
+	_show_swatches()
+	_team_editor.visible = true
+	_team_name_edit.grab_focus()
+
+
+## The palette, the current pick outlined; the other team's colour is taken.
+func _show_swatches() -> void:
+	var taken := session.team_colors[1 - _editing_team]
+	for i in _swatches.get_child_count():
+		var b := _swatches.get_child(i) as Button
+		var c: Color = GameMode.TEAM_PALETTE[i]
+		var border := Color.WHITE if i == _swatch_pick else Color(c, 0.0)
+		for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+			var fill := Color(c, 0.2) if i == taken else c
+			b.add_theme_stylebox_override(state, UiStyle.box(fill, border if state != "focus" else Color.WHITE,
+					3 if i == _swatch_pick or state == "focus" else 0, UiStyle.SKEW, 0, 0))
+		b.disabled = i == taken
+
+
+func _save_team() -> void:
+	session.set_team_style(_editing_team, _team_name_edit.text, _swatch_pick)
+	_team_editor.visible = false
+	Settings.set_value("profile", "team_names", Array(session.team_names))
+	Settings.set_value("profile", "team_colors", Array(session.team_colors))
+	Settings.save_settings()
+
+
+func _make_team_editor() -> Control:
+	var parts := UiStyle.menu_overlay(520.0)
+	var root: Control = parts[0]
+	var box: VBoxContainer = parts[1]
+	root.visible = false
+	box.add_child(UiStyle.label("LOBBY_EDIT_TEAM_TITLE", &"HeaderLabel"))
+	box.add_child(MenuKit.section("LOBBY_TEAM_NAME"))
+	_team_name_edit = LineEdit.new()
+	_team_name_edit.max_length = GameMode.MAX_TEAM_NAME
+	_team_name_edit.custom_minimum_size.y = 52
+	_team_name_edit.text_submitted.connect(func(_t: String) -> void: _save_team())
+	box.add_child(_team_name_edit)
+	box.add_child(MenuKit.section("LOBBY_TEAM_COLOUR"))
+	_swatches = HBoxContainer.new()
+	_swatches.add_theme_constant_override("separation", 8)
+	box.add_child(_swatches)
+	for i in GameMode.TEAM_PALETTE.size():
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(52, 44)
+		b.pressed.connect(func() -> void:
+			_swatch_pick = i
+			_show_swatches())
+		_swatches.add_child(b)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 12)
+	box.add_child(buttons)
+	var save := UiStyle.menu_button("LOBBY_TEAM_SAVE", &"PrimaryButton")
+	save.pressed.connect(_save_team)
+	buttons.add_child(save)
+	var cancel := UiStyle.menu_button("LOBBY_TEAM_CANCEL")
+	cancel.pressed.connect(func() -> void: _team_editor.visible = false)
+	buttons.add_child(cancel)
+	return root
 
 
 # --- Layout: header with the invite code; map, mode, length and bots on the left,
@@ -433,10 +624,15 @@ func _build_ui() -> void:
 	_ff_chips = _option(bot_row, "MENU_SECTION_FRIENDLY_FIRE", ["MENU_OFF", "MENU_ON"],
 			func(i: int) -> void: _apply({"friendly_fire": i == 1}))
 
+	var side := VBoxContainer.new()
+	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side.add_theme_constant_override("separation", 12)
+	columns.add_child(side)
 	var players := PanelContainer.new()
 	players.theme_type_variation = &"CardPanel"
-	players.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_child(players)
+	players.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side.add_child(players)
+	_players_card = players
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 6)
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -457,6 +653,28 @@ func _build_ui() -> void:
 	_slots.add_theme_constant_override("separation", 6)
 	_slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_slots)
+	for team in 2:
+		var card := PanelContainer.new()
+		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		card.visible = false
+		side.add_child(card)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 6)
+		card.add_child(box)
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 8)
+		box.add_child(head)
+		var team_scroll := ScrollContainer.new()
+		team_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		team_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		box.add_child(team_scroll)
+		var team_slots := VBoxContainer.new()
+		team_slots.add_theme_constant_override("separation", 6)
+		team_slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		team_scroll.add_child(team_slots)
+		_team_cards.append(card)
+		_team_heads.append(head)
+		_team_slots.append(team_slots)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
@@ -474,6 +692,8 @@ func _build_ui() -> void:
 	actions.add_child(_start_button)
 	if _host:
 		_start_button.grab_focus.call_deferred()
+	_team_editor = _make_team_editor()
+	add_child(_team_editor)
 
 
 ## A captioned chip row; read-only for players.

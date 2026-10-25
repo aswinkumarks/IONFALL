@@ -30,6 +30,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 		s.throw_cooldown -= 1
 	if s.melee_cooldown > 0:
 		s.melee_cooldown -= 1
+	_settle_recoil(s)
 	var busy := s.sprinting or s.move_state == PlayerSimState.Move.MANTLE
 
 	# Switching first: a slot request lives in one command only, and the
@@ -49,13 +50,13 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 	if ActionInput.has(executed, Action.MELEE) and s.melee_cooldown == 0 and s.move_state != PlayerSimState.Move.MANTLE:
 		var melee := Weapons.at(Weapons.MELEE)
 		s.melee_cooldown = melee.ticks_between_shots
-		shots.append(_shot(p, melee, aim_direction(s.yaw, s.pitch)))
+		shots.append(_shot(p, melee, aim_direction(s.aim_yaw(), s.aim_pitch())))
 		return shots
 	if ActionInput.has(executed, Action.GRENADE) and s.grenades > 0 and s.throw_cooldown == 0 \
 			and s.move_state != PlayerSimState.Move.MANTLE:
 		s.grenades -= 1
 		s.throw_cooldown = Balance.PLAYER.throw_cooldown_ticks
-		var aim := aim_direction(s.yaw, s.pitch)
+		var aim := aim_direction(s.aim_yaw(), s.aim_pitch())
 		shots.append(_shot(p, Weapons.at(Weapons.FRAG), (aim + Vector3.UP * THROW_LIFT).normalized()))
 		return shots
 
@@ -142,8 +143,9 @@ static func can_scope(s: PlayerSimState) -> bool:
 static func _fire(p: SimPlayer, w: int, data: WeaponData, match_seed: int, scoped: bool = false) -> Shot:
 	var s := p.state
 	s.mag[w] -= 1
-	var aim := aim_direction(s.yaw, s.pitch)
+	var aim := aim_direction(s.aim_yaw(), s.aim_pitch())
 	var shot := _shot(p, data, aim)
+	_kick(s, data, Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq, 0x7EC0]), scoped)
 	var spread := data.spread_degrees * (data.scope_spread if scoped else 1.0)
 	for i in maxi(data.pellets, 1):
 		var seed_value := Sim.hash_ints([match_seed, p.net_id, p.entity_gen, s.action_seq, i])
@@ -152,6 +154,29 @@ static func _fire(p: SimPlayer, w: int, data: WeaponData, match_seed: int, scope
 		shot.pellets.append(spread_direction(aim, spread, seed_value))
 	shot.direction = shot.pellets[0]
 	return shot
+
+
+## Recoil: the held weapon's settle back towards the look direction, once
+## the hold after the last shot is over.
+static func _settle_recoil(s: PlayerSimState) -> void:
+	if s.recoil_hold > 0:
+		s.recoil_hold -= 1
+		return
+	var data := s.weapon()
+	if data != null and s.recoil != Vector2.ZERO:
+		s.recoil = s.recoil.move_toward(Vector2.ZERO, deg_to_rad(data.recoil_recovery_degrees_per_second) / Sim.TICK_RATE)
+
+
+## Recoil: one shot's kick, up and to a side chosen by `seed_value`.
+static func _kick(s: PlayerSimState, data: WeaponData, seed_value: int, scoped: bool) -> void:
+	if data.recoil_kick_degrees <= 0.0 and data.recoil_side_degrees <= 0.0:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var scale := data.recoil_scoped if scoped else 1.0
+	var kick := Vector2(rng.randf_range(-1.0, 1.0) * data.recoil_side_degrees, data.recoil_kick_degrees)
+	s.recoil = (s.recoil + kick * deg_to_rad(1.0) * scale).limit_length(deg_to_rad(data.recoil_max_degrees))
+	s.recoil_hold = data.recoil_recovery_delay_ticks
 
 
 ## A new action from the eye along `direction`.

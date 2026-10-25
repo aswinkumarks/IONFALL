@@ -5,6 +5,13 @@ extends Node
 ## ENet or an online peer. Only the host sends: LOBBY on every change, START
 ## when the match begins. Then everyone leaves the lobby and joins the match,
 ## which the host serves on the same port or online socket.
+##
+## Team modes: every member is on a team (a joiner on the smaller one); a
+## player can switch (TEAM_PICK) and the host can move anyone, while a team
+## has room. The host takes the teams into the match by profile uuid
+## (team_plan()). The host names the teams and picks their colours
+## (set_team_style), and can remove a player, who can't come back to this
+## lobby.
 
 signal changed
 signal started(settings: Dictionary)  ## {map, mode, minutes}
@@ -13,6 +20,11 @@ signal in_match(map_id: String)  ## client: the host is already playing
 
 const DURATIONS := [5, 10, 15, 20]  ## match length choices (minutes)
 const DEFAULT_MINUTES := 10
+const HOST_ID := 1  ## the host's id in `members` (a server's transport peer id)
+## A removed player is told why before its connection closes.
+const KICK_CLOSE_S := 0.3
+## Host: pings every member this often, and sends everyone the latencies.
+const PING_INTERVAL_S := 1.0
 
 var transport := Transport.new()
 var is_host: bool = false
@@ -24,12 +36,25 @@ var minutes: int = DEFAULT_MINUTES
 var bots: int = 0
 var bot_difficulty: int = 1
 var friendly_fire: bool = false
+## The host's names ("" = the default) and colours (GameMode.TEAM_PALETTE
+## indices) for the two teams.
+var team_names := PackedStringArray(["", ""])
+var team_colors := GameMode.DEFAULT_TEAM_COLORS
 var max_players: int = Protocol.MAX_PEERS
-## [{name, host}], the host first, then in join order.
+## [{id, name, host, team}], the host first, then in join order.
 var members: Array = []
+## Host: the profile uuid -> team to seat players on as they join (the
+## teams of the last match, when back from one).
+var team_plan: Dictionary = {}
+var host_uuid: String = ""
 var _host_name: String = ""
 var _names: Dictionary = {}  ## host: peer id -> name, in join order
+var _uuids: Dictionary = {}  ## host: peer id -> profile uuid
 var _accepted: Dictionary = {}  ## host: authenticated peer id -> name
+var _teams: Dictionary = {}  ## host: member id (HOST_ID for the host) -> team
+var _removed: Dictionary = {}  ## host: profile uuids the host removed; refused from now on
+var _pings: Dictionary = {}  ## host: member id -> smoothed round trip (ms)
+var _ping_timer: float = 0.0
 var _done: bool = false  ## client: started, redirected or closed; later signals are ignored
 
 
@@ -42,8 +67,10 @@ func host(host_name: String, p_max: int, port: int, peer: MultiplayerPeer = null
 	transport.auth_validator = _validate_hello
 	transport.peer_joined.connect(_on_peer_joined)
 	transport.peer_left.connect(_on_peer_left)
+	transport.message.connect(_on_host_message)
 	var err := transport.host_peer(peer) if peer != null else transport.host(port, max_players)
 	if err == OK:
+		_teams[HOST_ID] = clampi(int(team_plan.get(host_uuid, 0)), 0, 1)
 		_update_members()
 	return err
 
@@ -79,6 +106,100 @@ func start() -> void:
 	started.emit({"map": map_id, "mode": game_mode, "minutes": minutes})
 
 
+## The modes where players pick sides (co-op puts every human on one team).
+static func has_teams(mode: int) -> bool:
+	return GameMode.is_team_mode(mode) and mode != GameMode.WAVES
+
+
+## The most players one team takes.
+func team_cap() -> int:
+	return ceili(max_players / 2.0)
+
+
+## Our own member id: HOST_ID when hosting, else our transport peer id.
+func my_id() -> int:
+	return HOST_ID if is_host else transport.local_id()
+
+
+func team_of(id: int) -> int:
+	for m: Dictionary in members:
+		if m.id == id:
+			return m.team
+	return -1
+
+
+## Puts member `id` on `team` if it has room. The host moves anyone; a
+## player asks the host to move itself.
+func set_team(id: int, team: int) -> void:
+	if team < 0 or team > 1:
+		return
+	if not is_host:
+		if id == my_id():
+			transport.send(HOST_ID, Protocol.encode_team_pick(team), Protocol.CH_CONTROL, true)
+		return
+	if not _teams.has(id) or _teams[id] == team or _team_size(team) >= team_cap():
+		return
+	_teams[id] = team
+	_update_members()
+
+
+## Host: removes member `id` from the lobby; it can't rejoin this lobby.
+func kick(id: int) -> void:
+	if not is_host or not _accepted.has(id):
+		return
+	var uuid: String = _uuids.get(id, "")
+	if not uuid.is_empty():
+		_removed[uuid] = true
+	transport.send(id, Protocol.encode_notice(Protocol.Notice.KICKED), Protocol.CH_CONTROL, true)
+	_on_peer_left(id)
+	var t: WeakRef = weakref(transport)  # the lobby may be gone by then
+	get_tree().create_timer(KICK_CLOSE_S).timeout.connect(func() -> void:
+		if t.get_ref() != null:
+			(t.get_ref() as Transport).kick(id))
+
+
+## Host: names team `team` (cleaned; "" for the default) and gives it palette
+## colour `color`, unless the other team has that colour.
+func set_team_style(team: int, team_name: String, color: int) -> void:
+	if not is_host or team < 0 or team > 1:
+		return
+	var names := team_names.duplicate()
+	names[team] = GameMode.clean_team_name(team_name)
+	var colors := team_colors.duplicate()
+	colors[team] = color
+	if GameMode.clean_team_colors(colors) == colors:
+		team_colors = colors
+	team_names = names
+	_broadcast()
+
+
+## Host: profile uuid -> team for everyone in the lobby, for the match.
+func team_plan_now() -> Dictionary:
+	var plan := {host_uuid: _teams.get(HOST_ID, 0)}
+	for id in _accepted:
+		plan[_uuids.get(id, "")] = _teams.get(id, 0)
+	plan.erase("")
+	return plan
+
+
+func _team_size(team: int) -> int:
+	return _teams.values().count(team)
+
+
+## Host: measures each member's round trip (PING / PONG, as in a match).
+func _process(delta: float) -> void:
+	if not is_host or _accepted.is_empty():
+		return
+	_ping_timer += delta
+	if _ping_timer < PING_INTERVAL_S:
+		return
+	_ping_timer = 0.0
+	var ping := Protocol.encode_ping(Time.get_ticks_msec() & 0xFFFFFFFF)
+	for id in _accepted:
+		transport.send(id, ping, Protocol.CH_GAME, false)
+	_update_members()
+
+
 func leave() -> void:
 	transport.close()
 
@@ -105,9 +226,12 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 		return "protocol mismatch (server %d, client %d)" % [Protocol.VERSION, hello.version]
 	if hello.compat != BuildInfo.compat_hash:
 		return "version mismatch: server runs %s" % BuildInfo.display_string()
+	if _removed.has(hello.uuid):
+		return "LOBBY_KICKED"
 	if 1 + _names.size() >= max_players:
 		return "server full"
 	_names[id] = ServerSession.sanitize_name(hello.name)
+	_uuids[id] = hello.uuid
 	return ""
 
 
@@ -116,28 +240,53 @@ func _on_peer_joined(id: int) -> void:
 		transport.kick(id)
 		return
 	_accepted[id] = _names[id]
+	# Back on the team of the last match, else the smaller team.
+	var team: int = team_plan.get(_uuids.get(id, ""), -1)
+	if team < 0 or team > 1 or _team_size(team) >= team_cap():
+		team = 0 if _team_size(0) <= _team_size(1) else 1
+	_teams[id] = team
 	_update_members()
 
 
 func _on_peer_left(id: int) -> void:
 	_names.erase(id)
+	_uuids.erase(id)
 	_accepted.erase(id)
+	_teams.erase(id)
+	_pings.erase(id)
 	_update_members()
 
 
 func _update_members() -> void:
-	members = [{"name": _host_name, "host": true}]
+	members = [{"id": HOST_ID, "name": _host_name, "host": true, "team": _teams.get(HOST_ID, 0)}]
 	for id in _accepted:
-		members.append({"name": _accepted[id], "host": false})
+		members.append({"id": id, "name": _accepted[id], "host": false, "team": _teams.get(id, 0),
+				"ping": maxi(roundi(_pings[id]), 1) if _pings.has(id) else 0})  # 0: not measured yet
 	_broadcast()
 
 
 func _broadcast() -> void:
 	if is_host:
-		var msg := Protocol.encode_lobby(map_id, game_mode, minutes, max_players, members, bots, bot_difficulty, friendly_fire)
+		var msg := Protocol.encode_lobby(map_id, game_mode, minutes, max_players, members, bots, bot_difficulty, friendly_fire,
+				team_names, team_colors)
 		for id in _accepted:
 			transport.send(id, msg, Protocol.CH_CONTROL, true)
 	changed.emit()
+
+
+## Host: requests from members.
+func _on_host_message(id: int, data: PackedByteArray) -> void:
+	if not _accepted.has(id):
+		return
+	match Protocol.message_type(data):
+		Protocol.Msg.TEAM_PICK:
+			set_team(id, Protocol.decode_team_pick(data))
+		Protocol.Msg.PONG:
+			var pong := Protocol.decode_pong(data)
+			if not pong.is_empty():
+				var rtt := float((Time.get_ticks_msec() - pong.echo) & 0xFFFFFFFF)
+				if rtt < 5000.0:
+					_pings[id] = rtt if not _pings.has(id) else lerpf(_pings[id], rtt, 0.4)
 
 
 func _on_message(_id: int, data: PackedByteArray) -> void:
@@ -153,11 +302,20 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 				bots = l.bots
 				bot_difficulty = l.bot_difficulty
 				friendly_fire = l.friendly_fire
+				team_names = l.team_names
+				team_colors = l.team_colors
 				changed.emit()
 		Protocol.Msg.START:
 			var s := Protocol.decode_start(data)
 			if not s.is_empty():
 				_finish(s, started)
+		Protocol.Msg.PING:
+			var ping := Protocol.decode_ping(data)
+			if not ping.is_empty():
+				transport.send(HOST_ID, Protocol.encode_pong(ping.time, 0, 0.0), Protocol.CH_GAME, false)
+		Protocol.Msg.NOTICE:
+			if Protocol.decode_notice(data) == Protocol.Notice.KICKED:
+				_finish("LOBBY_KICKED", closed)
 		Protocol.Msg.WELCOME:
 			# A match server answered: the host has already started.
 			_finish(Protocol.decode_welcome(data).get("map", ""), in_match)
