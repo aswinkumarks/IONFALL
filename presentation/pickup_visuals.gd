@@ -87,10 +87,7 @@ func _make(weapon: int) -> Node3D:
 	var data := Weapons.at(weapon)
 	var model: Node3D
 	if data == null:
-		model = (load("res://art/weapons/kenney/grenade-b.glb") as PackedScene).instantiate()
-		model.scale = Vector3.ONE * 1.8
-		for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-			mi.material_override = WeaponModels.material()
+		model = WeaponModels.grenade(0.32)
 	else:
 		model = WeaponModels.instantiate(data.id)
 		model.scale = Vector3.ONE * 1.6

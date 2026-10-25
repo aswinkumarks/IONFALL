@@ -31,11 +31,9 @@ static func paths(map_id: String) -> PackedStringArray:
 				if dep.get_extension() in ["res", "tres", "glb", "gltf", "fbx", "tscn", "scn", "mesh"] and not out.has(dep):
 					out.append(dep)
 			out.append(scene)
-	for def: Array in WeaponModels.MODELS.values():
-		out.append(WeaponModels.DIR + def[0] + ".glb")
-	out.append(WeaponModels.DIR + "grenade-b.glb")
-	for path: String in [ArmoredRig.SCENE, ArmoredRig.ANIM_SOURCE, SentinelRig.SENTINEL_SCENE,
-			SentinelRig.FINGER_MESH, SentinelRig.FINGER_SKIN]:
+	out.append_array(WeaponModels.paths())
+	out.append_array(MeshyRig.paths())
+	for path: String in [ArmoredRig.SCENE, ArmoredRig.ANIM_SOURCE]:
 		out.append(path)
 	for variant: String in AstronautRig.VARIANTS:
 		out.append(AstronautRig.DIR + variant + ".gltf")

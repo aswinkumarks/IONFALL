@@ -1,23 +1,26 @@
+@tool
 class_name CharacterRig
 extends Node3D
 ## Third-person body of a player (presentation only; hitboxes come from the
-## simulation). Subclasses: SentinelRig (default: Meshy Cybernetic Sentinel
-## on the animation-library clips), ArmoredRig (armoured soldier on the
+## simulation). Subclasses: MeshyRig (the selectable characters, Meshy
+## models on the animation-library clips), ArmoredRig (armoured soldier on the
 ## Quaternius animation-library mannequin), AstronautRig (Quaternius astronauts),
 ## SkinnedRig (Kenney character in a painted suit), PartsRig (rigid parts)
 ## and CapsuleRig (greybox). Skinned won the on-device comparison
 ## (docs/decisions/0003-character-rig.md).
 
-const STYLES := ["sentinel", "armored", "astronaut", "skinned", "parts", "capsule"]
+const STYLES := ["sentinel", "vanguard", "operative", "spacer", "armored", "astronaut", "skinned", "parts", "capsule"]
 ## Characters a player can pick (profile "character"), with their name keys.
 ## Sent as an index in the handshake and roster; indices wrap, so bots can
 ## take any number.
-const SELECTABLE := ["sentinel", "armored", "skinned", "astronaut"]
+const SELECTABLE := ["sentinel", "vanguard", "operative", "spacer"]
 const SELECTABLE_KEYS := ["CHAR_SENTINEL", "CHAR_VANGUARD", "CHAR_OPERATIVE", "CHAR_SPACER"]
+## Profiles saved before the Meshy characters name the old rigs.
+const LEGACY := {"armored": "vanguard", "skinned": "operative", "astronaut": "spacer"}
 
 
 static func selectable_index(style: String) -> int:
-	return maxi(SELECTABLE.find(style), 0)
+	return maxi(SELECTABLE.find(LEGACY.get(style, style)), 0)
 
 
 static func selectable_style(index: int) -> String:
@@ -26,8 +29,8 @@ static func selectable_style(index: int) -> String:
 
 static func create(style: String, variant: int = 0) -> CharacterRig:
 	match style:
-		"sentinel":
-			return SentinelRig.new()
+		"sentinel", "vanguard", "operative", "spacer":
+			return MeshyRig.new(style)
 		"armored":
 			return ArmoredRig.new()
 		"astronaut":
@@ -40,7 +43,7 @@ static func create(style: String, variant: int = 0) -> CharacterRig:
 			return PartsRig.new()
 		"capsule":
 			return CapsuleRig.new()
-	return SentinelRig.new()
+	return MeshyRig.new()
 
 
 func setup(_color: Color) -> void:

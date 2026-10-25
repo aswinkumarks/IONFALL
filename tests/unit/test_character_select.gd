@@ -79,4 +79,4 @@ func test_visual_uses_the_players_character() -> void:
 	add_child_autofree(v)
 	v.setup("A", false, Color.CYAN, 0, CharacterRig.selectable_style(1))
 	assert_eq(v.rig_style, CharacterRig.SELECTABLE[1])
-	assert_true(v.rig is ArmoredRig and not v.rig is SentinelRig)
+	assert_true(v.rig is MeshyRig and (v.rig as MeshyRig).character == "vanguard")

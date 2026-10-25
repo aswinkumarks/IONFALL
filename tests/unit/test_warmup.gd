@@ -102,7 +102,7 @@ func test_preload_lists_existing_mesh_files_map_first() -> void:
 			assert_true(ResourceLoader.exists(f), f)
 		var scene: String = Maps.LIST[map_id].presentation
 		assert_true(files.has(scene))
-		assert_lt(files.find(WeaponModels.DIR + "blaster-n.glb"), files.size())
+		assert_true(files.has(WeaponModels.DIR + "pulse_rifle.glb"), "weapons listed")
 		for dep in MatchPreload._dependencies(scene):
 			if files.has(dep):
 				assert_lt(files.find(dep), files.find(scene), "%s loads before the map scene" % dep)
@@ -110,7 +110,7 @@ func test_preload_lists_existing_mesh_files_map_first() -> void:
 
 func test_idle_pool_wait_returns_and_preload_holds_until_release() -> void:
 	await MatchPreload.wait_for_idle_pool(get_tree())
-	await MatchPreload.run(get_tree(), PackedStringArray([WeaponModels.DIR + "blaster-a.glb", "res://missing.glb"]))
+	await MatchPreload.run(get_tree(), PackedStringArray([WeaponModels.DIR + "mag_pistol.glb", "res://missing.glb"]))
 	assert_eq(MatchPreload._held.size(), 1)
 	MatchPreload.release()
 	assert_eq(MatchPreload._held.size(), 0)
