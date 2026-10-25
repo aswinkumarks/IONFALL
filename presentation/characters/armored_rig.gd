@@ -383,8 +383,8 @@ func _level_head() -> void:
 ## bone's own rotation, the aim clips (made for a pistol) turned the weapon
 ## 90 degrees across the body.
 func _place_weapon() -> void:
-	if _weapon_node == null:
-		return
+	if _weapon_node == null or not is_inside_tree():
+		return  # the skeleton still updates once while the rig leaves the tree
 	var hand := _skeleton.find_bone(_arm_chains()[0][2])
 	if hand < 0:
 		return
