@@ -62,8 +62,6 @@ func is_on_floor() -> bool:
 	return move_state == Move.GROUND or move_state == Move.SLIDE
 
 
-const GRENADES_PER_LIFE := 2
-
 
 func init_weapons(loadout: Array[WeaponData]) -> void:
 	var n := loadout.size()
@@ -78,7 +76,7 @@ func init_weapons(loadout: Array[WeaponData]) -> void:
 		set_slot(i, Weapons.index_of(loadout[i].id), loadout[i].mag_size, loadout[i].reserve)
 	weapon_slot = 0
 	switch_ticks = 0
-	grenades = GRENADES_PER_LIFE
+	grenades = Balance.PLAYER.grenades_per_life
 	throw_cooldown = 0
 	melee_cooldown = 0
 

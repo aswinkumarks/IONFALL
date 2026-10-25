@@ -3,15 +3,12 @@ extends RefCounted
 ## Co-op waves (PLAN §2.4): the humans (team 0) hold out against waves of
 ## bots (team 1). A wave's bots don't respawn: they leave shortly after
 ## dying. Fallen humans wait for the end of the wave and come back when it
-## is cleared. Clearing GameMode.WAVE_COUNT waves wins; everyone down at
+## is cleared. Clearing Balance.MODES.wave_count waves wins; everyone down at
 ## once loses. Server only; clients see `wave`, `enemies_left()` and
 ## `ticks_to_next()` in snapshots.
 
-const INTERMISSION_TICKS := 480  ## 8 s between waves (and before the first)
 const CLEANUP_TICKS := 120  ## a dead wave bot leaves after 2 s
 const NEVER := 0x7FFFFFFF  ## a fallen human's respawn tick while the wave lasts
-## How the waves grow: 2 bots, +1 per wave, +1 per extra human.
-const BASE_BOTS := 2
 
 var wave: int = 0  ## the current (or last) wave, 0 before the first
 var fighting: bool = false
@@ -28,7 +25,7 @@ func _init(session: ServerSession) -> void:
 func reset(tick: int) -> void:
 	wave = 0
 	fighting = false
-	next_wave_tick = tick + INTERMISSION_TICKS
+	next_wave_tick = tick + Balance.MODES.wave_intermission_ticks
 	_dead_since.clear()
 
 
@@ -46,13 +43,16 @@ func ticks_to_next() -> int:
 
 ## Bots in wave `n` (capped by the match's combatant limit).
 func wave_size(n: int, humans: int) -> int:
-	return clampi(BASE_BOTS + n - 1 + maxi(humans - 1, 0), 1, maxi(_session.max_combatants - humans, 1))
+	var m := Balance.MODES
+	var bots := m.first_wave_bots + (n - 1) * m.extra_bots_per_wave + maxi(humans - 1, 0) * m.extra_bots_per_human
+	return clampi(bots, 1, maxi(_session.max_combatants - humans, 1))
 
 
-## Wave `n`'s difficulty: the chosen one, one step harder every 3 waves.
+## Wave `n`'s difficulty: the chosen one, one step harder every
+## Balance.MODES.waves_per_difficulty_step waves.
 @warning_ignore("integer_division")
 func wave_difficulty(n: int) -> int:
-	return mini(_session.bot_difficulty + (n - 1) / 3, BotBrain.Difficulty.INSANE)
+	return mini(_session.bot_difficulty + (n - 1) / maxi(Balance.MODES.waves_per_difficulty_step, 1), BotBrain.Difficulty.INSANE)
 
 
 ## One tick during PLAYING. Returns the winning team + 1 when the match is
@@ -94,9 +94,9 @@ func step() -> int:
 			for p: SimPlayer in world.players.values():
 				if not p.is_bot and not p.state.alive:
 					p.state.respawn_tick = tick
-			if wave >= GameMode.WAVE_COUNT:
+			if wave >= Balance.MODES.wave_count:
 				return GameMode.HUMANS + 1
-			next_wave_tick = tick + INTERMISSION_TICKS
+			next_wave_tick = tick + Balance.MODES.wave_intermission_ticks
 	elif tick >= next_wave_tick:
 		_start_wave(wave + 1, humans)
 	return 0

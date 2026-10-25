@@ -8,7 +8,6 @@ const Action := PlayerCommand.Action
 const FireMode := WeaponData.FireMode
 
 
-const THROW_COOLDOWN := 30
 ## Grenades leave a little above the aim line.
 const THROW_LIFT := 0.12
 
@@ -55,7 +54,7 @@ static func step(p: SimPlayer, cmd: PlayerCommand, executed: int, match_seed: in
 	if ActionInput.has(executed, Action.GRENADE) and s.grenades > 0 and s.throw_cooldown == 0 \
 			and s.move_state != PlayerSimState.Move.MANTLE:
 		s.grenades -= 1
-		s.throw_cooldown = THROW_COOLDOWN
+		s.throw_cooldown = Balance.PLAYER.throw_cooldown_ticks
 		var aim := aim_direction(s.yaw, s.pitch)
 		shots.append(_shot(p, Weapons.at(Weapons.FRAG), (aim + Vector3.UP * THROW_LIFT).normalized()))
 		return shots

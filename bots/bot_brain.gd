@@ -16,36 +16,15 @@ const T := BotNavigation.Traversal
 
 enum Difficulty { EASY, NORMAL, HARD, INSANE }
 const DIFFICULTY_IDS := ["easy", "normal", "hard", "insane"]
-## Per difficulty (PLAN §2.7: higher levels only react faster and aim with
-## less error; none sees through walls or aims perfectly):
-## [reaction ticks, max turn rad/tick, tracking error rad, extra error rad
-## per m/s of target lateral speed, grenade chance per sighting]. Aim errors
-## raised 1.5x at every level after playtests (bots hit too often).
-const TUNING := [
-	[30, 0.06, 0.105, 0.018, 0.05],
-	[15, 0.1, 0.053, 0.009, 0.2],
-	[9, 0.14, 0.033, 0.006, 0.25],
-	[5, 0.18, 0.021, 0.004, 0.3],
-]
-const VIEW_RANGE := 60.0
-const VIEW_COS := 0.45  ## ~127° field of view
-const CLOSE_AWARENESS := 6.0  ## seen at any angle this close
+## The tuning: difficulty levels (reaction, turn speed, aim error, grenade
+## use), perception, fighting ranges and retreating.
+const CONFIG: BotConfig = preload("res://data/bots.tres")
 const PERCEPTION_INTERVAL := 6
 const REPATH_INTERVAL := 30
-const CHASE_MEMORY_TICKS := 300
 const STUCK_CHECK_TICKS := 90
 ## A jump pad path point is reached this close (pads launch at their edge,
 ## JumpPads.RADIUS).
 const PAD_REACH := 1.2
-## Splash weapons are kept for this range band (too close hurts the bot).
-const SPLASH_RANGE := Vector2(6.0, 30.0)
-const GRENADE_RANGE := Vector2(7.0, 18.0)
-const MELEE_RANGE := 1.8
-## Bots scope in (hold aim) at targets this far away or more.
-const SCOPE_RANGE := 10.0
-## Out of combat, bots fetch power weapons and grenades this close.
-const POWER_FETCH_RANGE := 35.0
-const GRENADE_FETCH_RANGE := 15.0
 const SLOT_PRIMARY := 0
 const SLOT_SIDEARM := 1
 
@@ -99,6 +78,7 @@ var _max_turn: float = 0.1
 var _aim_error: float = 0.035
 var _aim_speed_error: float = 0.006
 var _grenade_chance: float = 0.2
+var _view_cos: float = cos(deg_to_rad(CONFIG.field_of_view_degrees) * 0.5)
 
 
 func _init(world: SimWorld, nav: BotNavigation, id: int, seed_value: int, p_difficulty: int = Difficulty.NORMAL) -> void:
@@ -106,13 +86,13 @@ func _init(world: SimWorld, nav: BotNavigation, id: int, seed_value: int, p_diff
 	_nav = nav
 	_id = id
 	_rng.seed = seed_value
-	difficulty = clampi(p_difficulty, 0, TUNING.size() - 1)
-	var t: Array = TUNING[difficulty]
-	_reaction_ticks = t[0]
-	_max_turn = t[1]
-	_aim_error = t[2]
-	_aim_speed_error = t[3]
-	_grenade_chance = t[4]
+	difficulty = clampi(p_difficulty, 0, CONFIG.difficulties.size() - 1)
+	var t := CONFIG.difficulty(difficulty)
+	_reaction_ticks = t.reaction_ticks
+	_max_turn = deg_to_rad(t.turn_speed_degrees_per_second) / Sim.TICK_RATE
+	_aim_error = deg_to_rad(t.aim_error_degrees)
+	_aim_speed_error = deg_to_rad(t.moving_target_error_degrees)
+	_grenade_chance = t.grenade_chance
 	_noise_phase = Vector4(_rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU, _rng.randf() * TAU)
 
 
@@ -194,7 +174,7 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 	if goal == Goal.ATTACK and target != null:
 		held = (held & ~Held.SPRINT) | _trigger(tick, p, target, want_yaw, want_pitch)
 		# Scope in for longer shots, like players do.
-		if p.state.position.distance_to(target.state.position) >= SCOPE_RANGE:
+		if p.state.position.distance_to(target.state.position) >= CONFIG.scope_range:
 			held |= Held.AIM
 	else:
 		_manage_weapons_out_of_combat(p)
@@ -222,10 +202,10 @@ func _perceive(tick: int, p: SimPlayer) -> void:
 		var chest := o.state.position + Vector3(0.0, 1.2, 0.0)
 		var to := chest - eye
 		var d := to.length()
-		if d > VIEW_RANGE:
+		if d > CONFIG.view_range:
 			continue
 		var flat := Vector3(to.x, 0.0, to.z).normalized()
-		if d > CLOSE_AWARENESS and flat.dot(forward) < VIEW_COS and id != target_id:
+		if d > CONFIG.close_awareness and flat.dot(forward) < _view_cos and id != target_id:
 			continue
 		var space := p.get_world_3d().direct_space_state
 		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, chest, Sim.LAYER_WORLD)).is_empty():
@@ -242,9 +222,9 @@ func _perceive(tick: int, p: SimPlayer) -> void:
 			# Splash primaries only at a safe range; the sidearm up close.
 			var primary := p.state.weapon(SLOT_PRIMARY)
 			_slot = SLOT_PRIMARY
-			if primary.is_projectile() and (best_d < SPLASH_RANGE.x or best_d > SPLASH_RANGE.y):
+			if primary.is_projectile() and (best_d < CONFIG.splash_min_range or best_d > CONFIG.splash_max_range):
 				_slot = SLOT_SIDEARM
-			if p.state.grenades > 0 and best_d >= GRENADE_RANGE.x and best_d <= GRENADE_RANGE.y \
+			if p.state.grenades > 0 and best_d >= CONFIG.grenade_min_range and best_d <= CONFIG.grenade_max_range \
 					and _rng.randf() < _grenade_chance:
 				_throw_at = tick + _reaction_ticks + 10
 		target_id = best
@@ -254,7 +234,7 @@ func _perceive(tick: int, p: SimPlayer) -> void:
 
 func _choose_goal(tick: int, p: SimPlayer) -> void:
 	var s := p.state
-	if goal == Goal.RETREAT and tick < _retreat_until and s.shield < 60.0:
+	if goal == Goal.RETREAT and tick < _retreat_until and s.shield < CONFIG.retreat_until_shield:
 		return
 	var target: SimPlayer = _world.players.get(target_id)
 	# A flag carrier runs home, fights or not.
@@ -262,16 +242,17 @@ func _choose_goal(tick: int, p: SimPlayer) -> void:
 		_set_objective(_objective(p))
 		return
 	if _visible and target != null:
-		var losing := s.shield <= 0.0 and s.health < 45.0 and target.state.shield + target.state.health > s.health + 20.0
+		var losing := s.shield <= 0.0 and s.health < CONFIG.retreat_health \
+				and target.state.shield + target.state.health > s.health + CONFIG.retreat_margin
 		if losing and goal != Goal.RETREAT:
 			goal = Goal.RETREAT
-			_retreat_until = tick + 360
+			_retreat_until = tick + CONFIG.retreat_ticks
 			_path_goal = _retreat_point(p, target)
 			_path = []
 			_last_repath = -100000
 			return
 		goal = Goal.ATTACK
-	elif tick - _last_seen_tick < CHASE_MEMORY_TICKS and target_id != 0:
+	elif tick - _last_seen_tick < CONFIG.chase_memory_ticks and target_id != 0:
 		goal = Goal.CHASE
 	else:
 		target_id = 0
@@ -343,9 +324,9 @@ func _wanted_item(p: SimPlayer) -> Vector3:
 		var d := it.position.distance_to(s.position)
 		var want := false
 		if it.weapon < 0:
-			want = s.grenades < PlayerSimState.GRENADES_PER_LIFE and d < GRENADE_FETCH_RANGE
+			want = s.grenades < Balance.PLAYER.grenades_per_life and d < CONFIG.grenade_fetch_range
 		else:
-			want = Weapons.at(it.weapon).is_power_weapon and not s.weapon(0).is_power_weapon and d < POWER_FETCH_RANGE
+			want = Weapons.at(it.weapon).is_power_weapon and not s.weapon(0).is_power_weapon and d < CONFIG.power_fetch_range
 		if want and d < best_d:
 			best_d = d
 			best = it.position
@@ -372,7 +353,7 @@ func _attack_move(tick: int, p: SimPlayer, target: SimPlayer) -> Vector3:
 	var to := target.state.position - p.state.position
 	to.y = 0.0
 	var d := to.length()
-	if d > 25.0:
+	if d > CONFIG.follow_beyond:
 		return _follow(tick, p, target.state.position)
 	if tick >= _strafe_until:
 		_strafe = -_strafe if _rng.randf() < 0.7 else _strafe
@@ -380,9 +361,9 @@ func _attack_move(tick: int, p: SimPlayer, target: SimPlayer) -> Vector3:
 	var dir := to / maxf(d, 0.01)
 	var side := Vector3(-dir.z, 0.0, dir.x) * _strafe
 	var approach := 0.0
-	if d > 18.0:
+	if d > CONFIG.approach_beyond:
 		approach = 0.7
-	elif d < 7.0:
+	elif d < CONFIG.back_off_within:
 		approach = -0.6
 	if _rng.randf() < 0.008:
 		_press(Action.JUMP)
@@ -502,12 +483,12 @@ func _trigger(tick: int, p: SimPlayer, target: SimPlayer, want_yaw: float, want_
 		return 0
 	var w := s.weapon_slot
 	var d := p.state.position.distance_to(target.state.position)
-	if d < MELEE_RANGE and s.melee_cooldown == 0:
+	if d < CONFIG.melee_range and s.melee_cooldown == 0:
 		_press(Action.MELEE)
 		return 0
 	if _throw_at > 0 and tick >= _throw_at:
 		_throw_at = 0
-		if s.grenades > 0 and d >= GRENADE_RANGE.x:
+		if s.grenades > 0 and d >= CONFIG.grenade_min_range:
 			_press(Action.GRENADE)
 			return 0
 	if w != _slot or s.switch_ticks > 0:

@@ -79,7 +79,7 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	_bar.visibility_range_end_margin = 4.0
 	_bar.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	_label.add_child(_bar)
-	set_bar(Health.MAX_SHIELD, Health.MAX_HEALTH)
+	set_bar(Balance.PLAYER.max_shield, Balance.PLAYER.max_health)
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.55
 	capsule.height = 2.1
@@ -132,7 +132,7 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 ## it holds, else health in red.
 func set_bar(p_shield: float, health: float) -> void:
 	var on_shield := p_shield > 0.0
-	var fraction := clampf((p_shield / Health.MAX_SHIELD) if on_shield else (health / Health.MAX_HEALTH), 0.0, 1.0)
+	var fraction := clampf((p_shield / Balance.PLAYER.max_shield) if on_shield else (health / Balance.PLAYER.max_health), 0.0, 1.0)
 	var fill := roundi(fraction * (BAR_SIZE.x - 2))
 	var key := fill * 2 + (1 if on_shield else 0)
 	if key == _bar_key:

@@ -5,13 +5,9 @@ extends RefCounted
 
 enum { WAITING, COUNTDOWN, PLAYING, POST_MATCH, SUDDEN_DEATH }
 
-const COUNTDOWN_TICKS := 300
-const POST_MATCH_TICKS := 900
-const FFA_SCORE_LIMIT := 25
-const FFA_TIME_LIMIT_TICKS := 36000
-## Tie at the time limit: the next score change decides, for at most 2 min,
-## then the match is a draw (PLAN §2.4).
-const SUDDEN_DEATH_TICKS := 7200
+## Countdown, post-match, default time limit and sudden death (a tie at
+## the time limit: the next score decides, then a draw; PLAN §2.4) last as
+## long as Balance.MODES (data/modes.tres) says.
 
 
 static func allows_damage(phase: int) -> bool:
