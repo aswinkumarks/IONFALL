@@ -29,7 +29,8 @@ func test_rail_sniper_handle_is_in_the_hand() -> void:
 
 
 ## Third person (ArmoredRig.HoldWeapon): the right wrist by the handle and
-## the left at the weapon's Support marker, on every character and weapon.
+## the left at the weapon's Support marker (or, out of reach, further back
+## along the weapon), on every character and weapon.
 ## Bone poses are read after the modifiers run.
 func test_both_hands_hold_the_weapon() -> void:
 	for style: String in CharacterRig.SELECTABLE:
@@ -54,4 +55,36 @@ func test_both_hands_hold_the_weapon() -> void:
 			var grip := (w.get_node("Grip") as Node3D).global_position
 			var support := (w.get_node("Support") as Node3D).global_position
 			assert_lt((wrists[0] as Vector3).distance_to(grip), 0.12, "%s %s: right hand at the handle" % [style, id])
-			assert_lt((wrists[1] as Vector3).distance_to(support), 0.07, "%s %s: left hand at the support" % [style, id])
+			# At the support, or (out of reach) further back along the weapon.
+			var on_gun := Geometry3D.get_closest_point_to_segment(wrists[1], grip, support)
+			assert_lt((wrists[1] as Vector3).distance_to(on_gun), 0.02, "%s %s: left hand on the weapon" % [style, id])
+			assert_lt((wrists[1] as Vector3).distance_to(support), 0.1, "%s %s: left hand near the support" % [style, id])
+
+
+## First person (FirstPersonView): both hands reach the weapon on every
+## character and weapon: the right wrist by the handle, the left on the
+## weapon between the handle and the muzzle.
+func test_first_person_hands_reach_the_weapon() -> void:
+	var view := FirstPersonView.new()
+	add_child_autofree(view)
+	var s := PlayerSimState.new()
+	s.alive = true
+	s.move_state = PlayerSimState.Move.GROUND
+	s.reload = PackedInt32Array([0, 0])
+	s.weapons = PackedInt32Array([0, 0])
+	for style: String in CharacterRig.SELECTABLE:
+		view.set_character(style, Color.WHITE)
+		for id: StringName in WeaponModels.MODELS:
+			for i in 3:
+				view.update_view(Vector3.ZERO, 1.6, 0.0, 0.0, s, Weapons.by_id(id), 1.0 / 60.0)
+			var arms: ArmoredRig = view._arms
+			var sk := arms._skeleton
+			var chains := arms._arm_chains()
+			var right := sk.global_transform * sk.get_bone_global_pose(sk.find_bone(chains[0][2])).origin
+			var left := sk.global_transform * sk.get_bone_global_pose(sk.find_bone(chains[1][2])).origin
+			var w: Node3D = view._models[id]
+			var handle := (w.get_node("Grip") as Node3D).global_position
+			var muzzle := (w.get_node("Muzzle") as Node3D).global_position
+			assert_lt(right.distance_to(handle), 0.12, "%s %s: right hand at the handle" % [style, id])
+			var on_gun := Geometry3D.get_closest_point_to_segment(left, handle, muzzle)
+			assert_lt(left.distance_to(on_gun), FirstPersonView.SUPPORT_DROP + 0.03, "%s %s: left hand on the weapon" % [style, id])
