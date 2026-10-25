@@ -80,7 +80,7 @@ var networked: bool = false
 ## Most combatants (humans + bots) this session admits: 16 dedicated,
 ## 8 PC listen host, 4 phone host (PLAN §3.5.1).
 var map_id: String = Maps.DEFAULT  ## sent in WELCOME and beacons
-var time_limit_ticks: int = MatchPhase.FFA_TIME_LIMIT_TICKS
+var time_limit_ticks: int = Balance.MODES.default_time_limit_ticks
 var max_combatants: int = Protocol.MAX_PEERS
 var lobby_after_match: bool = false
 ## Bots fill the match up to this many combatants and leave as humans join.
@@ -543,7 +543,7 @@ func _audience() -> int:
 
 func _on_humans_changed() -> void:
 	if phase == MatchPhase.WAITING and _audience() > 0:
-		_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
+		_set_phase(MatchPhase.COUNTDOWN, world.tick + Balance.MODES.countdown_ticks)
 	elif _audience() == 0 and phase != MatchPhase.WAITING:
 		_set_phase(MatchPhase.WAITING, 0)
 
@@ -577,7 +577,7 @@ func _update_phase() -> void:
 				if lead != 0:
 					_end_match(lead)
 				else:
-					_set_phase(MatchPhase.SUDDEN_DEATH, world.tick + MatchPhase.SUDDEN_DEATH_TICKS)
+					_set_phase(MatchPhase.SUDDEN_DEATH, world.tick + Balance.MODES.sudden_death_ticks)
 		MatchPhase.SUDDEN_DEATH:
 			var lead := MatchPhase.leader(_victory_scores())
 			if lead != 0:
@@ -598,7 +598,7 @@ func _update_phase() -> void:
 				stats.reset(world.tick)
 				for d: Dictionary in _departed.values():
 					d.score = 0  # scores belong to the finished match
-				_set_phase(MatchPhase.COUNTDOWN, world.tick + MatchPhase.COUNTDOWN_TICKS)
+				_set_phase(MatchPhase.COUNTDOWN, world.tick + Balance.MODES.countdown_ticks)
 				_broadcast_roster()
 
 
@@ -618,7 +618,7 @@ func _end_match(lead: int) -> void:
 	var winner := lead if not teams else 0
 	var winner_team := lead - 1 if teams and lead > 0 else GameMode.NO_TEAM
 	last_winner = winner
-	_set_phase(MatchPhase.POST_MATCH, world.tick + MatchPhase.POST_MATCH_TICKS)
+	_set_phase(MatchPhase.POST_MATCH, world.tick + Balance.MODES.post_match_ticks)
 	var rows := []
 	for id in stats.lines:
 		var l: MatchStats.Line = stats.lines[id]

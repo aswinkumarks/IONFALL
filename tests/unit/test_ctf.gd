@@ -64,7 +64,7 @@ func test_take_and_capture() -> void:
 	SimHarness.place(a, Vector3(-12, 0.05, 0), 0.0)  # home, our flag is there
 	_step()
 	assert_eq(world.team_scores[0], 1, "capture scores for the team")
-	assert_eq(world.scores[1], SimWorld.CAPTURE_POINTS)
+	assert_eq(world.scores[1], Balance.MODES.capture_points)
 	assert_true(world.flags[1].at_base(), "the captured flag goes home")
 	assert_eq(_events("flag")[0].action, "capture")
 
@@ -105,7 +105,7 @@ func test_carrier_death_drops_and_returns() -> void:
 	world.drain_events()
 	_step()
 	assert_true(f.at_base(), "returned by touch")
-	assert_eq(world.scores[2], 1 + SimWorld.RETURN_POINTS)
+	assert_eq(world.scores[2], 1 + Balance.MODES.return_points)
 
 
 func test_dropped_flag_returns_by_itself() -> void:

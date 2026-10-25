@@ -32,27 +32,23 @@ static func is_team_mode(mode: int) -> bool:
 	return mode == TDM or mode == CTF or mode == WAVES
 
 
-## The score that wins: 25 kills (FFA), 50 team kills (TDM), 3 captures
-## (CTF), 10 waves cleared (co-op).
+## The score that wins: kills (FFA), team kills (TDM), captures (CTF),
+## waves cleared (co-op); Balance.MODES (data/modes.tres).
 static func score_limit(mode: int) -> int:
 	match mode:
 		TDM:
-			return 50
+			return Balance.MODES.tdm_score_limit
 		CTF:
-			return 3
+			return Balance.MODES.ctf_score_limit
 		WAVES:
-			return WAVE_COUNT
-	return 25
+			return Balance.MODES.wave_count
+	return Balance.MODES.ffa_score_limit
 
 
-## Co-op: clearing this many waves wins.
-const WAVE_COUNT := 10
-
-
-## Respawn delay (PLAN §2.5): FFA 3 s, team modes 5 s (co-op: at the end
-## of the wave instead, see WaveDirector).
+## Respawn delay (PLAN §2.5), from Balance.MODES (co-op: at the end of the
+## wave instead, see WaveDirector).
 static func respawn_ticks(mode: int) -> int:
-	return 180 if mode == FFA else 300
+	return Balance.MODES.ffa_respawn_ticks if mode == FFA else Balance.MODES.team_respawn_ticks
 
 
 static func from_id(id: String) -> int:

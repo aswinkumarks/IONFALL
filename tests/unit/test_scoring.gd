@@ -42,7 +42,7 @@ func test_assist_needs_40_damage_from_someone_else() -> void:
 
 func test_small_or_old_damage_is_not_an_assist() -> void:
 	world._damage(c, 2, 30.0, false, PULSE, 1)
-	for i in SimWorld.ASSIST_TICKS + 1:
+	for i in Balance.PLAYER.assist_ticks + 1:
 		world.step({})
 	world._damage(c, 2, 20.0, false, PULSE, 2)
 	world._damage(c, 1, 300.0, false, PULSE, 3)

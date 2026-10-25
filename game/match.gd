@@ -688,7 +688,7 @@ func _cycle_spectator(step: int) -> void:
 ## weapon timers (PLAN §2.3: the HUD shows the countdown).
 func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32Array) -> void:
 	var prompt := ""
-	var best := SimWorld.PICKUP_RADIUS + 0.3
+	var best := Balance.PLAYER.pickup_radius + 0.3
 	for it in items:
 		var weapon: int = it.weapon
 		var pos: Vector3 = it.position
@@ -966,7 +966,7 @@ func _update_objective() -> void:
 		if w.is_empty():
 			hud.set_objective("")
 		elif w.fighting:
-			hud.set_objective(tr("WAVES_FIGHTING") % [w.wave, GameMode.WAVE_COUNT, w.left], UiStyle.WARN)
+			hud.set_objective(tr("WAVES_FIGHTING") % [w.wave, Balance.MODES.wave_count, w.left], UiStyle.WARN)
 		else:
 			hud.set_objective(tr("WAVES_NEXT") % [w.wave + 1, ceili(w.next / float(Sim.TICK_RATE))], UiStyle.ACCENT)
 	else:
@@ -1059,7 +1059,7 @@ func _local_sounds(s: PlayerSimState) -> void:
 		audio.play_at("reload_shell" if shells else "reload", view.global_position, "UI", 2, -6.0)
 	_last_reload = reloading
 	var rising := s.shield > _last_shield + 0.01
-	if rising and not _shield_rising and s.shield < Health.MAX_SHIELD * 0.5:
+	if rising and not _shield_rising and s.shield < Balance.PLAYER.max_shield * 0.5:
 		audio.cue("shield_recharge", "CAPTION_SHIELD_RECHARGING")
 	_shield_rising = rising
 	_last_shield = s.shield
@@ -1201,7 +1201,7 @@ func _handle_event(e: Dictionary) -> void:
 			if not spectating():  # watching earns nothing
 				var gained := Profile.apply_results(e, me)
 				_results.show_xp(gained, Profile.data.xp())
-			_results_until = _time + MatchPhase.POST_MATCH_TICKS / float(Sim.TICK_RATE)
+			_results_until = _time + Balance.MODES.post_match_ticks / float(Sim.TICK_RATE)
 		"spawn":
 			if e.player == me:
 				input.look_yaw = e.yaw

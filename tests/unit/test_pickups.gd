@@ -59,7 +59,7 @@ func test_power_weapon_replaces_primary_and_it_drops() -> void:
 	assert_null(_item(Weapons.RAIL))
 	var dropped := _item(Weapons.PULSE)
 	assert_not_null(dropped, "the loadout primary drops")
-	assert_between(dropped.despawn_tick - world.tick, SimWorld.DROP_DESPAWN_TICKS - 2, SimWorld.DROP_DESPAWN_TICKS,
+	assert_between(dropped.despawn_tick - world.tick, Balance.PLAYER.drop_despawn_ticks - 2, Balance.PLAYER.drop_despawn_ticks,
 			"and despawns in 20 s")
 	assert_eq(events.filter(func(e: Dictionary) -> bool: return e.type == "pickup").size(), 1)
 	assert_eq(world.spot_ticks_left(0), 0, "no timer while the rail is held")
@@ -80,7 +80,7 @@ func test_dead_player_drops_power_weapon_then_spot_timer() -> void:
 	assert_not_null(drop, "the rail drops on death")
 	assert_eq(drop.mag + drop.reserve, 1 + Loadouts.RAIL.reserve, "with its remaining ammo")
 	assert_eq(world.spot_ticks_left(0), 0, "the instance still exists")
-	_run(SimWorld.DROP_DESPAWN_TICKS + 1)
+	_run(Balance.PLAYER.drop_despawn_ticks + 1)
 	assert_null(_item(Weapons.RAIL), "despawned after 20 s")
 	assert_gt(world.spot_ticks_left(0), 0, "now the spot's timer runs")
 	_run(world.spot_ticks_left(0) + 1)

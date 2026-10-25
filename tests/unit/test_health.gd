@@ -33,7 +33,7 @@ func test_precision_headshot_goes_through_shield() -> void:
 func test_regen_delays_are_in_ticks() -> void:
 	var s := _state()
 	Health.apply(s, 150.0, false, 1.0, false)
-	for i in Health.SHIELD_DELAY_TICKS:
+	for i in Balance.PLAYER.shield_delay_ticks:
 		Health.tick_regen(s)
 	assert_eq(s.shield, 0.0, "no shield regen during the 300-tick delay")
 	Health.tick_regen(s)
@@ -44,12 +44,12 @@ func test_health_waits_for_a_full_shield() -> void:
 	var s := _state()
 	Health.apply(s, 150.0, false, 1.0, false)
 	# 5 s delay, then 10 s to refill the shield at 10/s.
-	for i in Health.SHIELD_DELAY_TICKS + 599:
+	for i in Balance.PLAYER.shield_delay_ticks + 599:
 		Health.tick_regen(s)
 	assert_eq(s.health, 50.0, "no health regen while the shield is recharging")
-	assert_lt(s.shield, Health.MAX_SHIELD)
+	assert_lt(s.shield, Balance.PLAYER.max_shield)
 	Health.tick_regen(s)
-	assert_eq(s.shield, Health.MAX_SHIELD, "shield full after 10 s")
+	assert_eq(s.shield, Balance.PLAYER.max_shield, "shield full after 10 s")
 	assert_almost_eq(s.health, 50.0 + 5.0 / 60.0, 0.001, "then health at 5/s, from that tick")
 
 
@@ -59,8 +59,8 @@ func test_damage_resets_both_regen_timers() -> void:
 	for i in 300:
 		Health.tick_regen(s)
 	Health.apply(s, 1.0, false, 1.0, false)
-	assert_eq(s.shield_delay_ticks, Health.SHIELD_DELAY_TICKS)
-	assert_eq(s.health_delay_ticks, Health.HEALTH_DELAY_TICKS)
+	assert_eq(s.shield_delay_ticks, Balance.PLAYER.shield_delay_ticks)
+	assert_eq(s.health_delay_ticks, Balance.PLAYER.health_delay_ticks)
 
 
 func test_spawn_protection_blocks_damage() -> void:

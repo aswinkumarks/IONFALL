@@ -33,7 +33,7 @@ func _play() -> void:
 
 
 func _until_fighting() -> void:
-	for i in WaveDirector.INTERMISSION_TICKS + 5:
+	for i in Balance.MODES.wave_intermission_ticks + 5:
 		if server.waves.fighting:
 			return
 		_tick()
@@ -56,7 +56,7 @@ func test_setup_has_no_fill_bots_and_humans_on_team_0() -> void:
 
 func test_first_wave_arrives_after_the_intermission() -> void:
 	_play()
-	_tick(WaveDirector.INTERMISSION_TICKS - 10)
+	_tick(Balance.MODES.wave_intermission_ticks - 10)
 	assert_false(server.waves.fighting)
 	_until_fighting()
 	assert_true(server.waves.fighting)
@@ -102,14 +102,14 @@ func test_everyone_down_loses() -> void:
 
 func test_clearing_the_last_wave_wins() -> void:
 	_play()
-	server.waves.wave = GameMode.WAVE_COUNT - 1
+	server.waves.wave = Balance.MODES.wave_count - 1
 	_until_fighting()
-	assert_eq(server.waves.wave, GameMode.WAVE_COUNT)
+	assert_eq(server.waves.wave, Balance.MODES.wave_count)
 	_kill_wave()
 	assert_eq(server.phase, MatchPhase.POST_MATCH)
 	var results: Array = server.drain_host_events().filter(func(e: Dictionary) -> bool: return e.type == "results")
 	assert_eq(results[0].winner_team, GameMode.HUMANS)
-	assert_eq(results[0].team_scores[GameMode.HUMANS], GameMode.WAVE_COUNT)
+	assert_eq(results[0].team_scores[GameMode.HUMANS], Balance.MODES.wave_count)
 
 
 func test_later_waves_get_harder() -> void:

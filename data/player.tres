@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="PlayerConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://sim/player_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_shield = 100.0
+max_health = 100.0
+shield_delay_ticks = 300
+health_delay_ticks = 300
+shield_regen_per_second = 10.0
+health_regen_per_second = 5.0
+spawn_protection_ticks = 150
+grenades_per_life = 2
+throw_cooldown_ticks = 30
+melee_cone_degrees = 36.87
+backstab_degrees = 60.0
+assist_damage = 40.0
+assist_ticks = 300
+max_assists = 3
+pickup_radius = 1.2
+drop_despawn_ticks = 1200

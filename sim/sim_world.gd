@@ -7,23 +7,15 @@ extends Node3D
 ## damage → regen → events. Presentation reads `players`, `projectiles` and
 ## the events returned by `drain_events()`; it never changes simulation state.
 
-const RESPAWN_TICKS := 180
-const SPAWN_PROTECTION_TICKS := 150
+## Balance values (respawn delays, spawn protection, assists, melee cone,
+## pickups, CTF) come from Balance (data/player.tres, data/modes.tres).
+
 ## Spawns this close to the best score are picked at random (PLAN §2.5).
 const SPAWN_SCORE_MARGIN := 6.0
 const RECENT_DEATH_TICKS := 300
 const ENVIRONMENT_CREDIT_TICKS := 300
-## Assist (PLAN §2.4): at least this much damage within ASSIST_TICKS before
-## an enemy's death, by someone other than the killer.
-const ASSIST_DAMAGE := 40.0
-const ASSIST_TICKS := 300
-const MAX_ASSISTS := 3
 ## Falling below this height is an environmental death.
 const KILL_Y := -30.0
-## Melee reach: the target's centre within ~37° of the aim; "from behind"
-## when the attacker is within ~60° of the target's back.
-const MELEE_CONE_COS := 0.8
-const MELEE_BACK_DOT := 0.5
 
 var tick: int = 0
 var match_seed: int = 1
@@ -34,7 +26,7 @@ var spawn_points: Array[Transform3D] = []
 var scores: Dictionary = {}  ## net_id -> int
 ## TDM (PLAN §2.4): team scores; kills score for the killer's team.
 var team_scores := PackedInt32Array([0, 0])
-var respawn_ticks: int = RESPAWN_TICKS
+var respawn_ticks: int = Balance.MODES.ffa_respawn_ticks
 ## Players block each other (PLAN §2.2): overlapping living players are
 ## pushed apart every tick (_separate_players).
 var player_collision: bool = true
@@ -417,7 +409,7 @@ func _resolve_melee(p: SimPlayer, shot: WeaponSim.Shot, action_id: String) -> vo
 		var c := Hitbox.center(pose[0], pose[1])
 		var to := c - shot.origin
 		var d := to.length()
-		if d > w.max_range + 0.4 or to.normalized().dot(shot.direction) < MELEE_CONE_COS:
+		if d > w.max_range + 0.4 or to.normalized().dot(shot.direction) < cos(deg_to_rad(Balance.PLAYER.melee_cone_degrees)):
 			continue
 		if not _ray(shot.origin, c).is_empty():
 			continue
@@ -429,7 +421,7 @@ func _resolve_melee(p: SimPlayer, shot: WeaponSim.Shot, action_id: String) -> vo
 	if target == null:
 		return
 	var facing := WeaponSim.aim_direction(target.state.yaw, 0.0)
-	var from_behind := facing.dot((target.state.position - p.state.position).normalized()) > MELEE_BACK_DOT
+	var from_behind := facing.dot((target.state.position - p.state.position).normalized()) > cos(deg_to_rad(Balance.PLAYER.backstab_degrees))
 	_damage(target, p.net_id, w.direct_damage if from_behind else w.damage, false, w, shot.action_seq)
 
 
@@ -564,7 +556,7 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 	# 2. your own explosive → suicide; 3. environment → the last enemy who
 	# damaged you within 5 s; 4. otherwise suicide.
 	var dmg_log: Array = _damage_log.get(victim.net_id, []).filter(
-			func(e: Array) -> bool: return tick - e[2] <= maxi(ASSIST_TICKS, ENVIRONMENT_CREDIT_TICKS))
+			func(e: Array) -> bool: return tick - e[2] <= maxi(Balance.PLAYER.assist_ticks, ENVIRONMENT_CREDIT_TICKS))
 	_damage_log.erase(victim.net_id)
 	var killer := attacker_id
 	if killer == 0:
@@ -588,10 +580,10 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 	var assists: Array[int] = []
 	var dealt := {}
 	for e in dmg_log:
-		if tick - e[2] <= ASSIST_TICKS and e[0] != killer:
+		if tick - e[2] <= Balance.PLAYER.assist_ticks and e[0] != killer:
 			dealt[e[0]] = dealt.get(e[0], 0.0) + e[1]
 	for id in dealt:
-		if dealt[id] >= ASSIST_DAMAGE and assists.size() < MAX_ASSISTS:
+		if dealt[id] >= Balance.PLAYER.assist_damage and assists.size() < Balance.PLAYER.max_assists:
 			assists.append(id)
 	assists.sort()
 	_emit("d:%d:%d" % [victim.net_id, s.life_gen], "death", {
@@ -603,9 +595,7 @@ func _kill(victim: SimPlayer, attacker_id: int, w: WeaponData, headshot: bool) -
 
 # --- Pickups ---
 
-const PICKUP_RADIUS := 1.2
 const PICKUP_HEIGHT := 1.8
-const DROP_DESPAWN_TICKS := 1200
 
 
 func _reset_pickups() -> void:
@@ -667,7 +657,7 @@ func _step_pickups(ids: Array, interacting: Dictionary) -> void:
 				continue
 			var d := p.state.position - it.position
 			var flat := Vector2(d.x, d.z).length()
-			if flat > PICKUP_RADIUS or absf(d.y) > PICKUP_HEIGHT:
+			if flat > Balance.PLAYER.pickup_radius or absf(d.y) > PICKUP_HEIGHT:
 				continue
 			if _wants(p, it, interacting.has(id)) and flat < best_d:
 				best_d = flat
@@ -681,7 +671,7 @@ func _step_pickups(ids: Array, interacting: Dictionary) -> void:
 func _wants(p: SimPlayer, it: Item, interact: bool) -> bool:
 	var s := p.state
 	if it.weapon < 0:
-		return s.grenades < PlayerSimState.GRENADES_PER_LIFE
+		return s.grenades < Balance.PLAYER.grenades_per_life
 	var slot := s.weapons.find(it.weapon)
 	if slot >= 0:
 		return s.reserve[slot] < Weapons.at(it.weapon).reserve
@@ -729,7 +719,7 @@ func _drop_slot(p: SimPlayer, slot: int) -> void:
 		_held_spot.erase(p.net_id)
 	var floor_hit := _ray(s.position + Vector3.UP * 0.5, s.position + Vector3.DOWN * 20.0)
 	var at: Vector3 = floor_hit.position if not floor_hit.is_empty() else s.position
-	_add_item(spot, s.weapons[slot], at, s.mag[slot], s.reserve[slot], tick + DROP_DESPAWN_TICKS)
+	_add_item(spot, s.weapons[slot], at, s.mag[slot], s.reserve[slot], tick + Balance.PLAYER.drop_despawn_ticks)
 
 
 ## Death or leaving: a held power weapon drops with its remaining ammo.
@@ -742,9 +732,6 @@ func _drop_power_weapon(p: SimPlayer) -> void:
 # --- Capture the flag (PLAN §2.4) ---
 
 const FLAG_RADIUS := 1.2  ## touching a flag: as close as a pickup
-const FLAG_RETURN_TICKS := 1800  ## a dropped flag goes home after 30 s
-const CAPTURE_POINTS := 5  ## personal score for a capture
-const RETURN_POINTS := 1
 
 
 ## Puts team 0's flag at `bases[0]` and team 1's at `bases[1]`; [] for none.
@@ -789,7 +776,7 @@ func _step_flags(ids: Array) -> void:
 			var home := flags[c.team] if c.team < flags.size() else null
 			if home != null and home.at_base() and _touching(c, home.base):
 				team_scores[c.team] += 1
-				scores[c.net_id] += CAPTURE_POINTS
+				scores[c.net_id] += Balance.MODES.capture_points
 				_flag_home(f)
 				_emit("fc:%d:%d" % [f.team, tick], "flag", {"action": "capture", "team": f.team, "player": c.net_id,
 						"position": c.state.position})
@@ -805,7 +792,7 @@ func _step_flags(ids: Array) -> void:
 			if p.team == f.team:
 				if not f.at_base():
 					_flag_home(f)
-					scores[id] += RETURN_POINTS
+					scores[id] += Balance.MODES.return_points
 					_emit("fr:%d:%d" % [f.team, tick], "flag", {"action": "return", "team": f.team, "player": id,
 							"position": f.base})
 					break
@@ -831,7 +818,7 @@ func _drop_flag(p: SimPlayer) -> void:
 	var floor_hit := _ray(p.state.position + Vector3.UP * 0.5, p.state.position + Vector3.DOWN * 20.0)
 	f.carrier = 0
 	f.position = floor_hit.position if not floor_hit.is_empty() else f.base
-	f.return_tick = tick + FLAG_RETURN_TICKS
+	f.return_tick = tick + Balance.MODES.flag_return_ticks
 	_emit("fd:%d:%d" % [f.team, tick], "flag", {"action": "drop", "team": f.team, "player": p.net_id, "position": f.position})
 
 
@@ -856,7 +843,7 @@ func _spawn(p: SimPlayer) -> void:
 	s.slide_ticks = 0
 	s.alive = true
 	s.respawn_tick = 0
-	s.spawn_protection_ticks = SPAWN_PROTECTION_TICKS
+	s.spawn_protection_ticks = Balance.PLAYER.spawn_protection_ticks
 	s.life_gen += 1
 	s.discontinuity_gen += 1
 	s.pending_presses = PackedByteArray([0, 0, 0, 0, 0, 0, 0])

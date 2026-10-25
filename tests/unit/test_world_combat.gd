@@ -71,14 +71,14 @@ func test_respawn_after_180_ticks_with_new_generations() -> void:
 	_fire_ticks(67)
 	var gen := target.state.life_gen
 	var disc := target.state.discontinuity_gen
-	_fire_ticks(SimWorld.RESPAWN_TICKS - 1, 0)
+	_fire_ticks(Balance.MODES.ffa_respawn_ticks - 1, 0)
 	assert_false(target.state.alive)
 	var events := _fire_ticks(1, 0)
 	assert_true(target.state.alive)
 	assert_eq(target.state.life_gen, gen + 1)
 	assert_eq(target.state.discontinuity_gen, disc + 1)
 	assert_eq(target.state.health, 100.0)
-	assert_eq(target.state.spawn_protection_ticks, SimWorld.SPAWN_PROTECTION_TICKS - 1)
+	assert_eq(target.state.spawn_protection_ticks, Balance.PLAYER.spawn_protection_ticks - 1)
 	assert_eq(_of_type(events, "spawn").size(), 1)
 
 

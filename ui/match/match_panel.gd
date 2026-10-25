@@ -117,7 +117,7 @@ func show_results(results: Dictionary, local_id: int) -> void:
 	if results.get("mode", GameMode.FFA) == GameMode.WAVES:  # co-op: how far the team got
 		var cleared: int = results.team_scores[GameMode.HUMANS]
 		var won: bool = results.get("winner_team", GameMode.NO_TEAM) == GameMode.HUMANS
-		title.text = (tr("WAVES_VICTORY") % GameMode.WAVE_COUNT if won else tr("WAVES_DEFEAT") % (cleared + 1)).to_upper()
+		title.text = (tr("WAVES_VICTORY") % Balance.MODES.wave_count if won else tr("WAVES_DEFEAT") % (cleared + 1)).to_upper()
 		title.add_theme_color_override("font_color", UiStyle.ACCENT if won else UiStyle.WARN)
 		footer.text = ""
 	visible = true
