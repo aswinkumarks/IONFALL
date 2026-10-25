@@ -577,7 +577,7 @@ func _render_host(delta: float) -> void:
 	pickups.sync(world.items, spot_ticks)
 	if _game_mode() == GameMode.CTF:
 		flag_visuals.sync(world.flags, _flag_bases, _flag_carrier_at)
-	_update_pickup_hud(s, world.items, spot_ticks)
+	_update_pickup_prompt(s, world.items)
 	hud.update_state(s, me.current_weapon(), world.scores.get(me.net_id, 0), s.respawn_tick - world.tick)
 
 
@@ -691,9 +691,8 @@ func _cycle_spectator(step: int) -> void:
 	_arms_ready = false
 
 
-## The interact prompt for the nearest item that needs one, and the power
-## weapon timers (PLAN §2.3: the HUD shows the countdown).
-func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32Array) -> void:
+## The interact prompt for the nearest item that needs one.
+func _update_pickup_prompt(s: PlayerSimState, items: Array) -> void:
 	var prompt := ""
 	var best := Balance.PLAYER.pickup_radius + 0.3
 	for it in items:
@@ -706,16 +705,6 @@ func _update_pickup_hud(s: PlayerSimState, items: Array, spot_ticks: PackedInt32
 			prompt = tr("HUD_PICKUP_SWAP") % [InputAdapter.key_name("interact"), tr(Weapons.at(weapon).display_name).to_upper()]
 	hud.set_prompt(prompt)
 	touch.show_interact = not prompt.is_empty()
-	var timers := PackedStringArray()
-	for i in pickups.spots.size():
-		var def: Dictionary = pickups.spots[i]
-		if def.weapon == &"grenade":
-			continue
-		var tag: String = KillFeed.weapon_tag(def.weapon)
-		var ticks: int = spot_ticks[i] if i < spot_ticks.size() else 0
-		var secs := ceili(ticks / float(Sim.TICK_RATE))
-		timers.append("%s %s" % [tag, tr("HUD_PICKUP_READY") if ticks == 0 else "%d:%02d" % [floori(secs / 60.0), secs % 60]])
-	hud.set_pickup_timers(" · ".join(timers))
 
 
 ## Touch has no melee button: holding fire on an enemy within arm's reach,
@@ -797,7 +786,7 @@ func _render_client(delta: float) -> void:
 	pickups.sync(client.items, client.spot_ticks)
 	if _game_mode() == GameMode.CTF:
 		flag_visuals.sync(client.flags, _flag_bases, _flag_carrier_at)
-	_update_pickup_hud(s, client.items, client.spot_ticks)
+	_update_pickup_prompt(s, client.items)
 	var server_state := client.server_state if client.server_state != null else s
 	# Health, shield and death come from the server; movement and ammo are predicted.
 	var shown := s.copy()

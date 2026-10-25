@@ -190,7 +190,6 @@ TOUCH_GRENADE,Grenade
 TOUCH_MELEE,Melee
 TOUCH_INTERACT,Pick up
 HUD_PICKUP_SWAP,[%s] Swap for %s
-HUD_PICKUP_READY,ready
 LOADOUT_PRIMARY,Next spawn:
 CUSTOMIZE_PRIMARY,Primary weapon
 MODE_FFA,Free-for-all

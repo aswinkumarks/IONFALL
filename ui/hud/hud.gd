@@ -41,7 +41,6 @@ var _grenades: int = 0
 var _prompt: String = ""
 var _team: int = GameMode.NO_TEAM
 var _team_scores := PackedInt32Array()
-var _pickup_timers: String = ""
 var _reload: float = 0.0  ## 0 = not reloading, else progress 0..1
 ## Where the weapon chips and the ammo counter were drawn, for touch taps.
 var _slot_rects: Array[Rect2] = []
@@ -171,11 +170,6 @@ func set_teams(team: int, scores: PackedInt32Array) -> void:
 ## "Press E: swap for RAIL SNIPER", or "" for none.
 func set_prompt(text: String) -> void:
 	_prompt = text
-
-
-## Power weapon spawn timers, one line.
-func set_pickup_timers(text: String) -> void:
-	_pickup_timers = text
 
 
 ## The mode's objective line under the scores (CTF flags, co-op waves), or "".
@@ -353,9 +347,6 @@ func _draw_top() -> void:
 		y += 30 * s
 	_text(Vector2(x, y + 20 * s), tr("HUD_SCORE") % _score, 20 if _team_scores.is_empty() else 15, UiStyle.TEXT_DIM,
 			HORIZONTAL_ALIGNMENT_CENTER)
-	if not _pickup_timers.is_empty():
-		_text(Vector2(x, y + 42 * s), _pickup_timers, 15, Color(1.0, 0.65, 0.3, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
-		y += 20 * s
 	if not _objective.is_empty():
 		_text(Vector2(x, y + 44 * s), _objective, 18, _objective_color, HORIZONTAL_ALIGNMENT_CENTER, UiStyle.font_display_bold)
 
