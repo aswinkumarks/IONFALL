@@ -21,13 +21,13 @@ const REFERENCE_GRIP := Vector3(0.0, -0.048, 0.023)
 ## (fraction of the length from the muzzle end, height) in the source
 ## model's units.
 const MODELS := {
-	&"pulse_rifle": [0.38, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.09), Vector2(0.69, -0.17), Vector2(0.38, -0.04)],
+	&"pulse_rifle": [0.38, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.09), Vector2(0.79, -0.305), Vector2(0.495, -0.135)],
 	&"mag_pistol": [0.14, Vector3(0.17, -0.16, -0.36), Vector2(0.0, 0.36), Vector2(0.85, -0.31), Vector2(0.8, -0.45)],
 	&"arc_launcher": [0.41, Vector3(0.21, -0.2, -0.46), Vector2(0.0, 0.17), Vector2(0.67, -0.17), Vector2(0.27, -0.22)],
 	&"burst_rifle": [0.39, Vector3(0.2, -0.2, -0.46), Vector2(0.0, 0.03), Vector2(0.61, -0.19), Vector2(0.38, -0.08)],
 	&"rail_sniper": [0.58, Vector3(0.19, -0.19, -0.48), Vector2(0.0, 0.04), Vector2(0.73, -0.14), Vector2(0.45, -0.04)],
 	&"scatter_gun": [0.41, Vector3(0.2, -0.19, -0.44), Vector2(0.0, 0.16), Vector2(0.69, -0.1), Vector2(0.28, -0.07)],
-	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.44), Vector2(0.0, 0.26), Vector2(0.65, -0.17), Vector2(0.3, 0.1)],
+	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.44), Vector2(0.0, 0.26), Vector2(0.725, -0.17), Vector2(0.3, 0.125)],
 }
 const GRENADE := "frag_grenade"
 
