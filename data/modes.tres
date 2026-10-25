@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ModeConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://sim/mode_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ffa_score_limit = 25
+tdm_score_limit = 50
+ctf_score_limit = 3
+wave_count = 10
+ffa_respawn_ticks = 180
+team_respawn_ticks = 300
+countdown_ticks = 300
+post_match_ticks = 900
+default_time_limit_ticks = 36000
+sudden_death_ticks = 7200
+flag_return_ticks = 1800
+capture_points = 5
+return_points = 1
+wave_intermission_ticks = 480
+first_wave_bots = 2
+extra_bots_per_wave = 1
+extra_bots_per_human = 1
+waves_per_difficulty_step = 3

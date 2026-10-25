@@ -94,9 +94,8 @@ SETTINGS_TAB_ABOUT,About
 ABOUT_VERSION,Version %s
 ABOUT_CREDITS,Credits
 ABOUT_CREDIT_ICONS,"Touch icons: fire, jump, grenade, interact"
-ABOUT_CREDIT_CHARACTERS,Characters and weapons
+ABOUT_CREDIT_CHARACTERS,Prototype characters
 ABOUT_CREDIT_ENVIRONMENT,"Station environment, astronauts, animations"
-ABOUT_CREDIT_SENTINEL,Cybernetic Sentinel character
 ABOUT_CREDIT_FONTS,Fonts
 ABOUT_CREDIT_ENGINE,Engine
 ABOUT_CREDIT_ONLINE,Online play

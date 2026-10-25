@@ -59,7 +59,6 @@ const CREDITS := [
 	["ABOUT_CREDIT_ICONS", "Delapouite, Lorc · game-icons.net", "CC BY 3.0"],
 	["ABOUT_CREDIT_CHARACTERS", "Kenney (kenney.nl)", "CC0 1.0"],
 	["ABOUT_CREDIT_ENVIRONMENT", "Quaternius (quaternius.com)", "CC0 1.0"],
-	["ABOUT_CREDIT_SENTINEL", "tborcen via Meshy", "CC0 1.0"],
 	["ABOUT_CREDIT_FONTS", "Indian Type Foundry (Rajdhani), The Exo 2 Project Authors (Exo 2)", "SIL OFL 1.1"],
 	["ABOUT_CREDIT_ENGINE", "Godot Engine contributors (godotengine.org)", "MIT"],
 	["ABOUT_CREDIT_ONLINE", "Epic Online Services (Epic Games); EOSG plugin by Delano Lourenco", "EOS SDK License, MIT"],

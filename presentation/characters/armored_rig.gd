@@ -1,3 +1,4 @@
+@tool
 class_name ArmoredRig
 extends CharacterRig
 ## Armoured soldier (default): the Quaternius Universal Base Characters
@@ -26,14 +27,24 @@ const GRIP_SCALE := 2.6
 ## How much of the look pitch the head follows (the rest is the aim pose's
 ## arms and spine).
 const HEAD_PITCH := 0.6
-## Third person: the handle sits this far from the wrist (look-direction
-## axes: right, up, forward is -Z), in the palm.
-const HAND_TO_HANDLE := Vector3(0.0, -0.03, -0.07)
-## First-person grip (_fp_hand): how far the fingers point down from the
-## barrel (tan of the angle), and where the palm centre goes relative to the
-## handle (metres, weapon axes: to its right).
+## Third person: the weapon is shouldered, its handle this far from the
+## right shoulder (look-direction axes: right, up, forward is -Z); the arms
+## reach for it (HoldWeapon), the left hand to the model's Support marker.
+const SHOULDER_TO_HANDLE := Vector3(-0.07, -0.12, -0.4)
+## Holding a weapon the chest turns this far to the right (a bladed stance),
+## bringing the left shoulder forward so the left hand reaches the fore-end.
+const BLADE := deg_to_rad(30.0)
+## Hand on the handle (_fp_hand): how far the fingers point down from the
+## barrel (tan of the angle), and where the hand's palm centre goes relative
+## to the handle (metres, weapon axes: to its right). Slightly left of the
+## handle's middle: the knuckles then sit about 2 cm to its right, closed
+## round a slim grip.
 const FP_FINGER_DROP := 0.45
-const FP_PALM_AT := Vector3(0.03, 0.0, 0.0)
+const FP_PALM_AT := Vector3(-0.02, 0.0, 0.0)
+## The left hand under the fore-end (weapon axes): fingers forward and
+## across to the right, palm up and turned in.
+const SUPPORT_FINGERS := Vector3(0.6, 0.0, -1.0)
+const SUPPORT_PALM := Vector3(0.4, 1.0, 0.0)
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
 static var _library: AnimationLibrary
@@ -54,6 +65,8 @@ var _glow: float = 0.0
 var _flash: float = 0.0
 var _state_name: String = ""
 var _look_pitch: float = 0.0
+## The held weapon's transform in this rig's space, set by _hold_weapon.
+var _weapon_local := Transform3D()
 ## The aim blend's upper end: 1 uses the aim-up clip fully.
 var _aim_up: float = 1.0
 
@@ -67,6 +80,15 @@ class HeadLevel extends SkeletonModifier3D:
 
 	func _process_modification_with_delta(_delta: float) -> void:
 		rig._level_head()
+
+
+## Third person: the arms hold the weapon rather than following the clips,
+## whose two-handed pistol pose clasped both hands behind a rifle's grip.
+class HoldWeapon extends SkeletonModifier3D:
+	var rig: ArmoredRig
+
+	func _process_modification_with_delta(_delta: float) -> void:
+		rig._hold_weapon()
 
 
 func setup(color: Color) -> void:
@@ -296,6 +318,10 @@ func _build_tree(library: AnimationLibrary, upper_bones: Array) -> void:
 	_tree.anim_player = _tree.get_path_to(player)
 	_tree.set("parameters/upper/blend_amount", 1.0)
 	_tree.active = true
+	# Holding first: it turns the chest, which the head then undoes.
+	var hold := HoldWeapon.new()
+	hold.rig = self
+	_skeleton.add_child(hold)
 	var level := HeadLevel.new()
 	level.rig = self
 	_skeleton.add_child(level)
@@ -378,21 +404,33 @@ func _level_head() -> void:
 	_skeleton.set_bone_pose_rotation(head, local.get_rotation_quaternion())
 
 
-## Third person: the handle at the right palm and the barrel along the look
-## direction (the body's facing, tilted by the look pitch). Held by the hand
-## bone's own rotation, the aim clips (made for a pistol) turned the weapon
-## 90 degrees across the body.
+## Third person: the weapon where _hold_weapon put it, along the look
+## direction. Held by the hand bone's own rotation, the aim clips (made for a
+## pistol) turned it 90 degrees across the body.
 func _place_weapon() -> void:
-	if _weapon_node == null or not is_inside_tree():
-		return  # the skeleton still updates once while the rig leaves the tree
-	var hand := _skeleton.find_bone(_arm_chains()[0][2])
-	if hand < 0:
-		return
-	var wrist := _skeleton.global_transform * _skeleton.get_bone_global_pose(hand).origin
-	var aim := global_basis.orthonormalized() * Basis(Vector3.RIGHT, _look_pitch)
+	if _weapon_node != null and is_inside_tree():  # the skeleton updates once more while leaving
+		_weapon_node.global_transform = global_transform * _weapon_local
+
+
+## The weapon shouldered along the aim (SHOULDER_TO_HANDLE), the right hand
+## on its handle and the left on the fore-end. Runs after the animation.
+func _hold_weapon() -> void:
+	if _weapon_node == null or not _tree.active or not is_inside_tree():
+		return  # first person poses the arms itself (pose_first_person)
+	# Bladed stance: the chest turns right about the skeleton's up (+Y; it
+	# faces +Z, so a right turn is negative).
+	var chest := _skeleton.find_bone(_chest_bone())
+	var parent := _skeleton.get_bone_parent(chest)
+	var turned := Basis(Vector3.UP, -BLADE) * _skeleton.get_bone_global_pose(chest).basis
+	_skeleton.set_bone_pose_rotation(chest,
+			(_skeleton.get_bone_global_pose(parent).basis.inverse() * turned).get_rotation_quaternion())
+	var to_rig := global_transform.affine_inverse() * _skeleton.global_transform
+	var shoulder := to_rig * _skeleton.get_bone_global_pose(_skeleton.find_bone(_arm_chains()[0][0])).origin
+	var aim := Basis(Vector3.RIGHT, _look_pitch)
 	var held := aim.scaled_local(Vector3.ONE * _grip_scale())
-	var handle := (_weapon_node.get_node("Grip") as Node3D).position
-	_weapon_node.global_transform = Transform3D(held, wrist + aim * HAND_TO_HANDLE - held * handle)
+	var handle := shoulder + aim * SHOULDER_TO_HANDLE
+	_weapon_local = Transform3D(held, handle - held * (_weapon_node.get_node("Grip") as Node3D).position)
+	_pose_arms(_weapon_local, handle, _weapon_local * (_weapon_node.get_node("Support") as Node3D).position)
 
 
 ## Fire: the upper body plays a recoil.
@@ -409,11 +447,15 @@ func set_weapon(id: StringName) -> void:
 	if id == _weapon_id or _hand == null:
 		return
 	_weapon_id = id
+	hold_model(WeaponModels.instantiate(id))
+
+
+## Holds weapon model `w` (from WeaponModels; null: empty hands).
+func hold_model(w: Node3D) -> void:
 	if _weapon_node != null:
 		_weapon_node.queue_free()
 		_weapon_node = null
-	var w := WeaponModels.instantiate(id)
-	if w == null:
+	if w == null or _hand == null:
 		return
 	# Placed every pose (_place_weapon): the handle in the right hand, the
 	# barrel where the player looks.
@@ -440,6 +482,11 @@ func _arm_chains() -> Array:
 	return [["upperarm_r", "lowerarm_r", "hand_r"], ["upperarm_l", "lowerarm_l", "hand_l"]]
 
 
+## The upper chest, which turns for the bladed stance.
+func _chest_bone() -> String:
+	return "spine_03"
+
+
 func _arm_roots() -> Array:
 	return _arm_chains().map(func(c: Array) -> String: return c[0])
 
@@ -459,11 +506,18 @@ func head_position() -> Vector3:
 
 
 func pose_first_person(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
+	_pose_arms(weapon, handle, support)
+
+
+## The right hand on `handle` of `weapon`, the left on `support` (this rig's
+## space), by IK.
+func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 	var to_skel := (global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
 	var grip := _grip_local()
 	var unit := grip.basis.get_scale().x / _grip_scale()  ## skeleton units per metre (e.g. 100 for cm)
 	var hand_basis: Basis
 	var hand_pos: Vector3
+	var support_basis := Basis()  ## identity: the left hand keeps its forearm's
 	var fp := _fp_hand()
 	if fp.is_empty():
 		# The hand that holds `weapon`: undo the grip, keeping metres for the offset.
@@ -485,10 +539,16 @@ func pose_first_person(weapon: Transform3D, handle: Vector3, support: Vector3) -
 		hand_basis = Basis(fingers.cross(palm), fingers, palm) * local.inverse()
 		var centre: Vector3 = fp[2]
 		hand_pos = handle + w * FP_PALM_AT - hand_basis * (centre / unit)
+		# The left hand under the fore-end: palm up and in, fingers forward
+		# and across, curled round it.
+		var s_fingers := (w * SUPPORT_FINGERS).normalized()
+		var s_palm := w * SUPPORT_PALM
+		s_palm = (s_palm - s_fingers * s_palm.dot(s_fingers)).normalized()
+		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * local.inverse()
 	var chains := _arm_chains()
 	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
 	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
-	_reach(chains[1], to_skel * support, Basis(), Vector3(0.3, -1.0, -0.8))
+	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
 
 
 ## Two-bone IK in skeleton space: upper arm and forearm bend in the plane

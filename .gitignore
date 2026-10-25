@@ -19,3 +19,4 @@ eos_credentials.cfg
 
 # Python
 __pycache__/
+meshy_output/

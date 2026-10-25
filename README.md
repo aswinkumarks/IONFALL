@@ -128,7 +128,8 @@ single player and LAN only.
 | `server/` | Dedicated-server bootstrap |
 | `presentation/` | Visuals, audio, interpolation, input |
 | `ui/` | Menus, HUD, overlays |
-| `maps/`, `art/`, `audio/`, `data/` | Maps, assets and weapon data |
+| `maps/`, `art/`, `audio/` | Maps and assets |
+| `data/` | Balance configuration: weapons, player, movement, modes, bots ([docs/balance.md](docs/balance.md)) |
 | `tests/` | GUT unit tests |
 | `tools/` | Build info, release packaging, layer check, 16 KB check |
 

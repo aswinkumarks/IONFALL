@@ -458,12 +458,12 @@ func _draw_vitals() -> void:
 		shield_col = shield_col.lerp(Color.WHITE, _shield_flash)
 	_text(origin + Vector2(0, -8 * s), tr("HUD_SHIELD"), 15, UiStyle.TEXT_DIM)
 	_text(origin + Vector2(w, -8 * s), str(ceili(_shield)), 22, UiStyle.SHIELD, HORIZONTAL_ALIGNMENT_RIGHT, UiStyle.font_display_bold)
-	_segmented_bar(origin, w, 16 * s, _shield / Health.MAX_SHIELD, _shield_shown / Health.MAX_SHIELD, shield_col,
+	_segmented_bar(origin, w, 16 * s, _shield / Balance.PLAYER.max_shield, _shield_shown / Balance.PLAYER.max_shield, shield_col,
 			Color(1, 1, 1, 0.55))
 	var o2 := origin + Vector2(0, 26 * s)
 	var low := _health < 40.0
 	var health_col := Color(UiStyle.DANGER, pulse) if low else UiStyle.HEALTH
-	_segmented_bar(o2, w, 10 * s, _health / Health.MAX_HEALTH, _health_shown / Health.MAX_HEALTH, health_col,
+	_segmented_bar(o2, w, 10 * s, _health / Balance.PLAYER.max_health, _health_shown / Balance.PLAYER.max_health, health_col,
 			Color(UiStyle.DANGER, 0.7))
 	_text(o2 + Vector2(0, 32 * s), tr("HUD_HEALTH"), 15, UiStyle.TEXT_DIM)
 	_text(o2 + Vector2(w, 32 * s), str(ceili(_health)), 22, UiStyle.DANGER if low else UiStyle.TEXT,

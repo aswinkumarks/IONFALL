@@ -1,0 +1,63 @@
+[gd_resource type="Resource" script_class="BotConfig" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://bots/bot_config.gd" id="1"]
+[ext_resource type="Script" path="res://bots/bot_difficulty.gd" id="2"]
+
+[sub_resource type="Resource" id="Easy"]
+script = ExtResource("2")
+name = "Easy"
+reaction_ticks = 30
+turn_speed_degrees_per_second = 206.26
+aim_error_degrees = 6.02
+moving_target_error_degrees = 1.03
+grenade_chance = 0.05
+
+[sub_resource type="Resource" id="Normal"]
+script = ExtResource("2")
+name = "Normal"
+reaction_ticks = 15
+turn_speed_degrees_per_second = 343.77
+aim_error_degrees = 3.04
+moving_target_error_degrees = 0.52
+grenade_chance = 0.2
+
+[sub_resource type="Resource" id="Hard"]
+script = ExtResource("2")
+name = "Hard"
+reaction_ticks = 9
+turn_speed_degrees_per_second = 481.28
+aim_error_degrees = 1.89
+moving_target_error_degrees = 0.34
+grenade_chance = 0.25
+
+[sub_resource type="Resource" id="Insane"]
+script = ExtResource("2")
+name = "Insane"
+reaction_ticks = 5
+turn_speed_degrees_per_second = 618.79
+aim_error_degrees = 1.2
+moving_target_error_degrees = 0.23
+grenade_chance = 0.3
+
+[resource]
+script = ExtResource("1")
+difficulties = Array[ExtResource("2")]([SubResource("Easy"), SubResource("Normal"), SubResource("Hard"), SubResource("Insane")])
+view_range = 60.0
+field_of_view_degrees = 126.51
+close_awareness = 6.0
+chase_memory_ticks = 300
+back_off_within = 7.0
+approach_beyond = 18.0
+follow_beyond = 25.0
+scope_range = 10.0
+melee_range = 1.8
+splash_min_range = 6.0
+splash_max_range = 30.0
+grenade_min_range = 7.0
+grenade_max_range = 18.0
+retreat_health = 45.0
+retreat_margin = 20.0
+retreat_ticks = 360
+retreat_until_shield = 60.0
+power_fetch_range = 35.0
+grenade_fetch_range = 15.0
