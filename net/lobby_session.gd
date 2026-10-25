@@ -9,7 +9,8 @@ extends Node
 ## Team modes: every member is on a team (a joiner on the smaller one); a
 ## player can switch (TEAM_PICK) and the host can move anyone, while a team
 ## has room. The host takes the teams into the match by profile uuid
-## (team_plan()). The host can remove a player, who can't come back to this
+## (team_plan()). The host names the teams and picks their colours
+## (set_team_style), and can remove a player, who can't come back to this
 ## lobby.
 
 signal changed
@@ -33,6 +34,10 @@ var minutes: int = DEFAULT_MINUTES
 var bots: int = 0
 var bot_difficulty: int = 1
 var friendly_fire: bool = false
+## The host's names ("" = the default) and colours (GameMode.TEAM_PALETTE
+## indices) for the two teams.
+var team_names := PackedStringArray(["", ""])
+var team_colors := GameMode.DEFAULT_TEAM_COLORS
 var max_players: int = Protocol.MAX_PEERS
 ## [{id, name, host, team}], the host first, then in join order.
 var members: Array = []
@@ -149,6 +154,21 @@ func kick(id: int) -> void:
 			t.kick(id))
 
 
+## Host: names team `team` (cleaned; "" for the default) and gives it palette
+## colour `color`, unless the other team has that colour.
+func set_team_style(team: int, team_name: String, color: int) -> void:
+	if not is_host or team < 0 or team > 1:
+		return
+	var names := team_names.duplicate()
+	names[team] = GameMode.clean_team_name(team_name)
+	var colors := team_colors.duplicate()
+	colors[team] = color
+	if GameMode.clean_team_colors(colors) == colors:
+		team_colors = colors
+	team_names = names
+	_broadcast()
+
+
 ## Host: profile uuid -> team for everyone in the lobby, for the match.
 func team_plan_now() -> Dictionary:
 	var plan := {host_uuid: _teams.get(HOST_ID, 0)}
@@ -227,7 +247,8 @@ func _update_members() -> void:
 
 func _broadcast() -> void:
 	if is_host:
-		var msg := Protocol.encode_lobby(map_id, game_mode, minutes, max_players, members, bots, bot_difficulty, friendly_fire)
+		var msg := Protocol.encode_lobby(map_id, game_mode, minutes, max_players, members, bots, bot_difficulty, friendly_fire,
+				team_names, team_colors)
 		for id in _accepted:
 			transport.send(id, msg, Protocol.CH_CONTROL, true)
 	changed.emit()
@@ -255,6 +276,8 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 				bots = l.bots
 				bot_difficulty = l.bot_difficulty
 				friendly_fire = l.friendly_fire
+				team_names = l.team_names
+				team_colors = l.team_colors
 				changed.emit()
 		Protocol.Msg.START:
 			var s := Protocol.decode_start(data)

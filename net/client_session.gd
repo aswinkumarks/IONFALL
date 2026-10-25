@@ -316,6 +316,8 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 				match_seed = w.seed
 				map_id = w.map
 				reconnect_token = w.token
+				GameMode.team_names = w.team_names
+				GameMode.team_colors = w.team_colors
 				_metrics_start_ms = Time.get_ticks_msec()
 				joined.emit()
 		Protocol.Msg.PHASE:

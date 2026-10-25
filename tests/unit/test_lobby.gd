@@ -174,3 +174,25 @@ func test_the_host_removes_a_player_who_cannot_return() -> void:
 	assert_signal_emitted_with_parameters(again, "closed", ["LOBBY_KICKED"])  # refused when rejoining
 	b.kick(LobbySession.HOST_ID)
 	assert_eq(host.members.size(), 2, "only the host removes players")
+
+
+func test_the_host_names_and_colours_the_teams() -> void:
+	var a := _join("Alpha")
+	await wait_until(func() -> bool: return a.members.size() == 2, 5.0)
+	host.set_team_style(0, "  Wolves\n", 3)
+	await wait_until(func() -> bool: return a.team_names[0] == "Wolves", 3.0)
+	assert_eq(a.team_colors, PackedInt32Array([3, 1]))
+	assert_eq(GameMode.team_name(0, a.team_names), "Wolves")
+	assert_eq(GameMode.team_name(1, a.team_names), tr("TEAM_ORANGE"), "unnamed: the default")
+	host.set_team_style(1, "Ravens", 3)
+	assert_eq(host.team_colors, PackedInt32Array([3, 1]), "both teams can't share a colour")
+	assert_eq(host.team_names[1], "Ravens")
+	a.set_team_style(0, "Hijack", 5)
+	assert_eq(a.team_names[0], "Wolves", "only the host styles teams")
+	var w := Protocol.decode_welcome(Protocol.encode_welcome(2, 1, 0, 0, 0, 0, "station", 0,
+			PackedStringArray(["Wolves", ""]), PackedInt32Array([3, 1])))
+	assert_eq(w.team_names, PackedStringArray(["Wolves", ""]))
+	assert_eq(w.team_colors, PackedInt32Array([3, 1]))
+	assert_eq(GameMode.clean_team_colors(PackedInt32Array([2, 2])), GameMode.DEFAULT_TEAM_COLORS)
+	assert_eq(GameMode.clean_team_colors(PackedInt32Array([0, 99])), GameMode.DEFAULT_TEAM_COLORS)
+	assert_eq(GameMode.clean_team_name("x".repeat(40)).length(), GameMode.MAX_TEAM_NAME)
