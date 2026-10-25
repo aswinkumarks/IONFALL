@@ -119,13 +119,14 @@ func update_player(id: int, s: PlayerSimState, local: bool, ally: bool = false) 
 		st.dist = 0.0
 	if sliding and not st.sliding:
 		play_at("slide", s.position, "Footsteps", priority, vol - 2.0)
-	if not airborne and not sliding:
+	# Crouch-walking is silent (sneaking past someone is the point of it).
+	if not airborne and not sliding and s.stance == PlayerSimState.Stance.STAND:
 		var moved := Vector2(s.position.x - st.pos.x, s.position.z - st.pos.z).length()
 		st.dist += moved
 		var stride: float = STRIDE.sprint if s.sprinting else STRIDE.walk
 		if st.dist >= stride and moved > 0.0005:
 			st.dist = 0.0
-			play_at("footstep_%s%d" % ["ally_" if ally else "", randi() % 3 + 1], s.position, "Footsteps", priority, vol - (6.0 if s.stance != PlayerSimState.Stance.STAND else 0.0))
+			play_at("footstep_%s%d" % ["ally_" if ally else "", randi() % 3 + 1], s.position, "Footsteps", priority, vol)
 	st.pos = s.position
 	st.airborne = airborne
 	st.sliding = sliding

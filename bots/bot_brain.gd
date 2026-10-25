@@ -19,12 +19,13 @@ const DIFFICULTY_IDS := ["easy", "normal", "hard", "insane"]
 ## Per difficulty (PLAN §2.7: higher levels only react faster and aim with
 ## less error; none sees through walls or aims perfectly):
 ## [reaction ticks, max turn rad/tick, tracking error rad, extra error rad
-## per m/s of target lateral speed, grenade chance per sighting].
+## per m/s of target lateral speed, grenade chance per sighting]. Aim errors
+## raised 1.5x at every level after playtests (bots hit too often).
 const TUNING := [
-	[30, 0.06, 0.07, 0.012, 0.05],
-	[15, 0.1, 0.035, 0.006, 0.2],
-	[9, 0.14, 0.022, 0.004, 0.25],
-	[5, 0.18, 0.014, 0.0025, 0.3],
+	[30, 0.06, 0.105, 0.018, 0.05],
+	[15, 0.1, 0.053, 0.009, 0.2],
+	[9, 0.14, 0.033, 0.006, 0.25],
+	[5, 0.18, 0.021, 0.004, 0.3],
 ]
 const VIEW_RANGE := 60.0
 const VIEW_COS := 0.45  ## ~127° field of view

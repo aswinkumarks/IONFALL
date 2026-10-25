@@ -27,6 +27,11 @@ var rig: CharacterRig
 var rig_style: String = ""
 var color := Color.WHITE
 var _label: Label3D
+## Under the nameplate: the shield while it holds, then health in red. One
+## texture redrawn when the value changes (one draw call per player).
+var _bar: Sprite3D
+var _bar_image: Image
+var _bar_key := -1
 static var _shape_textures: Dictionary = {}  ## team -> ImageTexture
 var _height: float = 1.8
 var _last_time: float = -1.0
@@ -37,6 +42,8 @@ var _shell_t: float = 0.0
 
 const SHIELD_SHADER := preload("res://presentation/shield.gdshader")
 const NAMEPLATE_RANGE := 30.0  ## metres
+## The bar under the nameplate, in texels (Sprite3D pixel_size 0.005: 0.6 m).
+const BAR_SIZE := Vector2i(120, 13)
 const SHELL_SECONDS := 0.3
 
 
@@ -60,6 +67,19 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	_label.visibility_range_end_margin = 4.0
 	_label.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	add_child(_label)
+	_bar_image = Image.create(BAR_SIZE.x, BAR_SIZE.y, false, Image.FORMAT_RGBA8)
+	_bar = Sprite3D.new()
+	_bar.texture = ImageTexture.create_from_image(_bar_image)
+	_bar.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_bar.pixel_size = 0.005
+	_bar.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	_bar.position.y = -0.2  # just under the name
+	_bar.no_depth_test = false
+	_bar.visibility_range_end = NAMEPLATE_RANGE
+	_bar.visibility_range_end_margin = 4.0
+	_bar.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	_label.add_child(_bar)
+	set_bar(Health.MAX_SHIELD, Health.MAX_HEALTH)
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.55
 	capsule.height = 2.1
@@ -101,10 +121,32 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 		rig.set_weapon(held.id)
 	rig.animate(cur, delta, _height)
 	_label.position.y = _height + 0.45
+	set_bar(cur.shield, cur.health)
 	var shimmer := 0.0
 	if cur.spawn_protection_ticks > 0:
 		shimmer = 0.6 + 0.6 * sin(time * 18.0)
 	rig.set_glow(shimmer)
+
+
+## The bar under the nameplate: the shield in the HUD's shield colour while
+## it holds, else health in red.
+func set_bar(p_shield: float, health: float) -> void:
+	var on_shield := p_shield > 0.0
+	var fraction := clampf((p_shield / Health.MAX_SHIELD) if on_shield else (health / Health.MAX_HEALTH), 0.0, 1.0)
+	var fill := roundi(fraction * (BAR_SIZE.x - 2))
+	var key := fill * 2 + (1 if on_shield else 0)
+	if key == _bar_key:
+		return
+	_bar_key = key
+	_bar_image.fill(Color(0.0, 0.0, 0.0, 0.6))
+	if fill > 0:
+		_bar_image.fill_rect(Rect2i(1, 1, fill, BAR_SIZE.y - 2), UiStyle.SHIELD if on_shield else UiStyle.DANGER)
+	(_bar.texture as ImageTexture).update(_bar_image)
+
+
+## No name or bar (the menu's runners).
+func hide_nameplate() -> void:
+	_label.visible = false
 
 
 ## Nameplate tint (TDM team colour).

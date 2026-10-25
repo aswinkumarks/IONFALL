@@ -138,7 +138,9 @@ static func pickup_spots() -> Array:
 ## CTF flag bases (PLAN §2.4): team 0 (west) and team 1 (east), on the floor
 ## at the ends of the core's lane.
 static func flag_bases() -> Array:
-	return [Vector3(-21, 0, 0), Vector3(21, 0, 0)]
+	# In front of the end modules (solid blocks at x = ±20; a base inside one
+	# couldn't be touched), clear of the spawns at x = ±14.5.
+	return [Vector3(-17, 0, 0), Vector3(17, 0, 0)]
 
 
 ## Hash of everything the presentation is built from.
