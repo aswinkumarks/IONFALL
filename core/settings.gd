@@ -18,6 +18,8 @@ const DEFAULTS := {
 		"bot_difficulty": "normal",  ## BotBrain.DIFFICULTY_IDS
 		"bots": 3,  ## bots next to you (single player, hosting), up to MatchConfig.max_bots()
 		"browser_players": false,  ## LAN hosts also take browsers over WebSocket (PLAN §3.20)
+		"team_names": ["", ""],  ## the host's team names ("" = the default), GameMode
+		"team_colors": [0, 1],  ## the host's team colours, GameMode.TEAM_PALETTE indices
 	},
 	"video": {
 		"display_mode": "windowed",  ## desktop: windowed / fullscreen / exclusive

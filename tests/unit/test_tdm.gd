@@ -79,3 +79,12 @@ func test_team_reaching_50_wins() -> void:
 
 func test_respawn_is_five_seconds() -> void:
 	assert_eq(server.world.respawn_ticks, 300)
+
+
+func test_lobby_teams_seat_players() -> void:
+	server.team_plan = {"host-uuid": 1}
+	var me := server.add_local_player("Host", 0, 0, 0, "host-uuid")
+	assert_eq(me.team, 1, "the host on the team it picked in the lobby")
+	server.bot_fill = 4
+	server.update_bot_fill()
+	assert_eq(server.team_counts(), PackedInt32Array([2, 2]), "bots fill around the picked teams")

@@ -164,7 +164,7 @@ func _draw_set(front: Vector3, right: Vector3) -> void:
 	for style: String in CharacterRig.SELECTABLE:
 		var v := PlayerVisual.new()
 		add_child(v)
-		v.setup("", false, GameMode.TEAM_COLORS[i % 2], 0, style)
+		v.setup("", false, GameMode.team_color(i % 2), 0, style)
 		v.global_position = front + right * (i - 1) * 0.5 - Vector3.UP
 		v.flash_hit(true)
 		i += 1

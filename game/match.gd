@@ -198,13 +198,19 @@ func _ready() -> void:
 		# The host's bots stay as players join; a spectator's place goes to one more.
 		server.bot_count = config.bots + (1 if config.spectate else 0)
 		server.lobby_after_match = config.from_lobby
+		server.team_plan = config.team_plan
+		server.team_names = config.team_names
+		server.team_colors = config.team_colors
+		GameMode.team_names = config.team_names
+		GameMode.team_colors = config.team_colors
 		server.match_over.connect(_back_to_lobby)
 		if config.spectate:
 			server.add_local_spectator()
 			input.enabled = false
 			touch.visible = false
 		else:
-			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary)
+			var me := server.add_local_player(config.player_name, config.character, config.color, config.primary,
+					MatchConfig.profile_uuid())
 			input.look_yaw = me.state.yaw
 		if config.online:
 			_info.text = tr("NET_ONLINE_HOSTING") % _online_code
@@ -386,7 +392,7 @@ func _ensure_arms() -> void:
 				character = p.character
 				pick = p.color
 	var team := _team_of(local_id())
-	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(local_id(), pick)
+	var color: Color = GameMode.team_color(team) if team < 2 else PlayerVisual.color_for(local_id(), pick)
 	if _arms_ready and color == _arms_color:
 		return
 	_arms_ready = true
@@ -947,13 +953,13 @@ func _update_objective() -> void:
 		var own: Variant = flags[my_team]
 		var enemy: Variant = flags[1 - my_team]
 		if enemy.carrier == local_id():
-			hud.set_objective(tr("CTF_CARRYING"), GameMode.TEAM_COLORS[1 - my_team])
+			hud.set_objective(tr("CTF_CARRYING"), GameMode.team_color(1 - my_team))
 		elif own.carrier != 0:
 			hud.set_objective(tr("CTF_OUR_FLAG_TAKEN") % _display_name(own.carrier), UiStyle.WARN)
 		elif _flag_dropped(own):
 			hud.set_objective(tr("CTF_OUR_FLAG_DROPPED") % ceili(_flag_return_ticks(own) / float(Sim.TICK_RATE)), UiStyle.WARN)
 		elif enemy.carrier != 0:
-			hud.set_objective(tr("CTF_WE_HAVE_FLAG") % _display_name(enemy.carrier), GameMode.TEAM_COLORS[my_team])
+			hud.set_objective(tr("CTF_WE_HAVE_FLAG") % _display_name(enemy.carrier), GameMode.team_color(my_team))
 		else:
 			hud.set_objective(tr("CTF_GOAL"), UiStyle.TEXT_DIM)
 	elif mode == GameMode.WAVES:
@@ -1078,7 +1084,7 @@ func _visual_for(id: int, display_name: String, is_bot: bool, character: int, co
 	var v: PlayerVisual = _visuals.get(id)
 	var style := CharacterRig.selectable_style(character)
 	var team := _team_of(id)
-	var color: Color = GameMode.TEAM_COLORS[team] if team < 2 else PlayerVisual.color_for(id, color_pick, is_bot)
+	var color: Color = GameMode.team_color(team) if team < 2 else PlayerVisual.color_for(id, color_pick, is_bot)
 	if v != null and (v.rig_style != style or v.color != color):
 		v.queue_free()
 		v = null
@@ -1236,16 +1242,16 @@ func _on_flag_event(e: Dictionary, me: int) -> void:
 	var who := _display_name(e.player) if e.player != 0 else tr("CTF_NOBODY")
 	var mine := team == _team_of(me)
 	var keys := {"take": "CTF_FEED_TAKE", "drop": "CTF_FEED_DROP", "return": "CTF_FEED_RETURN", "capture": "CTF_FEED_CAPTURE"}
-	var what: String = tr(keys[e.action]) % tr(GameMode.TEAM_KEYS[team])
+	var what: String = tr(keys[e.action]) % GameMode.team_name(team)
 	var carrier_team: int = 1 - team if e.action in ["take", "drop", "capture"] else team
-	_kill_feed.add_note(who, what, GameMode.TEAM_COLORS[carrier_team], e.player == me)
+	_kill_feed.add_note(who, what, GameMode.team_color(carrier_team), e.player == me)
 	if e.action == "take":
 		audio.cue("shield_break", "CAPTION_OUR_FLAG_TAKEN" if mine else "CAPTION_FLAG_TAKEN")
 	elif e.action == "capture":
 		audio.cue("kill_confirm", "CAPTION_FLAG_LOST" if mine else "CAPTION_FLAG_CAPTURED")
 	elif e.action == "return":
 		audio.cue("pickup", "CAPTION_FLAG_RETURNED")
-	effects.pickup_burst(e.position + Vector3(0.0, 0.8, 0.0), GameMode.TEAM_COLORS[team])
+	effects.pickup_burst(e.position + Vector3(0.0, 0.8, 0.0), GameMode.team_color(team))
 
 
 func _net_info() -> String:

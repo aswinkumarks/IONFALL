@@ -37,6 +37,12 @@ var minutes: int = 0  ## match length; 0: the mode's default
 ## Started from a lobby (LobbySession): the host serves the lobby's online
 ## game again; clients give the host a moment to open the match.
 var from_lobby: bool = false
+## Hosting from a lobby, team modes: profile uuid -> team (LobbySession).
+var team_plan: Dictionary = {}
+## Team modes: the host's names ("" = the default) and colours
+## (GameMode.TEAM_PALETTE) for the two teams.
+var team_names := PackedStringArray(["", ""])
+var team_colors := GameMode.DEFAULT_TEAM_COLORS
 ## Watch instead of playing (spectator mode): OFFLINE, the bots only; JOIN,
 ## as a network spectator (no player, every combatant seen remotely).
 var spectate: bool = false
@@ -105,6 +111,12 @@ static func make(p_mode: int, p_name: String, p_bots: int = 0, p_address: String
 	var level: Variant = Settings.get_value("profile", "bot_difficulty")
 	c.bot_difficulty = maxi(BotBrain.DIFFICULTY_IDS.find(Platform.get_user_arg("--bot-difficulty",
 			level if level is String else "normal")), 0)
+	var names: Variant = Settings.get_value("profile", "team_names")
+	if names is Array and names.size() == 2:
+		c.team_names = PackedStringArray([GameMode.clean_team_name(str(names[0])), GameMode.clean_team_name(str(names[1]))])
+	var colors: Variant = Settings.get_value("profile", "team_colors")
+	if colors is Array and colors.size() == 2 and colors.all(func(v: Variant) -> bool: return v is int):
+		c.team_colors = GameMode.clean_team_colors(PackedInt32Array(colors))
 	if Platform.get_user_arg("--port").is_valid_int():  # dev: hosts and joins on another port
 		c.port = clampi(Platform.get_user_arg("--port").to_int(), 1, 65535)
 	if Platform.get_user_arg("--bots").is_valid_int():  # dev override for quick launches

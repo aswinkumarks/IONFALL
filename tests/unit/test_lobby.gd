@@ -1,6 +1,6 @@
 extends GutTest
-## Pre-match lobby (LobbySession): members, host-only settings and START,
-## over real ENet; and the LOBBY / START wire formats.
+## Pre-match lobby (LobbySession): members, host-only settings, teams and
+## START, over real ENet; and the LOBBY / START / TEAM_PICK wire formats.
 
 var host: LobbySession
 var port: int
@@ -21,7 +21,8 @@ func _join(player_name: String) -> LobbySession:
 
 
 func test_lobby_and_start_round_trip() -> void:
-	var members := [{"name": "Hosty", "host": true}, {"name": "Alpha", "host": false}]
+	var members := [{"id": 1, "name": "Hosty", "host": true, "team": 0},
+			{"id": 123456789, "name": "Alpha", "host": false, "team": 1}]
 	var l := Protocol.decode_lobby(Protocol.encode_lobby("spire", GameMode.TDM, 15, 8, members))
 	assert_eq(l.map, "spire")
 	assert_eq(l.mode, GameMode.TDM)
@@ -74,7 +75,7 @@ func test_full_lobby_rejects_and_unknown_settings_fall_back() -> void:
 
 
 func test_lobby_carries_the_bot_settings() -> void:
-	var members := [{"name": "Host", "host": true}]
+	var members := [{"id": 1, "name": "Host", "host": true, "team": 0}]
 	var l := Protocol.decode_lobby(Protocol.encode_lobby("foundry", GameMode.CTF, 10, 16, members, 7, 2, true))
 	assert_eq(l.bots, 7)
 	assert_eq(l.bot_difficulty, 2)
@@ -93,3 +94,86 @@ func test_bot_counts_stay_inside_the_host_cap() -> void:
 	assert_true(MatchConfig.friendly_fire_applies(GameMode.CTF))
 	assert_false(MatchConfig.friendly_fire_applies(GameMode.FFA))
 	assert_false(MatchConfig.friendly_fire_applies(GameMode.WAVES))
+
+
+func _teams(s: LobbySession) -> Array:
+	return s.members.map(func(m: Dictionary) -> int: return m.team)
+
+
+func test_joiners_fill_the_smaller_team_and_can_switch() -> void:
+	host.configure("station", GameMode.TDM, 10)
+	var a := _join("Alpha")
+	var b := _join("Bravo")
+	await wait_until(func() -> bool: return b.members.size() == 3, 5.0)
+	assert_eq(_teams(host), [0, 1, 0], "each joiner on the smaller team")
+	assert_eq(b.team_of(b.my_id()), 0, "a member knows its own team")
+	b.set_team(b.my_id(), 1)
+	await wait_until(func() -> bool: return _teams(a) == [0, 1, 1], 3.0)
+	assert_eq(_teams(host), [0, 1, 1], "a player switches itself")
+	a.set_team(b.my_id(), 0)
+	await wait_frames(10)
+	assert_eq(_teams(host), [0, 1, 1], "but nobody else")
+	host.set_team(b.my_id(), 0)
+	assert_eq(_teams(host), [0, 1, 0], "the host moves anyone")
+
+
+func test_a_full_team_takes_nobody_more() -> void:
+	host.configure("station", GameMode.TDM, 10)  # 4 places: 2 a team
+	var a := _join("Alpha")
+	var b := _join("Bravo")
+	await wait_until(func() -> bool: return host.members.size() == 3, 5.0)
+	assert_eq(host.team_cap(), 2)
+	host.set_team(LobbySession.HOST_ID, 1)
+	assert_eq(_teams(host), [1, 1, 0], "team 1 had room")
+	host.set_team(b.my_id(), 1)
+	assert_eq(_teams(host), [1, 1, 0], "now it is full")
+	await wait_until(func() -> bool: return _teams(a) == [1, 1, 0], 3.0)
+	assert_eq(_teams(a), [1, 1, 0], "members see the move")
+
+
+func test_the_team_plan_seats_players_by_uuid() -> void:
+	host.host_uuid = "uuid-Hosty"
+	var a := _join("Alpha")
+	await wait_until(func() -> bool: return host.members.size() == 2, 5.0)
+	host.set_team(a.my_id(), 0)
+	assert_eq(host.team_plan_now(), {"uuid-Hosty": 0, "uuid-Alpha": 0})
+	assert_true(LobbySession.has_teams(GameMode.CTF))
+	assert_false(LobbySession.has_teams(GameMode.WAVES), "co-op: one team of humans")
+	assert_eq(Protocol.decode_team_pick(Protocol.encode_team_pick(1)), 1)
+	assert_eq(Protocol.decode_team_pick(PackedByteArray([Protocol.Msg.TEAM_PICK, 2])), -1, "only two teams")
+
+
+func test_back_from_a_match_players_keep_their_teams() -> void:
+	var again := LobbySession.new()
+	add_child_autofree(again)
+	again.team_plan = {"uuid-Alpha": 1, "uuid-Bravo": 1}
+	var p := port + 1
+	assert_eq(again.host("Hosty", 8, p), OK)
+	for n in ["Alpha", "Bravo"]:
+		var c := LobbySession.new()
+		add_child_autofree(c)
+		c.join("127.0.0.1", p, n, "uuid-" + n)
+	await wait_until(func() -> bool: return again.members.size() == 3, 5.0)
+	assert_eq(_teams(again), [0, 1, 1])
+
+
+func test_the_host_names_and_colours_the_teams() -> void:
+	var a := _join("Alpha")
+	await wait_until(func() -> bool: return a.members.size() == 2, 5.0)
+	host.set_team_style(0, "  Wolves\n", 3)
+	await wait_until(func() -> bool: return a.team_names[0] == "Wolves", 3.0)
+	assert_eq(a.team_colors, PackedInt32Array([3, 1]))
+	assert_eq(GameMode.team_name(0, a.team_names), "Wolves")
+	assert_eq(GameMode.team_name(1, a.team_names), tr("TEAM_ORANGE"), "unnamed: the default")
+	host.set_team_style(1, "Ravens", 3)
+	assert_eq(host.team_colors, PackedInt32Array([3, 1]), "both teams can't share a colour")
+	assert_eq(host.team_names[1], "Ravens")
+	a.set_team_style(0, "Hijack", 5)
+	assert_eq(a.team_names[0], "Wolves", "only the host styles teams")
+	var w := Protocol.decode_welcome(Protocol.encode_welcome(2, 1, 0, 0, 0, 0, "station", 0,
+			PackedStringArray(["Wolves", ""]), PackedInt32Array([3, 1])))
+	assert_eq(w.team_names, PackedStringArray(["Wolves", ""]))
+	assert_eq(w.team_colors, PackedInt32Array([3, 1]))
+	assert_eq(GameMode.clean_team_colors(PackedInt32Array([2, 2])), GameMode.DEFAULT_TEAM_COLORS)
+	assert_eq(GameMode.clean_team_colors(PackedInt32Array([0, 99])), GameMode.DEFAULT_TEAM_COLORS)
+	assert_eq(GameMode.clean_team_name("x".repeat(40)).length(), GameMode.MAX_TEAM_NAME)

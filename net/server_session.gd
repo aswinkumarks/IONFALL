@@ -83,6 +83,13 @@ var map_id: String = Maps.DEFAULT  ## sent in WELCOME and beacons
 var time_limit_ticks: int = Balance.MODES.default_time_limit_ticks
 var max_combatants: int = Protocol.MAX_PEERS
 var lobby_after_match: bool = false
+## Team modes: the teams picked in the lobby, profile uuid -> team. Players
+## not in it join the smaller team.
+var team_plan: Dictionary = {}
+## The host's names ("" = the default) and colours (GameMode.TEAM_PALETTE)
+## for the two teams, sent in WELCOME.
+var team_names := PackedStringArray(["", ""])
+var team_colors := GameMode.DEFAULT_TEAM_COLORS
 ## Bots fill the match up to this many combatants and leave as humans join.
 var bot_fill: int = 0
 ## When 0 or more (the host's bot count): this many bots play alongside
@@ -185,10 +192,11 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 	return OK
 
 
-func add_local_player(player_name: String, character: int = 0, color: int = 0, primary: int = 0) -> SimPlayer:
+func add_local_player(player_name: String, character: int = 0, color: int = 0, primary: int = 0,
+		uuid: String = "") -> SimPlayer:
 	local_player_id = LOCAL_PLAYER_ID
 	var p := world.add_player(local_player_id, _loadout_for(primary), player_name, false)
-	_join_team(p)
+	_join_team(p, team_plan.get(uuid, -1))
 	p.character = character
 	p.color = color
 	stats.add_player(local_player_id, player_name, false, world.tick)
@@ -263,7 +271,7 @@ func _join_team(p: SimPlayer, team: int = -1) -> void:
 		return
 	if game_mode == GameMode.WAVES:  # humans against the waves
 		team = GameMode.WAVE_TEAM if p.is_bot else GameMode.HUMANS
-	if team < 0:
+	if team < 0 or team > 1:
 		var counts := team_counts(p.net_id)
 		team = 0 if counts[0] < counts[1] or (counts[0] == counts[1] and world.team_scores[0] <= world.team_scores[1]) else 1
 	p.team = team
@@ -744,7 +752,8 @@ func _on_peer_joined(id: int) -> void:
 	if c == null:
 		transport.kick(id)
 		return
-	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, map_id, c.token),
+	transport.send(id, Protocol.encode_welcome(c.player_id, match_id, phase, phase_seq, completed_tick(), world.match_seed, map_id, c.token,
+			team_names, team_colors),
 			Protocol.CH_CONTROL, true)
 	transport.send(id, Protocol.encode_phase(match_id, phase_seq, phase, world.tick, phase_ends_tick, world.match_seed),
 			Protocol.CH_CONTROL, true)
@@ -803,7 +812,7 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			elif not c.loaded:
 				c.loaded = true
 				var joined := world.add_player(c.player_id, _loadout_for(c.primary), c.name, false)
-				_join_team(joined, c.restored_team)
+				_join_team(joined, c.restored_team if c.restored_team >= 0 else team_plan.get(c.uuid, -1))
 				joined.character = c.character
 				joined.color = c.color
 				stats.add_player(c.player_id, c.name, false, world.tick)

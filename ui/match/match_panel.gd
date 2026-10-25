@@ -91,10 +91,10 @@ func show_results(results: Dictionary, local_id: int) -> void:
 			title.add_theme_color_override("font_color", UiStyle.TEXT)
 		elif wt == my_team:
 			title.text = tr("RESULTS_VICTORY").to_upper()
-			title.add_theme_color_override("font_color", GameMode.TEAM_COLORS[wt])
+			title.add_theme_color_override("font_color", GameMode.team_color(wt))
 		else:
-			title.text = (tr("RESULTS_TEAM_WINS") % tr(GameMode.TEAM_KEYS[wt])).to_upper()
-			title.add_theme_color_override("font_color", GameMode.TEAM_COLORS[wt])
+			title.text = (tr("RESULTS_TEAM_WINS") % GameMode.team_name(wt)).to_upper()
+			title.add_theme_color_override("font_color", GameMode.team_color(wt))
 	elif results.winner == 0:
 		title.text = tr("RESULTS_DRAW").to_upper()
 		title.add_theme_color_override("font_color", UiStyle.TEXT)
@@ -134,13 +134,13 @@ static func _sorted(players: Array) -> Array:
 
 
 static func _team_color(team: int) -> Color:
-	return GameMode.TEAM_COLORS[team] if team < GameMode.TEAM_COLORS.size() else UiStyle.TEXT
+	return GameMode.team_color(team) if team < 2 else UiStyle.TEXT
 
 
 ## "CYAN 12 · 9 ORANGE"
 func _team_line(team_scores: PackedInt32Array) -> String:
-	return "%s %d  ·  %d %s" % [tr(GameMode.TEAM_KEYS[0]).to_upper(), team_scores[0], team_scores[1],
-			tr(GameMode.TEAM_KEYS[1]).to_upper()]
+	return "%s %d  ·  %d %s" % [GameMode.team_name(0).to_upper(), team_scores[0], team_scores[1],
+			GameMode.team_name(1).to_upper()]
 
 
 ## XP gained this match: the bar fills from the old total to the new one,
