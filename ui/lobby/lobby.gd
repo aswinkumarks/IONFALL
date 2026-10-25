@@ -21,6 +21,7 @@ var config: MatchConfig
 var session := LobbySession.new()
 var _host: bool = false
 var _leaving: bool = false
+var _to_match: bool = false  ## on the way into the match
 var _joined: bool = false  ## client: the first LOBBY arrived
 var _starting: bool = false
 var _attempt: int = 0
@@ -310,7 +311,7 @@ func _on_closed(reason: String) -> void:
 
 
 func _fail(reason: String) -> void:
-	if _leaving:
+	if _leaving or _to_match:
 		return
 	Platform.perf_log("LOBBY left: %s" % tr(reason))
 	MatchConfig.last_error = reason
@@ -318,14 +319,19 @@ func _fail(reason: String) -> void:
 
 
 func _back() -> void:
+	if _leaving or _to_match:
+		return
 	_leaving = true
 	session.leave()
 	get_tree().change_scene_to_file.call_deferred(MAIN_MENU)
 
 
 func _go(scene: String) -> void:
+	if _to_match:
+		return
 	MatchConfig.pending = config
-	get_tree().change_scene_to_file.call_deferred(scene)
+	_to_match = true  # the cover takes two frames to show; nothing may turn back now
+	LoadingCover.change_scene(get_tree(), scene)
 
 
 func _unhandled_input(event: InputEvent) -> void:
