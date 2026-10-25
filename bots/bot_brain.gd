@@ -502,7 +502,7 @@ func _trigger(tick: int, p: SimPlayer, target: SimPlayer, want_yaw: float, want_
 	if s.mag[w] <= 0:
 		if w == SLOT_PRIMARY and s.mag[SLOT_SIDEARM] > 0:
 			_slot = SLOT_SIDEARM
-		elif w == SLOT_SIDEARM and (s.mag[SLOT_PRIMARY] > 0 or s.reserve[SLOT_PRIMARY] > 0):
+		elif w == SLOT_SIDEARM and (s.mag[SLOT_PRIMARY] > 0 or s.has_reserve(SLOT_PRIMARY)):
 			_slot = SLOT_PRIMARY
 		elif s.reload[w] == 0:
 			_press(Action.RELOAD)
@@ -523,7 +523,7 @@ func _manage_weapons_out_of_combat(p: SimPlayer) -> void:
 	_slot = SLOT_PRIMARY
 	var w := s.weapon_slot
 	if w == SLOT_PRIMARY and s.reload[w] == 0 and s.mag[w] * 2 < s.weapon(w).mag_size \
-			and s.reserve[w] > 0:
+			and s.has_reserve(w):
 		_press(Action.RELOAD)
 
 

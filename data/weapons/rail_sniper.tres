@@ -32,3 +32,4 @@ recoil_max_degrees = 8.0
 recoil_recovery_delay_ticks = 10
 recoil_recovery_degrees_per_second = 16.0
 recoil_scoped = 0.6
+infinite_reserve = false

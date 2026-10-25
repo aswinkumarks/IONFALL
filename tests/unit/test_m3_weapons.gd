@@ -71,7 +71,7 @@ func test_scatter_gun_reloads_one_shell_at_a_time() -> void:
 	_run(1, 0, [Action.RELOAD])
 	_run(Weapons.at(Weapons.SCATTER).reload_ticks)
 	assert_eq(s.mag[0], 3, "one shell per 30 ticks")
-	assert_eq(s.reserve[0], reserve - 1)
+	assert_eq(s.reserve[0], reserve, "a loadout weapon's reserve never runs down")
 	_run(Weapons.at(Weapons.SCATTER).reload_ticks * 3)
 	assert_eq(s.mag[0], 6, "keeps going until full")
 
@@ -153,3 +153,23 @@ func test_spawns_avoid_enemy_sight_and_live_grenades() -> void:
 	for i in 40:
 		assert_ne(world._choose_spawn(1).origin, best, "not next to a live grenade")
 	world.projectiles.clear()
+
+
+func test_loadout_weapons_never_run_out_and_power_weapons_do() -> void:
+	var s := shooter.state
+	s.mag[0] = 0
+	s.reserve[0] = 0
+	assert_true(s.has_reserve(0), "a loadout weapon always reloads")
+	_run(1, 0, [Action.RELOAD])
+	_run(Weapons.at(Weapons.SCATTER).reload_ticks * 7)
+	assert_eq(s.mag[0], Weapons.at(Weapons.SCATTER).mag_size, "full from an empty reserve")
+	s.set_slot(0, Weapons.RAIL, 0, 0)
+	assert_false(s.has_reserve(0), "the rail's ammo is what it came with")
+	_run(1, 0, [Action.RELOAD])
+	_run(Weapons.at(Weapons.RAIL).reload_ticks + 5)
+	assert_eq(s.mag[0], 0, "no reload from an empty reserve")
+	for w: WeaponData in Weapons.ALL:
+		if w.is_power_weapon:
+			assert_false(w.infinite_reserve, "%s: limited ammo" % w.id)
+		elif w.mag_size > 0 and w.id != &"melee" and w.id != &"frag_grenade":
+			assert_true(w.infinite_reserve, "%s: infinite reserve" % w.id)

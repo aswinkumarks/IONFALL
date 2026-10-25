@@ -674,7 +674,8 @@ func _wants(p: SimPlayer, it: Item, interact: bool) -> bool:
 		return s.grenades < Balance.PLAYER.grenades_per_life
 	var slot := s.weapons.find(it.weapon)
 	if slot >= 0:
-		return s.reserve[slot] < Weapons.at(it.weapon).reserve
+		var w := Weapons.at(it.weapon)
+		return not w.infinite_reserve and s.reserve[slot] < w.reserve
 	return interact or not needs_interact(s, it.weapon)
 
 
