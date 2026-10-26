@@ -53,12 +53,16 @@ const MAX_PULL_BACK := 0.08
 ## in front, both hands on it, the chest squarer.
 const HOLDS := {&"mag_pistol": [Vector3(0.14, -0.04, -0.64), deg_to_rad(30.0)]}
 ## Hand on the handle (_fp_hand): how far the fingers point down from the
-## barrel (tan of the angle), and where the hand's palm centre goes relative
-## to the handle (metres, weapon axes: to its right). Slightly left of the
-## handle's middle: the knuckles then sit about 2 cm to its right, closed
-## round a slim grip.
-const FP_FINGER_DROP := 0.45
-const FP_PALM_AT := Vector3(-0.02, 0.0, 0.0)
+## barrel and in across it (tan of the angles), and where the hand's palm
+## centre goes relative to the handle (metres, weapon axes: right, up,
+## back). Nearly level and turned in, the fingers wrap the grip's front
+## below the trigger while the wrist sits low and out to the right; pointing
+## down from the grip's middle, they put the wrist up in the receiver (and
+## a bullpup's magazine). Slightly left of, below and behind the handle's
+## middle: the knuckles close round a slim grip.
+const FP_FINGER_DROP := 0.2
+const FP_FINGER_IN := 0.3
+const FP_PALM_AT := Vector3(-0.015, -0.005, 0.01)
 ## The left hand on the fore-end (weapon axes): fingers forward and across
 ## to the right, palm against its left side. (Palm up would roll the forearm
 ## half a turn from the rest pose and wring the elbow.)
@@ -578,8 +582,9 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		# Fingers forward and a little down, palm against the handle's right
 		# side; the rig curls the fingers around it.
 		var w := weapon.basis.orthonormalized()
-		var fingers := (w * Vector3(0.0, -FP_FINGER_DROP, -1.0)).normalized()
+		var fingers := (w * Vector3(-FP_FINGER_IN, -FP_FINGER_DROP, -1.0)).normalized()
 		var palm := -w.x
+		palm = (palm - fingers * palm.dot(fingers)).normalized()
 		var hand_fingers: Vector3 = (fp[0] as Vector3).normalized()
 		var hand_palm: Vector3 = (fp[1] as Vector3).normalized()
 		var local := Basis(hand_fingers.cross(hand_palm), hand_fingers, hand_palm)

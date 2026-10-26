@@ -35,8 +35,9 @@ const MESHY_UPPER := ["Spine01", "Spine", "neck", "Head", "LeftShoulder", "LeftA
 		"RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const SAMPLE_FPS := 30.0
 ## Finger curl in degrees per joint (base, middle, tip), towards the palm:
-## the right hand closes around the grip, the left cups the fore-end.
-const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [60.0, 75.0, 45.0], "Middle": [70.0, 80.0, 50.0],
+## the right hand closes around the grip (the index finger less, on the
+## trigger), the left cups the fore-end.
+const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [25.0, 50.0, 35.0], "Middle": [70.0, 80.0, 50.0],
 		"Ring": [75.0, 80.0, 50.0], "Pinky": [80.0, 80.0, 50.0]}
 const SUPPORT_CURL := {"Thumb": [10.0, 20.0, 15.0], "Index": [35.0, 40.0, 25.0], "Middle": [40.0, 45.0, 30.0],
 		"Ring": [45.0, 45.0, 30.0], "Pinky": [50.0, 45.0, 30.0]}
