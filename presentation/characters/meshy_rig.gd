@@ -40,6 +40,11 @@ const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [60.0, 75.0, 45.0], "M
 		"Ring": [75.0, 80.0, 50.0], "Pinky": [80.0, 80.0, 50.0]}
 const SUPPORT_CURL := {"Thumb": [10.0, 20.0, 15.0], "Index": [35.0, 40.0, 25.0], "Middle": [40.0, 45.0, 30.0],
 		"Ring": [45.0, 45.0, 30.0], "Pinky": [50.0, 45.0, 30.0]}
+## First person the left hand cradles the fore-end from below
+## (ArmoredRig.FP_SUPPORT_PALM): its fingers close further, round the far
+## side.
+const FP_SUPPORT_CURL := {"Thumb": [14.0, 28.0, 21.0], "Index": [49.0, 56.0, 35.0], "Middle": [56.0, 63.0, 42.0],
+		"Ring": [63.0, 63.0, 42.0], "Pinky": [70.0, 63.0, 42.0]}
 ## Where the palm's centre is from the hand bone (cm), along the hand
 ## frame's axes (_hand_frame: thumb side, fingers, palm normal).
 const FP_PALM_CENTRE := Vector3(1.0, 8.0, 2.0)
@@ -51,6 +56,10 @@ const FP_FORWARD := {"spacer": 0.05}
 ## Third person: the slim characters bring a long gun back further for the
 ## left hand to reach its fore-end (ArmoredRig.MAX_PULL_BACK, metres).
 const PULL_BACK := {"operative": 0.15, "spacer": 0.15}
+## First person: the Spacer's long, spiked glove fingers stood out past the
+## weapon even closed; its hands are drawn smaller still
+## (ArmoredRig.FP_HAND_SCALE).
+const FP_HAND_SCALES := {"spacer": 0.65}
 
 static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
@@ -127,7 +136,7 @@ func setup(color: Color) -> void:
 ## after make_first_person resets the pose).
 func _curl_hands() -> void:
 	_curl(_skeleton, "Right", GRIP_CURL)
-	_curl(_skeleton, "Left", SUPPORT_CURL)
+	_curl(_skeleton, "Left", SUPPORT_CURL if _tree.active else FP_SUPPORT_CURL)
 
 
 ## `side`'s hand frame in its bone's space, from the finger bones: columns
@@ -199,6 +208,10 @@ static func _add_finger_bones(sk: Skeleton3D, skin: Skin) -> void:
 
 func head_position() -> Vector3:
 	return super() + Vector3(0.0, 0.0, FP_FORWARD.get(character, 0.0))
+
+
+func _fp_hand_scale() -> float:
+	return FP_HAND_SCALES.get(character, super())
 
 
 func _max_pull_back() -> float:
