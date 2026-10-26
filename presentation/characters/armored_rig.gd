@@ -74,7 +74,17 @@ const MAX_FOREARM_TWIST := deg_to_rad(90.0)
 const SUPPORT_REACH := 0.96
 ## First person: the top of each upper arm (this fraction, from the
 ## shoulder) is cut away with the body, so the stance never shows its edge.
-const FP_SHOULDER_CUT := 0.3
+const FP_SHOULDER_CUT := 0.75
+## First person: the hands (and their fingers) are drawn this much smaller
+## (_fp_hand_scale). Life-size gloves this near the eye dwarfed the weapon,
+## and their fingers stood out round it.
+const FP_HAND_SCALE := 0.75
+## First person: the left hand cradles the fore-end from below (weapon
+## axes): fingers forward and a little across, palm up and towards it, so
+## from the eye the weapon hides it. Held against its side as in third
+## person, the hand stood out beside the weapon.
+const FP_SUPPORT_FINGERS := Vector3(0.3, 0.0, -1.0)
+const FP_SUPPORT_PALM := Vector3(0.8, 0.6, 0.0)
 
 static var _armor_cache: Dictionary = {}  ## "mesh"/"skin" built once per skeleton layout
 static var _library: AnimationLibrary
@@ -89,6 +99,7 @@ var _body_mat := StandardMaterial3D.new()
 var _hand: BoneAttachment3D
 var _weapon_id: StringName = &""
 var _weapon_node: Node3D
+var _hand_scale := 1.0  ## _fp_hand_scale() once first person
 var _twist: float = 0.0
 var _color := Color.WHITE
 var _glow: float = 0.0
@@ -574,11 +585,11 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		var local := Basis(hand_fingers.cross(hand_palm), hand_fingers, hand_palm)
 		hand_basis = Basis(fingers.cross(palm), fingers, palm) * local.inverse()
 		var centre: Vector3 = fp[2]
-		hand_pos = handle + w * FP_PALM_AT - hand_basis * (centre / unit)
+		hand_pos = handle + w * FP_PALM_AT - hand_basis * (centre * _hand_scale / unit)
 		# The left hand on the fore-end: palm against its side, fingers
 		# forward and across, curled round it.
-		var s_fingers := (w * SUPPORT_FINGERS).normalized()
-		var s_palm := w * SUPPORT_PALM
+		var s_fingers := (w * (SUPPORT_FINGERS if _tree.active else FP_SUPPORT_FINGERS)).normalized()
+		var s_palm := w * (SUPPORT_PALM if _tree.active else FP_SUPPORT_PALM)
 		s_palm = (s_palm - s_fingers * s_palm.dot(s_fingers)).normalized()
 		var s_local: Basis = fp[3] if fp.size() > 3 else local
 		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * s_local.inverse()
@@ -591,6 +602,11 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 			TP_RIGHT_ELBOW if _tree.active else Vector3(-0.5, -1.0, -0.6))
 	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(),
 			TP_LEFT_ELBOW if _tree.active else Vector3(0.3, -1.0, -0.8))
+
+
+## FP_HAND_SCALE, for this rig's hands.
+func _fp_hand_scale() -> float:
+	return FP_HAND_SCALE
 
 
 ## MAX_PULL_BACK, for this rig's build.
@@ -698,6 +714,9 @@ func _reach(chain: Array, target: Vector3, hand_basis: Basis, pole: Vector3) -> 
 func make_first_person() -> bool:
 	_tree.active = false
 	_skeleton.reset_bone_poses()
+	_hand_scale = _fp_hand_scale()
+	for chain: Array in _arm_chains():
+		_skeleton.set_bone_pose_scale(_skeleton.find_bone(chain[2]), Vector3.ONE * _hand_scale)
 	_model.rotation.y = PI
 	var keep := {}
 	for root: String in _arm_roots():
