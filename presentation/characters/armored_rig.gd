@@ -32,11 +32,15 @@ const HEAD_PITCH := 0.6
 ## reach for it (HoldWeapon), the left hand to the model's Support marker.
 ## Out to the right of the shoulder and below it, so the right forearm and
 ## hand stay clear of the chest (checked against the meshes in Blender).
-const SHOULDER_TO_HANDLE := Vector3(0.18, -0.15, -0.45)
+const SHOULDER_TO_HANDLE := Vector3(0.18, -0.12, -0.47)
 ## Third person: the right elbow points out to the side, a little down and
 ## forward (skeleton space: the body faces +Z, its right is -X), as when
 ## shouldering a rifle; down and back, it folded the forearm into the torso.
 const TP_RIGHT_ELBOW := Vector3(-1.0, -0.6, 0.5)
+## Third person: the left elbow points out to the left and a little down
+## and forward, keeping the forearm off the chest as it reaches across for
+## the fore-end; down and back, it lay along the Sentinel's chest plate.
+const TP_LEFT_ELBOW := Vector3(1.0, -0.4, 0.2)
 ## Holding a weapon the chest turns this far to the right (a bladed stance),
 ## bringing the left shoulder forward so the left hand reaches the fore-end.
 const BLADE := deg_to_rad(40.0)
@@ -47,7 +51,7 @@ const MAX_PULL_BACK := 0.08
 ## Weapons held otherwise than shouldered: id -> [handle from the right
 ## shoulder (as SHOULDER_TO_HANDLE), chest turn]. The pistol is pushed out
 ## in front, both hands on it, the chest squarer.
-const HOLDS := {&"mag_pistol": [Vector3(0.16, -0.04, -0.66), deg_to_rad(20.0)]}
+const HOLDS := {&"mag_pistol": [Vector3(0.14, -0.04, -0.64), deg_to_rad(30.0)]}
 ## Hand on the handle (_fp_hand): how far the fingers point down from the
 ## barrel (tan of the angle), and where the hand's palm centre goes relative
 ## to the handle (metres, weapon axes: to its right). Slightly left of the
@@ -580,10 +584,13 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * s_local.inverse()
 	var chains := _arm_chains()
 	support = to_skel.affine_inverse() * _within_reach(chains[1], to_skel * support, to_skel * handle)
-	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
+	# Elbows down, out and slightly back in first person; third person turns
+	# them as TP_RIGHT_ELBOW and TP_LEFT_ELBOW (skeleton space: the body faces
+	# +Z, its right is -X).
 	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(),
 			TP_RIGHT_ELBOW if _tree.active else Vector3(-0.5, -1.0, -0.6))
-	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
+	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(),
+			TP_LEFT_ELBOW if _tree.active else Vector3(0.3, -1.0, -0.8))
 
 
 ## MAX_PULL_BACK, for this rig's build.
