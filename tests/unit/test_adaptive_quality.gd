@@ -6,9 +6,10 @@ var _saved: Dictionary = {}
 
 
 func before_each() -> void:
-	for k in ["quality", "render_scale", "effects", "glow", "shadows"]:
+	for k in ["quality", "render_scale", "effects", "glow", "shadows", "anti_aliasing"]:
 		_saved[k] = Settings.get_value("video", k)
 	Settings.set_value("video", "quality", "high")
+	Settings.set_value("video", "anti_aliasing", "off")
 
 
 func after_each() -> void:
@@ -53,6 +54,17 @@ func test_heat_steps_down_without_slow_frames_then_order() -> void:
 	assert_true(Settings.video("glow"), "glow is never touched")
 	assert_false(Settings.video("shadows"))
 	assert_eq(AdaptiveQuality.step_down(), "", "nothing left to lower")
+
+
+## On "auto", MSAA goes first (phones' Medium has 2x; it is the cheapest
+## thing to give up); a chosen anti-aliasing mode is left alone.
+func test_msaa_steps_down_first_on_auto() -> void:
+	Settings.set_value("video", "anti_aliasing", "auto")
+	assert_eq(AdaptiveQuality.step_down(), "msaa=0")
+	assert_eq(int(Settings.video("msaa")), 0)
+	assert_eq(AdaptiveQuality.step_down(), "render_scale=0.9")
+	Settings.set_value("video", "anti_aliasing", "msaa_2x")
+	assert_eq(AdaptiveQuality.step_down(), "render_scale=0.9", "the player's choice stays")
 
 
 func test_headroom_near_throttling_counts_as_hot() -> void:

@@ -83,6 +83,7 @@ corridor they turned grey).
 | Debanding | `project.godot` |
 | Specular anti-aliasing: roughness raised where the normal map varies within a texel (less shimmer at 0.6 render scale), baked at import | the ORM / metal-rough textures of the kit, characters and weapons |
 | Anti-aliasing setting: Auto (the preset's) / Off / FXAA / MSAA 2× / MSAA 4× | `Settings.anti_aliasing_for`, Video tab |
+| Phone Medium uses 2× MSAA on Auto (tile-based GPUs resolve it in tile memory). The adaptive governor's first step-down turns it off, before render scale, so a phone that can't afford it loses it after 30 s of slow frames or on thermal pressure. A mode the player picked stays | `Settings.MOBILE_EXTRAS`, `AdaptiveQuality.step_down` |
 | Blob shadows under characters when realtime shadows are off (Low, phone Medium) | `BlobShadows`: one MultiMesh draw, a floor ray per character, fading with height; compiled in the warm-up |
 
 ## Download and memory
@@ -109,9 +110,11 @@ or script errors (warm-up 0.5–0.7 s).
    `--play --autopilot --aa-bench --perf-log --aa-bench-quit` (AaBench).
    After 20 s it runs each anti-aliasing mode for 20 s, twice, with the
    adaptive governor held still, and logs one `AA_BENCH` line per mode
-   (GPU and frame p50/p95). If MSAA 2× costs about what FXAA did
-   (0.5 ms, m4.md) or less, make it phone Medium's default
-   (`QUALITY.medium.msaa = 1`). The run works end to end here, on software
-   Vulkan, whose numbers say nothing about a phone GPU.
+   (GPU and frame p50/p95). Phone Medium now defaults to MSAA 2×, with
+   the governor as a safety net. If the bench shows MSAA 2× costing much
+   more than FXAA did (0.5 ms, m4.md), remove `"msaa": 1` from
+   `Settings.MOBILE_EXTRAS`. The run works end to end here on software
+   Vulkan, but those numbers say nothing about a phone GPU, and no
+   on-device run has been made yet.
 3. Check that the blob shadows read well at the phone's brightness, and
    the AgX grade on the phone's panel.

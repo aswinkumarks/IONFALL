@@ -180,7 +180,8 @@ func apply_video() -> void:
 	else:
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	root.scaling_3d_scale = scale
-	var aa := anti_aliasing_for(str(get_value("video", "anti_aliasing")), preset)
+	# "auto" follows the preset's MSAA, or the governor's step-down of it.
+	var aa := anti_aliasing_for(str(get_value("video", "anti_aliasing")), preset.merged({"msaa": video("msaa")}, true))
 	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][aa.x]
 	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if aa.y == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	root.anisotropic_filtering_level = preset.aniso
@@ -314,8 +315,11 @@ const QUALITY := {
 }
 ## Phone-only changes to a preset's extras. The reflection probe costs the
 ## Mi 11X ~0.9 ms of GPU time, so phones leave it off on Medium; desktops
-## keep it (m4.md).
-const MOBILE_EXTRAS := {"medium": {"probe": false}}
+## keep it (m4.md). Phones get 2x MSAA on Medium: on tile-based GPUs it
+## resolves in tile memory, and at 0.6 render scale the edges need it. If the
+## phone can't afford it, AdaptiveQuality turns it off first (`--aa-bench`
+## measures its cost on the device).
+const MOBILE_EXTRAS := {"medium": {"probe": false, "msaa": 1}}
 const QUALITY_NAMES := ["low", "medium", "high", "ultra", "custom"]
 const PRESET_KEYS := ["render_scale", "shadows", "glow", "effects"]
 

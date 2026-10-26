@@ -56,6 +56,26 @@ func test_phone_medium_has_no_reflection_probe() -> void:
 	assert_eq(Settings.preset_for("medium", true).render_scale, Settings.QUALITY.medium.render_scale)
 
 
+## Phones' Medium has 2x MSAA (resolved in tile memory); desktops' Medium
+## upscales with FSR and has none.
+func test_phone_medium_has_msaa_2x() -> void:
+	assert_eq(Settings.anti_aliasing_for("auto", Settings.preset_for("medium", true)), Vector2i(1, 0))
+	assert_eq(Settings.anti_aliasing_for("auto", Settings.preset_for("medium", false)), Vector2i(0, 0))
+
+
+## The governor's MSAA step-down reaches the window on "auto".
+func test_adaptive_msaa_step_down_applies() -> void:
+	var saved: Array = [Settings.get_value("video", "quality"), Settings.get_value("video", "anti_aliasing")]
+	Settings.set_value("video", "quality", "high")
+	Settings.set_value("video", "anti_aliasing", "auto")
+	assert_eq(get_tree().root.msaa_3d, Viewport.MSAA_2X)
+	Settings.set_adaptive("msaa", 0)
+	assert_eq(get_tree().root.msaa_3d, Viewport.MSAA_DISABLED)
+	Settings.set_value("video", "quality", saved[0])
+	Settings.set_value("video", "anti_aliasing", saved[1])
+	assert_true(Settings.adaptive.is_empty())
+
+
 ## Menus cap the frame rate only on phones; a match restores the setting.
 func test_menu_mode_restores_the_fps_cap() -> void:
 	Settings.set_menu_mode(true)
