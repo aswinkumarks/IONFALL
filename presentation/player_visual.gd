@@ -1,7 +1,8 @@
 class_name PlayerVisual
 extends Node3D
-## Third-person view of another player: a CharacterRig body and a nameplate,
-## interpolated between the previous and current simulation ticks.
+## Third-person view of another player: a CharacterRig body, interpolated
+## between the previous and current simulation ticks, and its nameplate's
+## contents (drawn in 2D by Nameplates).
 
 ## Body style for visuals set up without one (CharacterRig.STYLES); the
 ## character comparison bench sets it.
@@ -26,13 +27,14 @@ static func color_for(id: int, pick: int, is_bot: bool = false) -> Color:
 var rig: CharacterRig
 var rig_style: String = ""
 var color := Color.WHITE
-var _label: Label3D
-## Under the nameplate: the shield while it holds, then health in red. One
-## texture redrawn when the value changes (one draw call per player).
-var _bar: Sprite3D
-var _bar_image: Image
-var _bar_key := -1
-static var _shape_textures: Dictionary = {}  ## team -> ImageTexture
+## The nameplate (Nameplates draws it): name, its tint, the TDM team shape
+## (-1: none) and the bar under it, the shield while it holds, then health.
+var nameplate_text := ""
+var nameplate_color := Color.WHITE
+var nameplate_team := -1
+var nameplate_shown := true
+var bar_fraction := 1.0
+var bar_on_shield := true
 var _height: float = 1.8
 var _last_time: float = -1.0
 var shield: float = 0.0  ## at the latest update
@@ -44,9 +46,8 @@ var _detail := Vector2i(1, 1)  ## [ik, anim_every] last sent to the rig
 var _phase := 0
 
 const SHIELD_SHADER := preload("res://presentation/shield.gdshader")
+## Past this nameplates fade out: unreadable on a phone anyway.
 const NAMEPLATE_RANGE := 30.0  ## metres
-## The bar under the nameplate, in texels (Sprite3D pixel_size 0.005: 0.6 m).
-const BAR_SIZE := Vector2i(120, 13)
 const SHELL_SECONDS := 0.3
 ## Animation detail (CharacterRig.set_detail), by distance from the camera:
 ## the arms hold the weapon by IK within IK_RANGE (a metre either side
@@ -69,30 +70,7 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	add_child(rig)
 	rig.setup(p_color)
 	_phase = get_instance_id() % 12  # spreads reduced-rate frames; not the shared RNG
-	_label = Label3D.new()
-	_label.text = ("[BOT] " if is_bot else "") + display_name
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.font_size = 40
-	_label.outline_size = 8
-	_label.no_depth_test = false
-	# Two draw calls each (text and outline): past this range nameplates are
-	# unreadable on a phone anyway, and 16 of them broke the draw budget (m4.md).
-	_label.visibility_range_end = NAMEPLATE_RANGE
-	_label.visibility_range_end_margin = 4.0
-	_label.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-	add_child(_label)
-	_bar_image = Image.create(BAR_SIZE.x, BAR_SIZE.y, false, Image.FORMAT_RGBA8)
-	_bar = Sprite3D.new()
-	_bar.texture = ImageTexture.create_from_image(_bar_image)
-	_bar.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_bar.pixel_size = 0.005
-	_bar.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	_bar.position.y = -0.2  # just under the name
-	_bar.no_depth_test = false
-	_bar.visibility_range_end = NAMEPLATE_RANGE
-	_bar.visibility_range_end_margin = 4.0
-	_bar.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-	_label.add_child(_bar)
+	nameplate_text = ("[BOT] " if is_bot else "") + display_name
 	set_bar(Balance.PLAYER.max_shield, Balance.PLAYER.max_health)
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.55
@@ -109,6 +87,7 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	_shell.position.y = 0.95
 	_shell.visible = false
 	add_child(_shell)
+	RenderLayers.mark_dynamic(self)
 
 
 ## `prev`/`cur` are the states at the last two ticks; `alpha` is the fraction
@@ -136,7 +115,6 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 	if held != null:
 		rig.set_weapon(held.id)
 	rig.animate(cur, delta, _height)
-	_label.position.y = _height + 0.45
 	set_bar(cur.shield, cur.health)
 	var shimmer := 0.0
 	if cur.spawn_protection_ticks > 0:
@@ -170,27 +148,24 @@ func _set_detail(ik: bool, anim_every: int) -> void:
 ## The bar under the nameplate: the shield in the HUD's shield colour while
 ## it holds, else health in red.
 func set_bar(p_shield: float, health: float) -> void:
-	var on_shield := p_shield > 0.0
-	var fraction := clampf((p_shield / Balance.PLAYER.max_shield) if on_shield else (health / Balance.PLAYER.max_health), 0.0, 1.0)
-	var fill := roundi(fraction * (BAR_SIZE.x - 2))
-	var key := fill * 2 + (1 if on_shield else 0)
-	if key == _bar_key:
-		return
-	_bar_key = key
-	_bar_image.fill(Color(0.0, 0.0, 0.0, 0.6))
-	if fill > 0:
-		_bar_image.fill_rect(Rect2i(1, 1, fill, BAR_SIZE.y - 2), UiStyle.SHIELD if on_shield else UiStyle.DANGER)
-	(_bar.texture as ImageTexture).update(_bar_image)
+	bar_on_shield = p_shield > 0.0
+	bar_fraction = clampf((p_shield / Balance.PLAYER.max_shield) if bar_on_shield
+			else (health / Balance.PLAYER.max_health), 0.0, 1.0)
+
+
+## Where the nameplate sits: above the head, lower when crouched.
+func nameplate_anchor() -> Vector3:
+	return global_position + Vector3(0.0, _height + 0.45, 0.0)
 
 
 ## No name or bar (the menu's runners).
 func hide_nameplate() -> void:
-	_label.visible = false
+	nameplate_shown = false
 
 
 ## Nameplate tint (TDM team colour).
 func set_label_color(c: Color) -> void:
-	_label.modulate = c
+	nameplate_color = c
 
 
 ## TDM: the team's shape above the nameplate, in its colour (PLAN §3.16:
@@ -198,19 +173,8 @@ func set_label_color(c: Color) -> void:
 func set_team(team: int, c: Color) -> void:
 	if team < 0 or team >= GameMode.TEAM_SHAPES.size():
 		return
-	if not _shape_textures.has(team):
-		_shape_textures[team] = UiStyle.team_shape_texture(team)
-	var marker := Sprite3D.new()
-	marker.texture = _shape_textures[team]
-	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	marker.pixel_size = 0.0045
-	marker.modulate = c
-	marker.position = Vector3(0, 0.3, 0)  # above the name; follows it when crouching
-	marker.no_depth_test = false
-	marker.visibility_range_end = NAMEPLATE_RANGE
-	marker.visibility_range_end_margin = 4.0
-	marker.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-	_label.add_child(marker)
+	nameplate_team = team
+	nameplate_color = c
 
 
 ## Hit feedback: a white flash on the body (brighter when the shield breaks)

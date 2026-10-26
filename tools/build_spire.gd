@@ -202,10 +202,10 @@ func _add_environment(root: Node3D) -> void:
 	env.ambient_light_color = _map.ambient
 	env.ambient_light_energy = _map.ambient_energy
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX  # keeps bright cyan and orange from clipping to white
 	env.glow_enabled = true
 	env.glow_intensity = 0.8
-	env.glow_bloom = 0.05
+	env.glow_bloom = 0.0  # only emissives past glow_hdr_threshold (1.0) glow; bloom hazed the whole frame
 	env.fog_enabled = true
 	env.fog_light_color = _map.fog
 	env.fog_density = _map.fog_density

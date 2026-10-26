@@ -30,6 +30,12 @@ const MODELS := {
 	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.44), Vector2(0.0, 0.26), Vector2(0.725, -0.17), Vector2(0.3, 0.125)],
 }
 const GRENADE := "frag_grenade"
+## Past this distance (metres) a model shows its stand-in (the "<mesh>Far"
+## node tools/weapon_import.gd adds at import: ~1k triangles instead of
+## 6-8k), for other players' weapons and pickups; a held rifle is ~40 px
+## across there on a phone. Only one of the two draws at a time.
+const FAR_RANGE := 5.0
+const FAR_MARGIN := 0.5
 
 
 ## Every model file, for loading ahead of a match.
@@ -76,6 +82,7 @@ static func instantiate_with(id: StringName, p_muzzle: Vector2, p_handle: Vector
 	support.name = "Support"
 	support.position = model.transform * _source_point(p_support)
 	root.add_child(support)
+	RenderLayers.mark_dynamic(root)
 	return root
 
 
@@ -86,6 +93,7 @@ static func grenade(height: float) -> Node3D:
 	model.scale = Vector3.ONE * height / (SOURCE_HALF * 2.0)
 	model.position.y = height * 0.5
 	root.add_child(model)
+	RenderLayers.mark_dynamic(root)
 	return root
 
 
@@ -93,6 +101,12 @@ static func _load(name: String) -> Node3D:
 	var model: Node3D = (load(DIR + name + ".glb") as PackedScene).instantiate()
 	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if String(mi.name).ends_with("Far"):
+			mi.visibility_range_begin = FAR_RANGE
+			mi.visibility_range_begin_margin = FAR_MARGIN
+		elif mi.get_parent().has_node(String(mi.name) + "Far"):
+			mi.visibility_range_end = FAR_RANGE
+			mi.visibility_range_end_margin = FAR_MARGIN
 	return model
 
 

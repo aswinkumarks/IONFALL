@@ -40,6 +40,9 @@ const SCOPE_TIME := 0.14
 const MELEE_TIME := 0.36
 const THROW_TIME := 0.45
 
+## Where the viewer stands (last update_view), or INF while dead: for its
+## blob shadow (BlobShadows).
+var feet_position := Vector3.INF
 var camera := Camera3D.new()
 var _viewmodel := Node3D.new()  ## pose root, animated every frame
 var _models: Dictionary = {}  ## weapon id -> Node3D
@@ -124,7 +127,7 @@ static func _flash_texture() -> Texture2D:
 
 ## First-person arms of `style` (CharacterRig.STYLES) in `color`; rigs that
 ## can't hold a weapon in first person fall back to `fallback`.
-func set_character(style: String, color: Color, fallback: String = "armored") -> void:
+func set_character(style: String, color: Color, fallback: String = CharacterRig.SELECTABLE[0]) -> void:
 	if _arms != null:
 		_arms.queue_free()
 		_arms = null
@@ -133,6 +136,7 @@ func set_character(style: String, color: Color, fallback: String = "armored") ->
 		camera.add_child(rig)
 		rig.setup(color)
 		if rig.make_first_person():
+			RenderLayers.mark_dynamic(rig)
 			_arms = rig
 			_arms.rotation.y = STANCE_YAW
 			_arms.position = -EYE_FROM_HEAD - _arms.basis * rig.head_position()
@@ -226,6 +230,7 @@ func scope_overlay_visible() -> bool:
 
 
 func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: PlayerSimState, weapon: WeaponData, delta: float) -> void:
+	feet_position = feet if s.alive else Vector3.INF
 	# After a long frame (a hitch, the app resuming) the springs below would
 	# overshoot and blow up: step them at most 0.1 s at a time.
 	delta = minf(delta, 0.1)

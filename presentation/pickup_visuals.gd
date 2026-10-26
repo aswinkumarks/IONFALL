@@ -124,4 +124,5 @@ func _make(weapon: int) -> Node3D:
 		light.omni_range = 2.2
 		light.position.y = 0.6
 		root.add_child(light)
+	RenderLayers.mark_dynamic(root)
 	return root

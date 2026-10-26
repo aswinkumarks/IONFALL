@@ -186,7 +186,26 @@ func apply_video() -> void:
 	RenderingServer.directional_shadow_atlas_set_size(preset.shadow_size, true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset.soft_shadows)
-	Engine.max_fps = int(get_value("video", "fps_cap"))
+	_apply_fps_cap()
+
+
+## Menus and the lobby on a phone run at most MENU_FPS: their backdrop is
+## full 3D, and heat is what limits a phone's match frame rate (m4.md).
+const MENU_FPS := 30
+var _in_menu := false
+
+
+## Entering a menu (true) or a match (false).
+func set_menu_mode(on: bool) -> void:
+	_in_menu = on
+	_apply_fps_cap()
+
+
+func _apply_fps_cap() -> void:
+	var cap := int(get_value("video", "fps_cap"))
+	if _in_menu and Platform.is_mobile():
+		cap = mini(cap, MENU_FPS) if cap > 0 else MENU_FPS
+	Engine.max_fps = cap
 
 
 var _applied_window: Array = []

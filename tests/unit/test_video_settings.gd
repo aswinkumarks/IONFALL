@@ -54,3 +54,15 @@ func test_phone_medium_has_no_reflection_probe() -> void:
 	assert_true(Settings.QUALITY.medium.probe, "the shared preset isn't changed")
 	assert_eq(Settings.preset_for("high", true), Settings.QUALITY.high)
 	assert_eq(Settings.preset_for("medium", true).render_scale, Settings.QUALITY.medium.render_scale)
+
+
+## Menus cap the frame rate only on phones; a match restores the setting.
+func test_menu_mode_restores_the_fps_cap() -> void:
+	Settings.set_menu_mode(true)
+	var in_menu := Engine.max_fps
+	Settings.set_menu_mode(false)
+	assert_eq(Engine.max_fps, int(Settings.get_value("video", "fps_cap")))
+	if Platform.is_mobile():
+		assert_lte(in_menu, Settings.MENU_FPS)
+	else:
+		assert_eq(in_menu, Engine.max_fps, "desktops keep their cap in menus")
