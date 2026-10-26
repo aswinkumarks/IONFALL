@@ -40,13 +40,17 @@ const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [60.0, 75.0, 45.0], "M
 		"Ring": [75.0, 80.0, 50.0], "Pinky": [80.0, 80.0, 50.0]}
 const SUPPORT_CURL := {"Thumb": [10.0, 20.0, 15.0], "Index": [35.0, 40.0, 25.0], "Middle": [40.0, 45.0, 30.0],
 		"Ring": [45.0, 45.0, 30.0], "Pinky": [50.0, 45.0, 30.0]}
-## The palm's normal in the hand bones' space (fingers +Y).
-const PALM := Vector3(0.0, 0.0, -1.0)
+## Where the palm's centre is from the hand bone (cm), along the hand
+## frame's axes (_hand_frame: thumb side, fingers, palm normal).
+const FP_PALM_CENTRE := Vector3(1.0, 8.0, 2.0)
 const MESHY_GRIP_SCALE := 2.0  ## a touch smaller than ArmoredRig: slimmer hands
 ## First person: how far the arms sit ahead of where the head bone puts them
 ## (metres). The Spacer's head bone sits forward in its big helmet, which
 ## left its shoulders too far back to reach the handle.
 const FP_FORWARD := {"spacer": 0.05}
+## Third person: the slim characters bring a long gun back further for the
+## left hand to reach its fore-end (ArmoredRig.MAX_PULL_BACK, metres).
+const PULL_BACK := {"operative": 0.15, "spacer": 0.15}
 
 static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
@@ -126,17 +130,38 @@ func _curl_hands() -> void:
 	_curl(_skeleton, "Left", SUPPORT_CURL)
 
 
-## Bends each joint of `side`'s fingers by `curl` degrees about the axis that
-## turns it towards the palm (its direction × the palm normal).
+## `side`'s hand frame in its bone's space, from the finger bones: columns
+## thumb side, fingers, palm normal. The auto-rig orients each character's
+## hand bones differently (the Operative's palm faces about 140° from the
+## Sentinel's), so no one axis is the palm for all of them.
+static func _hand_frame(sk: Skeleton3D, side: String) -> Basis:
+	var at := func(f: String) -> Vector3:
+		return sk.get_bone_rest(sk.find_bone("%sHand%s1" % [side, f])).origin
+	var fingers: Vector3 = (at.call("Index") + at.call("Middle") + at.call("Ring") + at.call("Pinky")).normalized()
+	var thumb: Vector3 = at.call("Index") - at.call("Pinky")
+	thumb = (thumb - fingers * thumb.dot(fingers)).normalized()
+	# Mirrored hands: the right palm is thumb × fingers, the left fingers × thumb.
+	var palm := thumb.cross(fingers) if side == "Right" else fingers.cross(thumb)
+	return Basis(thumb, fingers, palm)
+
+
+## Bends each joint of `side`'s fingers by `curl` degrees towards the palm:
+## about the hand's knuckle line (the fingers' direction × the palm normal),
+## the thumb about its own direction × the palm normal. The auto-rig's
+## finger joints zigzag (the Spacer's point half into the palm), so one
+## joint's own direction would bend it sideways.
 static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
+	var frame := _hand_frame(sk, side)
 	for finger: String in curl:
 		for k in 3:
 			var bone := sk.find_bone("%sHand%s%d" % [side, finger, k + 1])
 			if bone < 0:
 				continue
-			var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
-			var dir := sk.get_bone_rest(next if next >= 0 else bone).origin.normalized()
-			sk.set_bone_pose_rotation(bone, Quaternion(dir.cross(PALM).normalized(), deg_to_rad(curl[finger][k])))
+			var axis := frame.y.cross(frame.z)
+			if finger == "Thumb":
+				var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
+				axis = sk.get_bone_rest(next if next >= 0 else bone).origin.normalized().cross(frame.z)
+			sk.set_bone_pose_rotation(bone, Quaternion(axis.normalized(), deg_to_rad(curl[finger][k])))
 
 
 ## The animation tree resets the fingers (it has no tracks for them) each
@@ -176,14 +201,20 @@ func head_position() -> Vector3:
 	return super() + Vector3(0.0, 0.0, FP_FORWARD.get(character, 0.0))
 
 
+func _max_pull_back() -> float:
+	return PULL_BACK.get(character, super())
+
+
 func _grip_local() -> Transform3D:
 	return _grips[character]
 
 
 ## First person: the palm against the handle, fingers curled round it
-## (GRIP_CURL). Hand bone space (cm): fingers +Y, palm -Z, thumb -X.
+## (GRIP_CURL), in this character's hand frames.
 func _fp_hand() -> Array:
-	return [Vector3.UP, Vector3.FORWARD, Vector3(-1.0, 8.0, -2.0)]
+	var h := _hand_frame(_skeleton, "Right")
+	var l := _hand_frame(_skeleton, "Left")
+	return [h.y, h.z, h * FP_PALM_CENTRE, Basis(-l.x, l.y, l.z)]
 
 
 func _arm_chains() -> Array:
