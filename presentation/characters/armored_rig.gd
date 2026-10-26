@@ -19,7 +19,7 @@ const UPPER_BONES := ["spine_02", "spine_03", "neck_01", "Head", "clavicle_l", "
 		"clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"]
 const LOOPING := ["Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Pistol_Idle",
 		"Pistol_Aim_Down", "Pistol_Aim_Neutral", "Pistol_Aim_Up"]
-const MAX_LEG_TWIST := deg_to_rad(50.0)
+const MAX_LEG_TWIST := deg_to_rad(35.0)
 ## The weapon in the right hand (hand-bone space).
 const GRIP_EULER := Vector3(0.0, PI * 0.5, PI * 0.5)
 const GRIP_OFFSET := Vector3(0.0, 0.08, 0.03)
@@ -467,13 +467,27 @@ func _hold_weapon() -> void:
 	if _weapon_node == null or not _tree.active or not is_inside_tree():
 		return  # first person poses the arms itself (pose_first_person)
 	# Bladed stance: the chest turns right about the skeleton's up (+Y; it
-	# faces +Z, so a right turn is negative).
+	# faces +Z, so a right turn is negative), and back by the legs' twist
+	# towards a strafe (_twist turns the whole model): turned with the legs,
+	# a strafe to the left swung the left shoulder away from the fore-end.
+	# The turn back is spread over the chest and the two spine bones below
+	# it, so the waist doesn't wring.
 	var chest := _skeleton.find_bone(_chest_bone())
-	var parent := _skeleton.get_bone_parent(chest)
+	var spine: Array[int] = [chest]
+	for i in 2:
+		var below := _skeleton.get_bone_parent(spine[0])
+		if below >= 0:
+			spine.push_front(below)
 	var hold: Array = HOLDS.get(_weapon_id, [SHOULDER_TO_HANDLE, BLADE])
-	var turned := Basis(Vector3.UP, -float(hold[1])) * _skeleton.get_bone_global_pose(chest).basis
-	_skeleton.set_bone_pose_rotation(chest,
-			(_skeleton.get_bone_global_pose(parent).basis.inverse() * turned).get_rotation_quaternion())
+	for bone: int in spine:
+		var angle := -_twist / spine.size() - (float(hold[1]) if bone == chest else 0.0)
+		var turned := Basis(Vector3.UP, angle) * _skeleton.get_bone_global_pose(bone).basis
+		_skeleton.set_bone_pose_rotation(bone, (_skeleton.get_bone_global_pose(
+				_skeleton.get_bone_parent(bone)).basis.inverse() * turned).get_rotation_quaternion())
+	# The left collarbone at rest: the run clips swing it, carrying the left
+	# shoulder back out of reach of the fore-end.
+	var clavicle := _skeleton.get_bone_parent(_skeleton.find_bone(_arm_chains()[1][0]))
+	_skeleton.set_bone_pose_rotation(clavicle, _skeleton.get_bone_rest(clavicle).basis.get_rotation_quaternion())
 	var to_rig := global_transform.affine_inverse() * _skeleton.global_transform
 	var shoulder := to_rig * _skeleton.get_bone_global_pose(_skeleton.find_bone(_arm_chains()[0][0])).origin
 	var aim := Basis(Vector3.RIGHT, _look_pitch)
