@@ -24,12 +24,12 @@ const EYE_FROM_HEAD := Vector3(0.0, 0.12, 0.0)
 ## Bladed stance: the (hidden) body turns towards the weapon side, bringing
 ## the left shoulder forward so the support arm comes up from below and
 ## reaches the fore-end.
-const STANCE_YAW := -0.9
-## The arms sit this far ahead of where the head bone puts them (camera
-## space): the left hand then reaches the fore-end of the larger weapons.
-## Their shoulders are cut away (ArmoredRig.FP_SHOULDER_CUT), so the move
-## doesn't show.
-const ARMS_FORWARD := Vector3(0.0, 0.0, -0.1)
+const STANCE_YAW := -1.05
+## The arms sit this far ahead of and below where the head bone puts them
+## (camera space): the left hand then reaches the fore-end of the larger
+## weapons, while the left elbow stays below the screen's edge (further
+## forward, the arm's cut-off end showed beside it).
+const ARMS_FORWARD := Vector3(0.0, -0.06, -0.05)
 ## First-person weapons are drawn this much larger than their hip offsets
 ## were tuned for: beside the (smaller, ArmoredRig.FP_HAND_SCALE) hands a
 ## life-size weapon looked like a toy.

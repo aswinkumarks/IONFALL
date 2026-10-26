@@ -74,7 +74,7 @@ const MAX_FOREARM_TWIST := deg_to_rad(90.0)
 const SUPPORT_REACH := 0.96
 ## First person: the top of each upper arm (this fraction, from the
 ## shoulder) is cut away with the body, so the stance never shows its edge.
-const FP_SHOULDER_CUT := 0.75
+const FP_SHOULDER_CUT := 0.4
 ## First person: the hands (and their fingers) are drawn this much smaller
 ## (_fp_hand_scale). Life-size gloves this near the eye dwarfed the weapon,
 ## and their fingers stood out round it.
