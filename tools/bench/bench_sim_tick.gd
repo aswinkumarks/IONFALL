@@ -59,12 +59,12 @@ static func _fight(tree: SceneTree, players: int, ticks: int, native: bool) -> A
 	if not native:
 		world.native_rewind = null
 	tree.root.add_child(world)
-	var inputs := RewindFixture.start_fight(world, players)
+	var inputs := NativeParityCheck.start_fight(world, players)
 	var st := FrameStats.new(ticks)
 	var shots := 0
 	var hits := 0
 	for t in ticks:
-		var commands := RewindFixture.fight_commands(world, inputs, t)
+		var commands := NativeParityCheck.fight_commands(world, inputs, t)
 		var t0 := Time.get_ticks_usec()
 		world.step(commands)
 		st.add((Time.get_ticks_usec() - t0) / 1000.0)

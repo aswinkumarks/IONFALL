@@ -16,6 +16,11 @@ func _ready() -> void:
 		check.finished.connect(func(_s: String) -> void: get_tree().quit())
 		add_child(check)
 		return
+	if Platform.user_args.has("--native-parity"):
+		var parity := NativeParityCheck.new()
+		parity.finished.connect(func(_s: String) -> void: get_tree().quit())
+		add_child(parity)
+		return
 	if Platform.user_args.has("--lighting-test"):
 		get_tree().change_scene_to_file.call_deferred("res://maps/lighting_test/lighting_test.tscn")
 		return

@@ -96,11 +96,20 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # The native extension (native/, PLAN §3.17) for Linux and Windows
-      # (cross-compiled with mingw-w64). Built before the import so Godot
-      # registers it: the tests then run the native path, and the desktop
-      # exports ship it. Android and the web keep the GDScript path
-      # (export_presets.cfg excludes native/).
+      # The NDK is also the native extension's Android toolchain.
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK" >/dev/null
+          curl -fsSL -o ~/bundletool.jar \
+            https://github.com/google/bundletool/releases/download/$BUNDLETOOL_VERSION/bundletool-all-$BUNDLETOOL_VERSION.jar
+
+      # The native extension (native/, PLAN §3.17) for Linux, Windows
+      # (cross-compiled with mingw-w64) and Android (arm64, plus x86_64 for
+      # the emulator build). Built before the import so Godot registers it:
+      # the tests then run the native path, and the exports ship it. The web
+      # keeps the GDScript path (export_presets.cfg excludes native/).
       - name: Install native build tools
         run: |
           set -euo pipefail
@@ -119,7 +128,7 @@ jobs:
           restore-keys: godot-cpp-
 
       - name: Build the native extension
-        run: bash native/build.sh linux windows
+        run: bash native/build.sh linux windows android
 
       - name: Import project
         run: timeout 600 godot --headless --import
@@ -180,14 +189,9 @@ jobs:
               grep -q "native rewind on" smoke.log
             done
           done
-
-      - name: Install Android SDK packages
-        run: |
-          set -euo pipefail
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK" >/dev/null
-          curl -fsSL -o ~/bundletool.jar \
-            https://github.com/google/bundletool/releases/download/$BUNDLETOOL_VERSION/bundletool-all-$BUNDLETOOL_VERSION.jar
+          # The scripted fight gives the same events with and without it.
+          timeout 300 build/linux/ionfall.x86_64 --headless -- --native-parity 2>&1 | tee parity.log
+          grep -q "NATIVE_PARITY OK" parity.log
 
       # Release tags are signed with the Play upload key when its secrets are
       # set (ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_KEY_ALIAS,
@@ -214,6 +218,7 @@ jobs:
           timeout 1800 godot --headless --install-android-build-template --export-$CONFIG "Android" build/android/ionfall.aab 2>&1 | tee export.log
           if grep -q "ERROR" export.log; then echo "::error::Android export logged errors"; exit 1; fi
           test -f build/android/ionfall.aab
+          unzip -l build/android/ionfall.aab | grep -q "arm64-v8a/libionfall_native"
           bash tools/check_16kb.sh build/android/ionfall.aab
           if [ "$CONFIG" = release ]; then
             java -jar "$BUNDLETOOL" build-apks --bundle=build/android/ionfall.aab --output="$RUNNER_TEMP/universal.apks" \

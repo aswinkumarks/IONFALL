@@ -15,7 +15,7 @@ Every version here is pinned (PLAN §3.18). Change one only on a branch, then re
 | Android cmdline-tools | 16111833 | SHA-1 verified against Google's `repository2-3.xml` |
 | bundletool | 1.18.3 | 16 KB ZIP-alignment check (`tools/check_16kb.sh`) |
 | GUT (unit tests) | 9.7.1 | Vendored in `addons/gut` |
-| godot-cpp (native extension) | `godot-4.5-stable` (`e83fd09`) | Fetched by `native/build.sh`; 4.5 bindings load in 4.7.2. CI builds it for Linux and Windows; the desktop releases ship it (`docs/perf/hitbox-rewind-native.md`) |
+| godot-cpp (native extension) | `godot-4.5-stable` (`e83fd09`) | Fetched by `native/build.sh`; 4.5 bindings load in 4.7.2. CI builds it for Linux, Windows and Android (arm64, x86_64); the releases ship it, except on the web (`docs/perf/hitbox-rewind-native.md`) |
 | SCons | 4.x | `pip install scons` (CI: Ubuntu's `scons`), only for `native/build.sh` |
 | mingw-w64 | Ubuntu 24.04's, posix threads | Cross-compiles the Windows native library (`native/build.sh windows`) |
 | Python | 3.10+ | Build tooling in `tools/` |

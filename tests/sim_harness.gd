@@ -24,21 +24,7 @@ static func loadout() -> Array[WeaponData]:
 
 
 ## Builds commands with persistent press counters, like a real client.
-class CommandScript:
-	var presses := PackedByteArray([0, 0, 0, 0, 0, 0, 0])
-	var yaw: float = 0.0
-	var pitch: float = 0.0
-
-	func cmd(tick: int, move: Vector2 = Vector2.ZERO, held: int = 0, press: Array = []) -> PlayerCommand:
-		for a in press:
-			presses[a] = (presses[a] + 1) & 0xFF
-		var c := PlayerCommand.new()
-		c.tick = tick
-		c.set_move(move)
-		c.set_look(yaw, pitch)
-		c.held = held
-		c.presses = presses.duplicate()
-		return c
+const CommandScript := preload("res://game/command_script.gd")
 
 
 ## Places a player at `feet`, facing `yaw`, standing on the ground.
