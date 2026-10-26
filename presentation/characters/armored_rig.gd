@@ -30,9 +30,11 @@ const HEAD_PITCH := 0.6
 ## Third person: the weapon is shouldered, its handle this far from the
 ## right shoulder (look-direction axes: right, up, forward is -Z); the arms
 ## reach for it (HoldWeapon), the left hand to the model's Support marker.
-## Out to the right of the shoulder and below it, so the right forearm and
-## hand stay clear of the chest (checked against the meshes in Blender).
-const SHOULDER_TO_HANDLE := Vector3(0.18, -0.12, -0.47)
+## A little right of and below the shoulder, the weapon in front of the
+## chest rather than out at the side (from the front, the left hand hid
+## behind the right); far enough out that the right forearm and hand clear
+## the bulkier chests (checked against the meshes in Blender).
+const SHOULDER_TO_HANDLE := Vector3(0.1, -0.13, -0.48)
 ## Third person: the right elbow points out to the side, a little down and
 ## forward (skeleton space: the body faces +Z, its right is -X), as when
 ## shouldering a rifle; down and back, it folded the forearm into the torso.
@@ -45,13 +47,15 @@ const TP_LEFT_ELBOW := Vector3(1.0, -0.4, 0.2)
 ## bringing the left shoulder forward so the left hand reaches the fore-end.
 const BLADE := deg_to_rad(40.0)
 ## A long gun comes back towards the shoulder at most this far (metres) for
-## the left hand to reach its fore-end (_pull_back); further, the right
-## forearm folds into a bulky chest (_max_pull_back).
-const MAX_PULL_BACK := 0.08
+## the left hand to reach its fore-end (_pull_back). Held this close in, the
+## left hand reaches without; brought back, the right hand went into the
+## bulkier chests. The slim characters still bring it back a little
+## (_max_pull_back).
+const MAX_PULL_BACK := 0.0
 ## Weapons held otherwise than shouldered: id -> [handle from the right
 ## shoulder (as SHOULDER_TO_HANDLE), chest turn]. The pistol is pushed out
 ## in front, both hands on it, the chest squarer.
-const HOLDS := {&"mag_pistol": [Vector3(0.14, -0.04, -0.64), deg_to_rad(30.0)]}
+const HOLDS := {&"mag_pistol": [Vector3(0.14, -0.04, -0.57), deg_to_rad(30.0)]}
 ## Hand on the handle (_fp_hand): how far the fingers point down from the
 ## barrel and in across it (tan of the angles), and where the hand's palm
 ## centre goes relative to the handle (metres, weapon axes: right, up,
@@ -835,3 +839,4 @@ func flash(amount: float) -> void:
 func _apply_emission() -> void:
 	_armor_mat.emission = _color.lerp(Color.WHITE, 0.5) if _flash <= 0.0 else Color.WHITE
 	_armor_mat.emission_energy_multiplier = _glow * 0.8 + _flash * 1.6
+
