@@ -30,10 +30,16 @@ const HEAD_PITCH := 0.6
 ## Third person: the weapon is shouldered, its handle this far from the
 ## right shoulder (look-direction axes: right, up, forward is -Z); the arms
 ## reach for it (HoldWeapon), the left hand to the model's Support marker.
-const SHOULDER_TO_HANDLE := Vector3(-0.07, -0.12, -0.4)
+## In line with the shoulder and half a metre out, so the right forearm and
+## hand stay clear of the chest.
+const SHOULDER_TO_HANDLE := Vector3(0.03,-0.1,-0.42)
+## Third person: the right elbow points out to the side and a little down
+## (skeleton space: the body faces +Z, its right is -X), as when shouldering a
+## rifle; down and back, it folded the forearm into the torso.
+const TP_RIGHT_ELBOW := Vector3(-1.0, -0.5, 0.0)
 ## Holding a weapon the chest turns this far to the right (a bladed stance),
 ## bringing the left shoulder forward so the left hand reaches the fore-end.
-const BLADE := deg_to_rad(30.0)
+const BLADE := deg_to_rad(45.0)
 ## Hand on the handle (_fp_hand): how far the fingers point down from the
 ## barrel (tan of the angle), and where the hand's palm centre goes relative
 ## to the handle (metres, weapon axes: to its right). Slightly left of the
@@ -560,7 +566,8 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 	var chains := _arm_chains()
 	support = to_skel.affine_inverse() * _within_reach(chains[1], to_skel * support, to_skel * handle)
 	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
-	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
+	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(),
+			TP_RIGHT_ELBOW if _tree.active else Vector3(-0.5, -1.0, -0.6))
 	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
 
 
