@@ -62,6 +62,7 @@ var _quit_panel: Control  ## "Quit IONFALL?", from Back on the home page
 
 
 func _ready() -> void:
+	Settings.set_menu_mode(true)
 	var music := AudioStreamPlayer.new()
 	music.stream = load("res://audio/generated/menu_theme.wav")
 	music.bus = "Music"

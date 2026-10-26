@@ -18,6 +18,7 @@ var _time: float = 0.0
 func build(pads: Array) -> void:
 	for pad: Dictionary in pads:
 		_pads.append(_make(pad))
+	RenderLayers.mark_dynamic(self)
 
 
 ## A player took off at `at`: flare the pad there.

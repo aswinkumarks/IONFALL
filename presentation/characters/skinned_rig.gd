@@ -6,11 +6,13 @@ extends CharacterRig
 ## weapon clips, so the weapon rides on a pivot in front of the chest (pitched
 ## with the look) and two-bone IK puts both hands on it after the clip.
 
-const MODEL := preload("res://art/characters/kenney/characterMedium.fbx")
+## Loaded when one is built (not preloaded): exports leave out this art, as
+## no player can pick this rig any more (CharacterRig.SELECTABLE).
+const MODEL := "res://art/characters/kenney/characterMedium.fbx"
 ## Armour suit painted over the pack's UV layout (tools/gen_suit.py); the
 ## emission mask glows in the player's colour.
-const SKIN := preload("res://art/characters/kenney/suit.png")
-const GLOW_MASK := preload("res://art/characters/kenney/suit_emission.png")
+const SKIN := "res://art/characters/kenney/suit.png"
+const GLOW_MASK := "res://art/characters/kenney/suit_emission.png"
 const GLOW_ENERGY := 3.5
 const CLIPS := {
 	"idle": ["res://art/characters/kenney/idle.fbx", "Root|Idle", true],
@@ -69,11 +71,11 @@ static func library() -> AnimationLibrary:
 
 
 func setup(color: Color) -> void:
-	_model = MODEL.instantiate()
+	_model = (load(MODEL) as PackedScene).instantiate()
 	_model.scale = Vector3.ONE * (1.8 / MODEL_HEIGHT)
 	_model.rotation.y = PI  # the model faces +Z; Godot forward is -Z
 	add_child(_model)
-	_material.albedo_texture = SKIN
+	_material.albedo_texture = load(SKIN)
 	_material.albedo_color = Color.WHITE.lerp(color, 0.12)
 	_material.roughness = 0.55
 	_material.metallic = 0.2
@@ -81,7 +83,7 @@ func setup(color: Color) -> void:
 	_material.emission_enabled = true
 	_color = color
 	_material.emission = color
-	_material.emission_texture = GLOW_MASK
+	_material.emission_texture = load(GLOW_MASK)
 	_material.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
 	_material.emission_energy_multiplier = GLOW_ENERGY
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D"):

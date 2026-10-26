@@ -33,7 +33,7 @@ func _init() -> void:
 	for kind: int in by_kind:
 		var mesh := _merge(by_kind[kind], _material(kind))
 		var kind_name: String = Kind.keys()[kind].to_lower()
-		ResourceSaver.save(mesh, DIR + "meshes/%s.res" % kind_name)
+		ResourceSaver.save(MapMaterials.converted(mesh), DIR + "meshes/%s.res" % kind_name)
 		mesh = load(DIR + "meshes/%s.res" % kind_name)
 		var mi := MeshInstance3D.new()
 		mi.name = kind_name.capitalize().replace(" ", "")
@@ -132,10 +132,10 @@ func _add_environment(root: Node3D) -> void:
 	env.ambient_light_color = Color(0.3, 0.36, 0.48)
 	env.ambient_light_energy = 0.35
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX  # keeps bright cyan and orange from clipping to white
 	env.glow_enabled = true
 	env.glow_intensity = 0.8
-	env.glow_bloom = 0.05
+	env.glow_bloom = 0.0  # only emissives past glow_hdr_threshold (1.0) glow; bloom hazed the whole frame
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.25, 0.35, 0.48)
 	env.fog_density = 0.003

@@ -32,6 +32,7 @@ const DEFAULTS := {
 		"glow": true,
 		"effects": 1.0,  ## particle density
 		"adaptive_quality": true,  ## automatic step-down when slow or hot (PLAN §3.10)
+		"anti_aliasing": "auto",  ## auto (the preset's) / off / fxaa / msaa_2x / msaa_4x
 	},
 	"input": {
 		"sensitivity_x": 1.0,
@@ -82,7 +83,7 @@ func _ready() -> void:
 	var q := Platform.get_user_arg("--quality").split(",")
 	if QUALITY.has(q[0]):
 		_quality_override = q[0]
-		_override_preset = QUALITY[q[0]].duplicate()
+		_override_preset = preset_for(q[0], Platform.is_mobile()).duplicate()
 		for pair in q.slice(1):
 			var key := pair.get_slice("=", 0)
 			if _override_preset.has(key) or DEFAULTS.video.has(key):
@@ -179,14 +180,35 @@ func apply_video() -> void:
 	else:
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	root.scaling_3d_scale = scale
-	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][preset.msaa]
-	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if preset.fxaa else Viewport.SCREEN_SPACE_AA_DISABLED
+	# "auto" follows the preset's MSAA, or the governor's step-down of it.
+	var aa := anti_aliasing_for(str(get_value("video", "anti_aliasing")), preset.merged({"msaa": video("msaa")}, true))
+	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][aa.x]
+	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if aa.y == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	root.anisotropic_filtering_level = preset.aniso
 	root.mesh_lod_threshold = preset.lod
 	RenderingServer.directional_shadow_atlas_set_size(preset.shadow_size, true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset.soft_shadows)
-	Engine.max_fps = int(get_value("video", "fps_cap"))
+	_apply_fps_cap()
+
+
+## Menus and the lobby on a phone run at most MENU_FPS: their backdrop is
+## full 3D, and heat is what limits a phone's match frame rate (m4.md).
+const MENU_FPS := 30
+var _in_menu := false
+
+
+## Entering a menu (true) or a match (false).
+func set_menu_mode(on: bool) -> void:
+	_in_menu = on
+	_apply_fps_cap()
+
+
+func _apply_fps_cap() -> void:
+	var cap := int(get_value("video", "fps_cap"))
+	if _in_menu and Platform.is_mobile():
+		cap = mini(cap, MENU_FPS) if cap > 0 else MENU_FPS
+	Engine.max_fps = cap
 
 
 var _applied_window: Array = []
@@ -291,6 +313,13 @@ const QUALITY := {
 	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
 			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "probe": true, "lights": true},
 }
+## Phone-only changes to a preset's extras. The reflection probe costs the
+## Mi 11X ~0.9 ms of GPU time, so phones leave it off on Medium; desktops
+## keep it (m4.md). Phones get 2x MSAA on Medium: on tile-based GPUs it
+## resolves in tile memory, and at 0.6 render scale the edges need it. If the
+## phone can't afford it, AdaptiveQuality turns it off first (`--aa-bench`
+## measures its cost on the device).
+const MOBILE_EXTRAS := {"medium": {"probe": false, "msaa": 1}}
 const QUALITY_NAMES := ["low", "medium", "high", "ultra", "custom"]
 const PRESET_KEYS := ["render_scale", "shadows", "glow", "effects"]
 
@@ -312,7 +341,36 @@ func quality_preset() -> Dictionary:
 	if not _override_preset.is_empty():
 		return _override_preset
 	var q: String = get_value("video", "quality")
-	return QUALITY.get(q, QUALITY[default_quality()])
+	return preset_for(q if QUALITY.has(q) else default_quality(), Platform.is_mobile())
+
+
+## The anti-aliasing setting's choices. On tile-based phone GPUs (Adreno,
+## Mali) MSAA resolves in tile memory and may cost less than FXAA's full
+## screen pass (0.5 ms on the Mi 11X, m4.md); `--aa-bench` measures them
+## on the device (AaBench).
+const ANTI_ALIASING := ["auto", "off", "fxaa", "msaa_2x", "msaa_4x"]
+
+
+## [MSAA level (0 off, 1 2x, 2 4x), FXAA (1 on)] for anti-aliasing setting
+## `choice` with `preset` (QUALITY) as "auto".
+static func anti_aliasing_for(choice: String, preset: Dictionary) -> Vector2i:
+	match choice:
+		"off":
+			return Vector2i(0, 0)
+		"fxaa":
+			return Vector2i(0, 1)
+		"msaa_2x":
+			return Vector2i(1, 0)
+		"msaa_4x":
+			return Vector2i(2, 0)
+	return Vector2i(int(preset.get("msaa", 0)), 1 if preset.get("fxaa", false) else 0)
+
+
+## Preset `q`'s values on a phone (`mobile`) or elsewhere (MOBILE_EXTRAS).
+static func preset_for(q: String, mobile: bool) -> Dictionary:
+	if mobile and MOBILE_EXTRAS.has(q):
+		return (QUALITY[q] as Dictionary).merged(MOBILE_EXTRAS[q], true)
+	return QUALITY[q]
 
 
 func load_settings() -> void:

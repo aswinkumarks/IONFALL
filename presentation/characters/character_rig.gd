@@ -56,6 +56,13 @@ func animate(_state: PlayerSimState, _delta: float, _height: float) -> void:
 	pass
 
 
+## Animation detail for characters far away or off screen (PlayerVisual):
+## `ik` off skips pose fixes after the clips; the clips advance every
+## `anim_every` frames (0: paused), `phase` spreading them across characters.
+func set_detail(_ik: bool, _anim_every: int, _phase: int = 0) -> void:
+	pass
+
+
 ## Spawn-protection shimmer, 0 = off.
 func set_glow(_amount: float) -> void:
 	pass

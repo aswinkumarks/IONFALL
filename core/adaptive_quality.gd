@@ -3,6 +3,7 @@ extends RefCounted
 ## Automatic quality step-down (PLAN §3.10): when frame times stay above the
 ## target, or the phone reports thermal pressure, lower one video setting at a
 ## time for the rest of the session (Settings.adaptive, never saved). Order:
+## MSAA off (when anti-aliasing is on "auto"; phones' Medium has 2x), then
 ## render scale in 0.1 steps down to 0.5, then effects density, then sun
 ## shadows. Glow is left alone: toggling it changes pipeline specializations,
 ## and on the Mi 11X the resulting compile burst made frames worse (M4). It
@@ -56,6 +57,8 @@ func add_frame(delta: float, target_fps: int) -> String:
 
 ## Lowers the next setting; returns "key=value", or "" at the floor.
 static func step_down() -> String:
+	if Settings.get_value("video", "anti_aliasing") == "auto" and int(Settings.video("msaa")) > 0:
+		return _lower("msaa", 0)
 	var scale := float(Settings.video("render_scale"))
 	if scale > MIN_SCALE + 0.01:
 		return _lower("render_scale", maxf(snappedf(scale - 0.1, 0.05), MIN_SCALE))

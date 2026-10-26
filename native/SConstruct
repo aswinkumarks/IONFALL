@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+# IONFALL native extension (PLAN §3.17). Build with native/build.sh, which
+# fetches the pinned godot-cpp first.
+import os
+
+godot_cpp = os.environ.get("GODOT_CPP", "godot-cpp")
+env = SConscript(os.path.join(godot_cpp, "SConstruct"))
+
+# The GDScript fallback must give the same hits, so no fused multiply-adds
+# (the engine's x86_64 GDScript doesn't contract them either).
+if env.get("is_msvc", False):
+    env.Append(CCFLAGS=["/fp:precise"])
+else:
+    env.Append(CCFLAGS=["-ffp-contract=off"])
+
+env.Append(CPPPATH=["src/"])
+sources = Glob("src/*.cpp")
+
+library = env.SharedLibrary(
+    "bin/libionfall_native{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+    source=sources,
+)
+Default(library)

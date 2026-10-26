@@ -66,6 +66,9 @@ static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
 
 var character: String
+## The full mesh instead of the reduced one (reduced_mesh_path): set before setup()
+## for close-ups (the character screen); first person switches by itself.
+var full_detail := false
 var _mat: ShaderMaterial
 
 
@@ -77,7 +80,7 @@ func _init(p_character: String = "sentinel") -> void:
 static func paths() -> PackedStringArray:
 	var out := PackedStringArray()
 	for c: String in CharacterRig.SELECTABLE:
-		out.append_array([scene_path(c), finger_mesh_path(c), finger_skin_path(c), anims_path(c)])
+		out.append_array([scene_path(c), finger_mesh_path(c), reduced_mesh_path(c), finger_skin_path(c), anims_path(c)])
 	return out
 
 
@@ -89,6 +92,12 @@ static func scene_path(c: String) -> String:
 ## (tools/rig_meshy_fingers.gd).
 static func finger_mesh_path(c: String) -> String:
 	return DIR + c + "/" + c + "_fingers_mesh.res"
+
+
+## The third-person mesh (ReducedMesh, saved by
+## tools/bake_reduced_characters.gd).
+static func reduced_mesh_path(c: String) -> String:
+	return DIR + c + "/" + c + "_reduced_mesh.res"
 
 
 static func finger_skin_path(c: String) -> String:
@@ -113,8 +122,9 @@ func setup(color: Color) -> void:
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0]
 	var skin: Skin = load(finger_skin_path(character))
 	_add_finger_bones(_skeleton, skin)
+	_curl_hands()
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
-		mi.mesh = load(finger_mesh_path(character))
+		mi.mesh = load(finger_mesh_path(character) if full_detail else reduced_mesh_path(character))
 		mi.skin = skin
 		var base := mi.get_active_material(0) as StandardMaterial3D
 		_mat = ShaderMaterial.new()
@@ -126,18 +136,15 @@ func setup(color: Color) -> void:
 		mi.material_override = _mat
 	for a: AnimationPlayer in _model.find_children("*", "AnimationPlayer", true, false):
 		a.queue_free()  # Meshy's rig-check clip; the tree drives the skeleton
-	_hand = BoneAttachment3D.new()
-	_hand.bone_name = "RightHand"
-	_skeleton.add_child(_hand)
 	_build_tree(_retarget_to(character, _skeleton, String(_model.get_path_to(_skeleton))), MESHY_UPPER)
-	_curl_hands()
 
 
-## The animations don't move the fingers, so their curl is set once (again
-## after make_first_person resets the pose).
+## The animations don't move the fingers, so the curl goes into the finger
+## bones' rests: the tree's pose resets then leave them curled, with nothing
+## to redo each frame. Again for first person (its left-hand curl).
 func _curl_hands() -> void:
 	_curl(_skeleton, "Right", GRIP_CURL)
-	_curl(_skeleton, "Left", SUPPORT_CURL if _tree.active else FP_SUPPORT_CURL)
+	_curl(_skeleton, "Left", SUPPORT_CURL if _tree == null or _tree.active else FP_SUPPORT_CURL)
 
 
 ## `side`'s hand frame in its bone's space, from the finger bones: columns
@@ -159,7 +166,8 @@ static func _hand_frame(sk: Skeleton3D, side: String) -> Basis:
 ## about the hand's knuckle line (the fingers' direction × the palm normal),
 ## the thumb about its own direction × the palm normal. The auto-rig's
 ## finger joints zigzag (the Spacer's point half into the palm), so one
-## joint's own direction would bend it sideways.
+## joint's own direction would bend it sideways. Set in the rest as well as
+## the pose, so pose resets (the tree's each frame) keep it.
 static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
 	var frame := _hand_frame(sk, side)
 	for finger: String in curl:
@@ -171,18 +179,18 @@ static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
 			if finger == "Thumb":
 				var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
 				axis = sk.get_bone_rest(next if next >= 0 else bone).origin.normalized().cross(frame.z)
-			sk.set_bone_pose_rotation(bone, Quaternion(axis.normalized(), deg_to_rad(curl[finger][k])))
+			var q := Quaternion(axis.normalized(), deg_to_rad(curl[finger][k]))
+			var rest := sk.get_bone_rest(bone)
+			sk.set_bone_rest(bone, Transform3D(Basis(q).scaled_local(rest.basis.get_scale()), rest.origin))
+			sk.set_bone_pose_rotation(bone, q)
 
 
-## The animation tree resets the fingers (it has no tracks for them) each
-## frame in third person: curl them again after the clips.
-func _hold_weapon() -> void:
-	super()
-	if _tree.active:
-		_curl_hands()
-
-
+## First person: the arms are cut from the full mesh (the camera is
+## centimetres from them), and the left hand cradles the fore-end
+## (FP_SUPPORT_CURL).
 func make_first_person() -> bool:
+	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		mi.mesh = load(finger_mesh_path(character))
 	var ok := super()
 	_curl_hands()
 	return ok

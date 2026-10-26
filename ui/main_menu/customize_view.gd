@@ -229,6 +229,8 @@ func _refresh() -> void:
 	if _rig != null:
 		_rig.queue_free()
 	_rig = CharacterRig.create(CharacterRig.SELECTABLE[_character])
+	if _rig is MeshyRig:
+		(_rig as MeshyRig).full_detail = true  # a close-up
 	_stage.add_child(_rig)
 	_rig.setup(preview_color())
 	_rig.set_weapon(Loadouts.PRIMARIES[_primary].id)

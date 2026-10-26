@@ -58,6 +58,7 @@ var _dots: float = 0.0
 
 
 func _ready() -> void:
+	Settings.set_menu_mode(true)
 	config = MatchConfig.pending if MatchConfig.pending != null else MatchConfig.make(MatchConfig.Mode.HOST, "Player")
 	MatchConfig.pending = null
 	_host = config.mode == MatchConfig.Mode.HOST

@@ -82,6 +82,7 @@ func _make_base(team: int) -> Node3D:
 	shape.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	shape.position.y = 3.2
 	root.add_child(shape)
+	RenderLayers.mark_dynamic(root)
 	return root
 
 
@@ -108,12 +109,18 @@ func _make_flag(team: int) -> Node3D:
 	cloth.position.x = 0.47
 	cloth.material_override = _glow(color, 1.0, 1.6)
 	banner.add_child(cloth)
-	var light := OmniLight3D.new()
-	light.light_color = color
-	light.light_energy = 1.2
-	light.omni_range = 4.0
-	light.position.y = 1.4
-	root.add_child(light)
+	# A light where effect lights are on, as for pickups; phones rely on the
+	# emissive banner and glow. A moving omni pulls the map's big merged
+	# meshes into another lighting pass and compiles their omni-lit
+	# pipelines mid-match (m4.md).
+	if Settings.video("lights") == true:
+		var light := OmniLight3D.new()
+		light.light_color = color
+		light.light_energy = 1.2
+		light.omni_range = 4.0
+		light.position.y = 1.4
+		root.add_child(light)
+	RenderLayers.mark_dynamic(root)
 	return root
 
 

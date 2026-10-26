@@ -32,6 +32,7 @@ var effects := Effects.new()
 var pickups := PickupVisuals.new()
 var flag_visuals := FlagVisuals.new()
 var pad_visuals := JumpPadVisuals.new()
+var blobs := BlobShadows.new()
 var _flag_bases: Array = []  ## CTF: the map's flag bases
 var _aim_assist := AimAssist.new()
 var audio := GameAudio.new()
@@ -101,6 +102,7 @@ var _perf_peaks := Vector3i.ZERO  ## this minute's most draw calls, primitives, 
 
 
 func _ready() -> void:
+	Settings.set_menu_mode(false)
 	config = MatchConfig.pending if MatchConfig.pending != null else MatchConfig.new()
 	MatchConfig.pending = null
 	if not Maps.has(config.map):
@@ -125,6 +127,7 @@ func _ready() -> void:
 	add_child(pickups)
 	add_child(flag_visuals)
 	add_child(pad_visuals)
+	add_child(blobs)
 	add_child(audio)
 	audio.launched.connect(pad_visuals.launched)
 	audio.listener = view.camera
@@ -137,6 +140,8 @@ func _ready() -> void:
 		MatchPreload.release()
 	get_tree().root.get_window().focus_exited.connect(_on_focus_lost)
 	Diagnostics.net_info = _net_info
+	if Platform.user_args.has("--aa-bench"):  # dev: MSAA vs FXAA on the device (AaBench)
+		add_child(AaBench.new())
 	if Platform.user_args.has("--adpf"):  # ADPF spike (docs/decisions/0004-thermals-adpf.md)
 		Platform.start_performance_hints(1000.0 / maxf(float(Settings.get_value("video", "fps_cap")), 1.0))
 	# Static world bodies become queryable after the first physics step.
@@ -372,6 +377,7 @@ func _apply_shadows(root: Node) -> void:
 		(light as DirectionalLight3D).shadow_enabled = on
 	for probe in root.find_children("*", "ReflectionProbe", true, false):
 		(probe as ReflectionProbe).visible = Settings.video("probe") != false
+	RenderLayers.light_dynamic_with_baked_lights(root, Settings.video("lights") == true)
 
 
 ## First-person arms in the player's character and colour, once the local
@@ -490,6 +496,7 @@ func _process(delta: float) -> void:
 			_render_client(delta)
 		elif client.spectate and client.latest_snapshot != null:
 			_render_client_spectator(delta)
+	_update_blobs()
 	Diagnostics.time_section("visuals", t0)
 	t0 = Time.get_ticks_usec()
 	_update_aim_assist(delta)
@@ -498,6 +505,18 @@ func _process(delta: float) -> void:
 	_update_banner()
 	_update_match_ui(delta)
 	Diagnostics.time_section("ui", t0)
+
+
+## Contact shadows under everyone shown, and under us, when realtime shadows
+## are off (BlobShadows).
+func _update_blobs() -> void:
+	if not blobs.visible:
+		return
+	var feet := PackedVector3Array([view.feet_position])
+	for v: PlayerVisual in _visuals.values():
+		if v.visible:
+			feet.append(v.global_position)
+	blobs.show_at(feet)
 
 
 ## Touch aim assist (PLAN §3.11): slowdown, magnetism and optional
@@ -809,7 +828,8 @@ func _log_perf(delta: float) -> void:
 		return
 	Platform.report_frame_work((Performance.get_monitor(Performance.TIME_PROCESS) \
 			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0 + RenderingServer.get_frame_setup_time_cpu())
-	if Settings.get_value("video", "adaptive_quality") and not _paused:
+	# Not during an AA benchmark: a step-down would change what it measures.
+	if Settings.get_value("video", "adaptive_quality") and not _paused and not AaBench.running:
 		var step := _adaptive.add_frame(delta, int(Settings.get_value("video", "fps_cap")))
 		if not step.is_empty():
 			Platform.perf_log("QUALITY step-down %s" % step)
@@ -1273,6 +1293,9 @@ func _net_info() -> String:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	var nameplates := Nameplates.new()
+	nameplates.visuals = _visuals
+	layer.add_child(nameplates)  # under the HUD
 	hud = HUD_SCENE.instantiate()
 	layer.add_child(hud)
 	hud.pause_requested.connect(_set_paused.bind(true))
