@@ -112,6 +112,7 @@ func _save(root: Node3D, name: String, st: SurfaceTool, material: Material) -> i
 	var mesh := st.commit()
 	mesh.surface_set_material(0, material)
 	mesh.lightmap_unwrap(Transform3D.IDENTITY, TEXEL_SIZE)
+	mesh = MapMaterials.converted(mesh)
 	ResourceSaver.save(mesh, _dir + "meshes/%s.res" % name)
 	mesh = load(_dir + "meshes/%s.res" % name)
 	var mi := MeshInstance3D.new()

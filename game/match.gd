@@ -114,7 +114,6 @@ func _ready() -> void:
 	if gameplay.has_method("jump_pads"):
 		pad_visuals.build(gameplay.jump_pads())
 	var presentation := Maps.presentation(config.map)
-	MapMaterials.apply(presentation)
 	add_child(presentation)
 	_apply_shadows(presentation)
 	Settings.apply_environment(presentation)

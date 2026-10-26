@@ -1,6 +1,7 @@
 extends GutTest
 ## MapMaterials: triplanar becomes planar UVs that sample what triplanar's
-## dominant projection did; the kit's closed materials cull back faces.
+## dominant projection did; the kit's closed materials cull back faces. The
+## saved maps carry the conversion.
 
 
 func test_planar_uvs_follow_the_dominant_projection() -> void:
@@ -22,10 +23,9 @@ func test_planar_uvs_follow_the_dominant_projection() -> void:
 	assert_eq(uv[2], Vector2(-3, -2), "side faces take zy * (-1, 1)")
 
 
-func test_maps_lose_triplanar_and_cull_closed_kit_materials() -> void:
+func test_saved_maps_have_no_triplanar_and_cull_closed_kit_materials() -> void:
 	for map_id in ["station", "spire", "foundry"]:
 		var root := Maps.presentation(map_id)
-		MapMaterials.apply(root)
 		var triplanar := 0
 		var culled := 0
 		var double_sided := []
@@ -47,13 +47,12 @@ func test_maps_lose_triplanar_and_cull_closed_kit_materials() -> void:
 		root.free()
 
 
-func test_converted_meshes_are_reused() -> void:
-	var a := Maps.presentation("station")
-	var b := Maps.presentation("station")
-	MapMaterials.apply(a)
-	MapMaterials.apply(b)
-	var ma := (a.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
-	var mb := (b.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
-	assert_same(ma, mb, "the menu and a match share the converted mesh")
-	a.free()
-	b.free()
+## Converting a saved mesh again changes nothing (the bake is complete and
+## the builders' output is already final).
+func test_saved_meshes_need_no_conversion() -> void:
+	for map_id in ["station", "spire", "foundry"]:
+		var root := Maps.presentation(map_id)
+		for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+			if mi.mesh is ArrayMesh:
+				assert_same(MapMaterials.converted(mi.mesh, MapMaterials.transform_in(mi, root)), mi.mesh, mi.name)
+		root.free()

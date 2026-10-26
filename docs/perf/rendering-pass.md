@@ -9,17 +9,25 @@ check is listed at the end.
 
 ## GPU work
 
-Both mesh changes are made from the shipped assets rather than stored as
-new ones (this branch couldn't upload Git LFS objects): the map material
-fixes when a map loads (`MapMaterials`, a few milliseconds, cached), the
-weapon stand-ins by the weapon models' import script.
+The mesh changes are stored as assets (Git LFS), each with the tool that
+rebuilds it:
+- the maps' meshes carry the material fixes. `tools/bake_map_materials.gd`
+  converted them in place, and the map builders now convert as they save;
+- the weapon stand-ins are `art/weapons/ionfall/<model>_far.res`, built by
+  `tools/bake_weapon_proxies.gd`;
+- the characters' third-person meshes are
+  `art/characters/meshy/<c>/<c>_reduced_mesh.res`, built by
+  `tools/bake_reduced_characters.gd`.
+
+Nothing is converted at load. Renders of the three maps from the saved
+meshes match the earlier load-time conversion to within 0.035% of pixels.
 
 | Change | Where | Effect |
 |---|---|---|
 | Reflection probe off on phone Medium | `Settings.MOBILE_EXTRAS` (previous commit) | ~0.9 ms GPU on the Mi 11X (m4.md) |
-| Triplanar → planar UVs on map panels | `MapMaterials`, as the map loads | 1 texture fetch per pixel instead of 3 on 13 Station surfaces and the slabs, walls and cover of Spire and Foundry. Every converted face is axis-aligned, so the image is unchanged; geometry and lightmap UVs are untouched, so no rebake |
+| Triplanar → planar UVs on map panels | `MapMaterials`, baked into `maps/*/meshes/*.res` | 1 texture fetch per pixel instead of 3 on 13 Station surfaces and the slabs, walls and cover of Spire and Foundry. Every converted face is axis-aligned, so the image is unchanged; geometry and lightmap UVs are untouched, so no rebake |
 | Back-face culling on 5 kit materials | same | crates (~50k triangles per map), floor trims, trims, cables, decals; MI_Trim_01/02 stay double-sided (below) |
-| Weapon stand-ins past 5 m | `tools/weapon_import.gd` (the weapons' import script), `WeaponModels.FAR_RANGE` | other players' guns and pickups: 6–8k → ~1k triangles each; same material and vertex format, so no new pipelines |
+| Weapon stand-ins past 5 m | `<model>_far.res` (`tools/bake_weapon_proxies.gd`), `WeaponModels.FAR_RANGE` | other players' guns and pickups: 6–8k → ~1k triangles each; same material and vertex format, so no new pipelines |
 | Character textures 2048² → 1024² | `.import` size limits | ¼ of the VRAM for the 12 character textures |
 | Baked accent lights off moving things on phones | `RenderLayers` | characters, weapons, the first-person arms, pickups and flags take the accents from the lightmap probes instead of a real-time omni pass where effect lights are off (Low, Medium); desktops keep the coloured rim light |
 | CTF flag light only with effect lights | `FlagVisuals` | no moving omni (and its pipeline compiles) on phones |
@@ -45,12 +53,13 @@ at play distances now draw about 100k triangles, not 470k.
 
 **Character decimation.** Mesh LODs only trim indices, so every remote
 character still skinned all 26–31k vertices of its full mesh each frame,
-at any distance. In third person, characters now use `ReducedMesh`: the
+at any distance. In third person, characters now use the saved reduced mesh (`ReducedMesh`): the
 mesh's own first LOD becomes the base level (about 10.4k triangles,
 down from 20.7k), the coarser LODs stay, and the vertices none of them use
 are dropped (sentinel 26,156 → 10,763, vanguard 28,758 → 11,593, operative
-26,896 → 11,235, spacer 30,547 → 12,647). It takes 15–19 ms per
-character, during the match's loading screen (`MatchPreload`). First
+26,896 → 11,235, spacer 30,547 → 12,647). It is about 0.6 MB per
+character (the Linux pack goes from 82 to 84 MB), and loads with the others
+(`MeshyRig.paths`). First
 person (the arms) and the character screen keep the full mesh. With 16
 characters running on Medium (`build/shots/char_bench.gd`, software
 Vulkan, three runs each) GPU time went from 70.3–72.9 ms to 62.1–64.3 ms,

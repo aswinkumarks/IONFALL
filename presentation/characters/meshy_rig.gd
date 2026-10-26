@@ -52,7 +52,7 @@ static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
 
 var character: String
-## The full mesh instead of the reduced one (ReducedMesh): set before setup()
+## The full mesh instead of the reduced one (reduced_mesh_path): set before setup()
 ## for close-ups (the character screen); first person switches by itself.
 var full_detail := false
 var _mat: ShaderMaterial
@@ -66,7 +66,7 @@ func _init(p_character: String = "sentinel") -> void:
 static func paths() -> PackedStringArray:
 	var out := PackedStringArray()
 	for c: String in CharacterRig.SELECTABLE:
-		out.append_array([scene_path(c), finger_mesh_path(c), finger_skin_path(c), anims_path(c)])
+		out.append_array([scene_path(c), finger_mesh_path(c), reduced_mesh_path(c), finger_skin_path(c), anims_path(c)])
 	return out
 
 
@@ -78,6 +78,12 @@ static func scene_path(c: String) -> String:
 ## (tools/rig_meshy_fingers.gd).
 static func finger_mesh_path(c: String) -> String:
 	return DIR + c + "/" + c + "_fingers_mesh.res"
+
+
+## The third-person mesh (ReducedMesh, saved by
+## tools/bake_reduced_characters.gd).
+static func reduced_mesh_path(c: String) -> String:
+	return DIR + c + "/" + c + "_reduced_mesh.res"
 
 
 static func finger_skin_path(c: String) -> String:
@@ -104,8 +110,7 @@ func setup(color: Color) -> void:
 	_add_finger_bones(_skeleton, skin)
 	_curl_hands()
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
-		var mesh: ArrayMesh = load(finger_mesh_path(character))
-		mi.mesh = mesh if full_detail else ReducedMesh.of(mesh)
+		mi.mesh = load(finger_mesh_path(character) if full_detail else reduced_mesh_path(character))
 		mi.skin = skin
 		var base := mi.get_active_material(0) as StandardMaterial3D
 		_mat = ShaderMaterial.new()
@@ -129,13 +134,6 @@ func make_first_person() -> bool:
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
 		mi.mesh = load(finger_mesh_path(character))
 	return super()
-
-
-## Builds the characters' reduced meshes as their files load (MatchPreload),
-## so no player joining mid-match builds one.
-static func prepare(path: String, res: Resource) -> void:
-	if res is ArrayMesh and path.ends_with("_fingers_mesh.res"):
-		ReducedMesh.of(res)
 
 
 func _curl_hands() -> void:

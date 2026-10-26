@@ -38,8 +38,23 @@ func test_characters_reduce_to_their_first_lod() -> void:
 				(r[0][Mesh.ARRAY_VERTEX] as PackedVector3Array).size() * bones_per, c + ": skin weights kept per vertex")
 
 
+## The saved third-person meshes (tools/bake_reduced_characters.gd) are
+## the reduction of the current full meshes, with the coarser LODs kept.
+func test_saved_reduced_meshes_match_the_full_ones() -> void:
+	for c: String in CharacterRig.SELECTABLE:
+		var full: ArrayMesh = load(MeshyRig.finger_mesh_path(c))
+		var saved: ArrayMesh = load(MeshyRig.reduced_mesh_path(c))
+		var lods := ReducedMesh.lods_of(full, 0)
+		assert_eq(saved.surface_get_array_index_len(0), (lods[0][1] as PackedInt32Array).size(), c + ": base is LOD 1")
+		assert_lt(saved.surface_get_array_len(0), full.surface_get_array_len(0) / 2, c + ": vertices")
+		assert_eq(ReducedMesh.lods_of(saved, 0).size(), lods.size() - 1, c + ": coarser LODs kept")
+		assert_eq(saved.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS,
+				full.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS, c + ": same skinning")
+
+
 func test_rigs_pick_the_mesh_for_their_view() -> void:
 	var full: ArrayMesh = load(MeshyRig.finger_mesh_path("vanguard"))
+	var reduced: ArrayMesh = load(MeshyRig.reduced_mesh_path("vanguard"))
 	var third := MeshyRig.new("vanguard")
 	add_child_autofree(third)
 	third.setup(Color.ORANGE)
@@ -49,9 +64,7 @@ func test_rigs_pick_the_mesh_for_their_view() -> void:
 	close.setup(Color.ORANGE)
 	var mesh_of := func(r: Node) -> Mesh:
 		return (r.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
-	assert_same(mesh_of.call(third), ReducedMesh.of(full), "third person: reduced")
-	assert_ne(mesh_of.call(third), full)
+	assert_same(mesh_of.call(third), reduced, "third person: reduced")
 	assert_same(mesh_of.call(close), full, "close-up: full")
 	assert_true(third.make_first_person())
-	var arms: ArrayMesh = mesh_of.call(third)
-	assert_ne(arms, ReducedMesh.of(full), "first person cuts its arms from the full mesh")
+	assert_ne(mesh_of.call(third), reduced, "first person cuts its arms from the full mesh")

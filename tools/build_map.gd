@@ -33,7 +33,7 @@ func _init() -> void:
 	for kind: int in by_kind:
 		var mesh := _merge(by_kind[kind], _material(kind))
 		var kind_name: String = Kind.keys()[kind].to_lower()
-		ResourceSaver.save(mesh, DIR + "meshes/%s.res" % kind_name)
+		ResourceSaver.save(MapMaterials.converted(mesh), DIR + "meshes/%s.res" % kind_name)
 		mesh = load(DIR + "meshes/%s.res" % kind_name)
 		var mi := MeshInstance3D.new()
 		mi.name = kind_name.capitalize().replace(" ", "")

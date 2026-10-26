@@ -13,7 +13,6 @@ var _time: float = 0.0
 
 func _ready() -> void:
 	var station := Maps.presentation(Maps.DEFAULT)
-	MapMaterials.apply(station)
 	add_child(station)
 	RenderLayers.light_dynamic_with_baked_lights(station, Settings.video("lights") == true)
 	Settings.apply_environment(station)

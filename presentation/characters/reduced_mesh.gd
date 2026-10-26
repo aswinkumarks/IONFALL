@@ -8,16 +8,8 @@ extends RefCounted
 ## distance. The reduced mesh skins about half that. First person and the
 ## character screen keep the full mesh (MeshyRig.full_detail).
 ##
-## Built from the imported mesh's LODs (no new simplification), once per
-## character, ahead of the match (MatchPreload).
-
-static var _cache: Dictionary = {}  ## source mesh -> reduced mesh (or the source)
-
-
-static func of(mesh: ArrayMesh) -> ArrayMesh:
-	if not _cache.has(mesh):
-		_cache[mesh] = build(mesh)
-	return _cache[mesh]
+## Built from the mesh's own LODs (no new simplification) and saved by
+## tools/bake_reduced_characters.gd as MeshyRig.reduced_mesh_path.
 
 
 ## `mesh` with LOD 1 as its base level, or `mesh` itself where it has no LODs

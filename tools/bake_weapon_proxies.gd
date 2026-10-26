@@ -1,8 +1,9 @@
-@tool
-extends EditorScenePostImport
-## Import script of the weapon models (their .glb.import import_script):
-## adds a low-detail stand-in next to each mesh, "<mesh name>Far", which
-## WeaponModels shows past FAR_RANGE (other players' weapons, pickups).
+extends SceneTree
+## Builds each weapon model's low-detail stand-in, saved next to it as
+## "<model>_far.res", which WeaponModels shows past FAR_RANGE (other players'
+## weapons, pickups). Run again after replacing a model:
+##
+##   xvfb-run godot --rendering-driver vulkan -s tools/bake_weapon_proxies.gd
 ##
 ## The Meshy models are close to triangle soup (about two vertices per
 ## triangle, split at every UV and normal seam), so the importer's own LOD
@@ -11,23 +12,24 @@ extends EditorScenePostImport
 ## welded first (keeping one UV each; at a distance the seams don't show),
 ## the welded mesh goes through the engine's quadric simplifier
 ## (ImporterMesh.generate_lods), and the level nearest TARGET triangles gets
-## smooth normals and tangents. Built at import, so replacing a model
-## rebuilds it.
+## smooth normals and tangents. The stand-in carries no material:
+## WeaponModels gives it the model's.
 
 const TARGET := 1000
 
 
-func _post_import(scene: Node) -> Object:
-	for mi: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
-		if mi.mesh == null:
+func _init() -> void:
+	for path in WeaponModels.paths():
+		if not path.ends_with(".glb"):
 			continue
-		var far := MeshInstance3D.new()
-		far.name = String(mi.name) + "Far"
-		far.mesh = proxy(mi.mesh)
-		far.transform = mi.transform
-		mi.add_sibling(far)
-		far.owner = scene
-	return scene
+		var scene: Node = (load(path) as PackedScene).instantiate()
+		var mi: MeshInstance3D = scene.find_children("*", "MeshInstance3D", true, false)[0]
+		var far := proxy(mi.mesh)
+		var err := ResourceSaver.save(far, WeaponModels.far_path(path))
+		print("%s: %d triangles%s" % [WeaponModels.far_path(path), far.surface_get_array_index_len(0) / 3,
+				"" if err == OK else " ERROR %d" % err])
+		scene.free()
+	quit()
 
 
 static func proxy(mesh: Mesh) -> ArrayMesh:
@@ -58,7 +60,6 @@ static func proxy(mesh: Mesh) -> ArrayMesh:
 		# the stand-in draws with the pipelines the warm-up already compiled.
 		var flags: int = mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES
 		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays(), [], {}, flags)
-		out.surface_set_material(s, mesh.surface_get_material(s))
 	return out
 
 

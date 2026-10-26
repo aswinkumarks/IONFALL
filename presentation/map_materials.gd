@@ -1,9 +1,10 @@
 class_name MapMaterials
 extends RefCounted
-## Cheaper materials on a map's meshes (PLAN §3.10 GPU budget), applied as
-## the presentation scene loads, before it enters the tree (so LightmapGI
-## pairs its lightmap with the new mesh). Converted meshes are cached, so
-## the menu backdrop and later matches reuse them.
+## Cheaper materials on a map's meshes (PLAN §3.10 GPU budget), baked into
+## the saved meshes: the map builders (tools/build_map.gd, build_spire.gd)
+## convert each mesh as they save it, and tools/bake_map_materials.gd
+## converted the maps built before. Geometry and the lightmap UVs (UV2)
+## don't change, so the baked lightmaps stay valid.
 ##
 ## - World triplanar becomes planar UVs. Triplanar samples every texture
 ##   three times per pixel; the panels are boxes, so each face takes the one
@@ -16,17 +17,6 @@ extends RefCounted
 ##   stands (open wall panels), so those stay double-sided.
 
 const CULL_BACK := ["MI_Props_Crates", "MI_Trim_02_Floor", "MI_Trim_03", "MI_Trim_03_Dark", "MI_Decal_Grey"]
-
-static var _converted: Dictionary = {}  ## source mesh -> converted mesh (or itself)
-
-
-## Converts the meshes under `root` (a map presentation not yet in the tree).
-static func apply(root: Node) -> void:
-	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
-		if mi.mesh is ArrayMesh:
-			if not _converted.has(mi.mesh):
-				_converted[mi.mesh] = converted(mi.mesh as ArrayMesh, mi.global_transform if mi.is_inside_tree() else _transform_in(mi, root))
-			mi.mesh = _converted[mi.mesh]
 
 
 ## `mesh` with planar UVs instead of world triplanar and culled back faces
@@ -103,8 +93,8 @@ static func _culls(m: BaseMaterial3D) -> bool:
 	return m.cull_mode == BaseMaterial3D.CULL_DISABLED and m.resource_name in CULL_BACK
 
 
-## `node`'s transform relative to `root` (outside the tree).
-static func _transform_in(node: Node3D, root: Node) -> Transform3D:
+## `node`'s transform relative to `root` (a scene not in the tree).
+static func transform_in(node: Node3D, root: Node) -> Transform3D:
 	var xf := node.transform
 	var p := node.get_parent()
 	while p != null and p != root:

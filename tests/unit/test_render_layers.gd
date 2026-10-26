@@ -44,7 +44,7 @@ func test_weapons_have_a_far_stand_in() -> void:
 			far = mi
 		else:
 			near = mi
-	assert_not_null(far, "stand-in present (tools/weapon_import.gd, at import)")
+	assert_not_null(far, "stand-in present (tools/bake_weapon_proxies.gd)")
 	if far == null:
 		return
 	assert_eq(near.visibility_range_end, WeaponModels.FAR_RANGE)
@@ -54,3 +54,4 @@ func test_weapons_have_a_far_stand_in() -> void:
 	assert_lt(tris.call(far.mesh), 1600)
 	assert_gt(tris.call(near.mesh), 5000)
 	assert_eq(far.mesh.surface_get_format(0), near.mesh.surface_get_format(0), "same pipelines as the model")
+	assert_same(far.get_active_material(0), near.get_active_material(0), "and the same material")
