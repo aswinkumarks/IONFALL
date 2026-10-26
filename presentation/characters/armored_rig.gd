@@ -30,16 +30,24 @@ const HEAD_PITCH := 0.6
 ## Third person: the weapon is shouldered, its handle this far from the
 ## right shoulder (look-direction axes: right, up, forward is -Z); the arms
 ## reach for it (HoldWeapon), the left hand to the model's Support marker.
-## In line with the shoulder and half a metre out, so the right forearm and
-## hand stay clear of the chest.
-const SHOULDER_TO_HANDLE := Vector3(0.03,-0.1,-0.42)
-## Third person: the right elbow points out to the side and a little down
-## (skeleton space: the body faces +Z, its right is -X), as when shouldering a
-## rifle; down and back, it folded the forearm into the torso.
-const TP_RIGHT_ELBOW := Vector3(-1.0, -0.5, 0.0)
+## Out to the right of the shoulder and below it, so the right forearm and
+## hand stay clear of the chest (checked against the meshes in Blender).
+const SHOULDER_TO_HANDLE := Vector3(0.18, -0.15, -0.45)
+## Third person: the right elbow points out to the side, a little down and
+## forward (skeleton space: the body faces +Z, its right is -X), as when
+## shouldering a rifle; down and back, it folded the forearm into the torso.
+const TP_RIGHT_ELBOW := Vector3(-1.0, -0.6, 0.5)
 ## Holding a weapon the chest turns this far to the right (a bladed stance),
 ## bringing the left shoulder forward so the left hand reaches the fore-end.
-const BLADE := deg_to_rad(45.0)
+const BLADE := deg_to_rad(40.0)
+## A long gun comes back towards the shoulder at most this far (metres) for
+## the left hand to reach its fore-end (_pull_back); further, the right
+## forearm folds into a bulky chest (_max_pull_back).
+const MAX_PULL_BACK := 0.08
+## Weapons held otherwise than shouldered: id -> [handle from the right
+## shoulder (as SHOULDER_TO_HANDLE), chest turn]. The pistol is pushed out
+## in front, both hands on it, the chest squarer.
+const HOLDS := {&"mag_pistol": [Vector3(0.16, -0.04, -0.66), deg_to_rad(20.0)]}
 ## Hand on the handle (_fp_hand): how far the fingers point down from the
 ## barrel (tan of the angle), and where the hand's palm centre goes relative
 ## to the handle (metres, weapon axes: to its right). Slightly left of the
@@ -439,16 +447,20 @@ func _hold_weapon() -> void:
 	# faces +Z, so a right turn is negative).
 	var chest := _skeleton.find_bone(_chest_bone())
 	var parent := _skeleton.get_bone_parent(chest)
-	var turned := Basis(Vector3.UP, -BLADE) * _skeleton.get_bone_global_pose(chest).basis
+	var hold: Array = HOLDS.get(_weapon_id, [SHOULDER_TO_HANDLE, BLADE])
+	var turned := Basis(Vector3.UP, -float(hold[1])) * _skeleton.get_bone_global_pose(chest).basis
 	_skeleton.set_bone_pose_rotation(chest,
 			(_skeleton.get_bone_global_pose(parent).basis.inverse() * turned).get_rotation_quaternion())
 	var to_rig := global_transform.affine_inverse() * _skeleton.global_transform
 	var shoulder := to_rig * _skeleton.get_bone_global_pose(_skeleton.find_bone(_arm_chains()[0][0])).origin
 	var aim := Basis(Vector3.RIGHT, _look_pitch)
 	var held := aim.scaled_local(Vector3.ONE * _grip_scale())
-	var handle := shoulder + aim * SHOULDER_TO_HANDLE
-	_weapon_local = Transform3D(held, handle - held * (_weapon_node.get_node("Grip") as Node3D).position)
-	_pose_arms(_weapon_local, handle, _weapon_local * (_weapon_node.get_node("Support") as Node3D).position)
+	var handle: Vector3 = shoulder + aim * (hold[0] as Vector3)
+	var grip := (_weapon_node.get_node("Grip") as Node3D).position
+	var support := (_weapon_node.get_node("Support") as Node3D).position
+	handle -= aim * Vector3.FORWARD * _pull_back(handle, held * (support - grip), aim * Vector3.FORWARD, _max_pull_back())
+	_weapon_local = Transform3D(held, handle - held * grip)
+	_pose_arms(_weapon_local, handle, _weapon_local * support)
 
 
 ## Fire: the upper body plays a recoil.
@@ -511,8 +523,10 @@ func _arm_roots() -> Array:
 
 ## First-person right hand placed from the handle rather than the
 ## third-person grip: [fingers, palm normal, palm centre] in the hand bone's
-## space (skeleton units). The hand is posed palm against the handle's right
-## side, fingers forward, thumb up; the rig curls its fingers around it.
+## space (skeleton units), optionally then the left hand's frame (columns
+## little-finger side, fingers, palm normal; else the right's). The hand is
+## posed palm against the handle's right side, fingers forward, thumb up;
+## the rig curls its fingers around it.
 ## Empty: hold the weapon by the grip transform (_grip_local).
 func _fp_hand() -> Array:
 	return []
@@ -562,13 +576,45 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		var s_fingers := (w * SUPPORT_FINGERS).normalized()
 		var s_palm := w * SUPPORT_PALM
 		s_palm = (s_palm - s_fingers * s_palm.dot(s_fingers)).normalized()
-		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * local.inverse()
+		var s_local: Basis = fp[3] if fp.size() > 3 else local
+		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * s_local.inverse()
 	var chains := _arm_chains()
 	support = to_skel.affine_inverse() * _within_reach(chains[1], to_skel * support, to_skel * handle)
 	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
 	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(),
 			TP_RIGHT_ELBOW if _tree.active else Vector3(-0.5, -1.0, -0.6))
 	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
+
+
+## MAX_PULL_BACK, for this rig's build.
+func _max_pull_back() -> float:
+	return MAX_PULL_BACK
+
+
+## How far (rig space, at most `most`) to move the weapon from `handle`
+## back along `forward` for the left arm to reach its fore-end, `support`
+## ahead of the handle.
+func _pull_back(handle: Vector3, support: Vector3, forward: Vector3, most: float) -> float:
+	var to_skel := (global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
+	var chain: Array = _arm_chains()[1]
+	var sk := _skeleton
+	var joints: Array[Vector3] = []
+	for bone: String in chain:
+		joints.append(sk.get_bone_global_rest(sk.find_bone(bone)).origin)
+	var u := sk.find_bone(chain[0])
+	var shoulder := to_skel.affine_inverse() * (sk.get_bone_global_pose(sk.get_bone_parent(u)) * sk.get_bone_rest(u).origin)
+	var unit := to_skel.basis.get_scale().x
+	var reach := (joints[0].distance_to(joints[1]) + joints[1].distance_to(joints[2])) * SUPPORT_REACH / unit
+	# Least t >= 0 with |handle + support - t forward - shoulder| <= reach.
+	var f := handle + support - shoulder
+	var b := -2.0 * f.dot(forward)
+	var c := f.length_squared() - reach * reach
+	if c <= 0.0:
+		return 0.0
+	var disc := b * b - 4.0 * c
+	if disc < 0.0:
+		return most
+	return clampf((-b - sqrt(disc)) / 2.0, 0.0, most)
 
 
 ## The point nearest `want` along the weapon (from `handle` towards `want`)
