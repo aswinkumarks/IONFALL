@@ -68,7 +68,9 @@ func test_both_hands_hold_the_weapon() -> void:
 			# the elbow out to the side, not folded into the armour.
 			var off := (wrists[0] as Vector3) - chest
 			assert_gt(Vector2(off.x, off.z).length(), 0.18, "%s %s: right hand clear of the chest" % [style, id])
-			assert_gt(((wrists["elbow"] as Vector3) - chest).dot(right), 0.14, "%s %s: right elbow out to the side" % [style, id])
+			# Less for the pistol, held out in front with both hands.
+			assert_gt(((wrists["elbow"] as Vector3) - chest).dot(right), 0.12 if ArmoredRig.HOLDS.has(id) else 0.14,
+					"%s %s: right elbow out to the side" % [style, id])
 			# At the support, or (out of reach) further back along the weapon but
 			# still on the fore-end, well ahead of the handle.
 			var on_gun := Geometry3D.get_closest_point_to_segment(wrists[1], grip, support)

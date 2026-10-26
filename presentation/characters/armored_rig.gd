@@ -19,7 +19,7 @@ const UPPER_BONES := ["spine_02", "spine_03", "neck_01", "Head", "clavicle_l", "
 		"clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"]
 const LOOPING := ["Idle", "Walk", "Jog_Fwd", "Sprint", "Crouch_Idle", "Crouch_Fwd", "Jump", "Pistol_Idle",
 		"Pistol_Aim_Down", "Pistol_Aim_Neutral", "Pistol_Aim_Up"]
-const MAX_LEG_TWIST := deg_to_rad(50.0)
+const MAX_LEG_TWIST := deg_to_rad(35.0)
 ## The weapon in the right hand (hand-bone space).
 const GRIP_EULER := Vector3(0.0, PI * 0.5, PI * 0.5)
 const GRIP_OFFSET := Vector3(0.0, 0.08, 0.03)
@@ -30,9 +30,11 @@ const HEAD_PITCH := 0.6
 ## Third person: the weapon is shouldered, its handle this far from the
 ## right shoulder (look-direction axes: right, up, forward is -Z); the arms
 ## reach for it (HoldWeapon), the left hand to the model's Support marker.
-## Out to the right of the shoulder and below it, so the right forearm and
-## hand stay clear of the chest (checked against the meshes in Blender).
-const SHOULDER_TO_HANDLE := Vector3(0.18, -0.12, -0.47)
+## A little right of and below the shoulder, the weapon in front of the
+## chest rather than out at the side (from the front, the left hand hid
+## behind the right); far enough out that the right forearm and hand clear
+## the bulkier chests (checked against the meshes in Blender).
+const SHOULDER_TO_HANDLE := Vector3(0.1, -0.13, -0.48)
 ## Third person: the right elbow points out to the side, a little down and
 ## forward (skeleton space: the body faces +Z, its right is -X), as when
 ## shouldering a rifle; down and back, it folded the forearm into the torso.
@@ -45,13 +47,15 @@ const TP_LEFT_ELBOW := Vector3(1.0, -0.4, 0.2)
 ## bringing the left shoulder forward so the left hand reaches the fore-end.
 const BLADE := deg_to_rad(40.0)
 ## A long gun comes back towards the shoulder at most this far (metres) for
-## the left hand to reach its fore-end (_pull_back); further, the right
-## forearm folds into a bulky chest (_max_pull_back).
-const MAX_PULL_BACK := 0.08
+## the left hand to reach its fore-end (_pull_back). Held this close in, the
+## left hand reaches without; brought back, the right hand went into the
+## bulkier chests. The slim characters still bring it back a little
+## (_max_pull_back).
+const MAX_PULL_BACK := 0.0
 ## Weapons held otherwise than shouldered: id -> [handle from the right
 ## shoulder (as SHOULDER_TO_HANDLE), chest turn]. The pistol is pushed out
 ## in front, both hands on it, the chest squarer.
-const HOLDS := {&"mag_pistol": [Vector3(0.14, -0.04, -0.64), deg_to_rad(30.0)]}
+const HOLDS := {&"mag_pistol": [Vector3(0.14, -0.04, -0.57), deg_to_rad(30.0)]}
 ## Hand on the handle (_fp_hand): how far the fingers point down from the
 ## barrel and in across it (tan of the angles), and where the hand's palm
 ## centre goes relative to the handle (metres, weapon axes: right, up,
@@ -121,6 +125,7 @@ var _support_at := Vector3.ZERO
 ## forearm, hand, upper arm's parent].
 var _b_chest := -1
 var _b_chest_parent := -1
+var _b_spine := PackedInt32Array()  ## the chest and the two spine bones below it, lowest first
 var _b_head := -1
 var _b_head_parent := -1
 var _head_rest := Basis()
@@ -387,6 +392,11 @@ func _cache_bones() -> void:
 	var sk := _skeleton
 	_b_chest = sk.find_bone(_chest_bone())
 	_b_chest_parent = sk.get_bone_parent(_b_chest)
+	_b_spine = PackedInt32Array([_b_chest])
+	for i in 2:
+		var below := sk.get_bone_parent(_b_spine[0])
+		if below >= 0:
+			_b_spine.insert(0, below)
 	_b_head = sk.find_bone("Head")
 	_b_head_parent = sk.get_bone_parent(_b_head)
 	if _b_head >= 0:
@@ -524,10 +534,19 @@ func _hold_weapon() -> void:
 	var hold: Array = HOLDS.get(_weapon_id, [SHOULDER_TO_HANDLE, BLADE])
 	if _ik:
 		# Bladed stance: the chest turns right about the skeleton's up (+Y; it
-		# faces +Z, so a right turn is negative).
-		var turned := Basis(Vector3.UP, -float(hold[1])) * _skeleton.get_bone_global_pose(_b_chest).basis
-		_skeleton.set_bone_pose_rotation(_b_chest,
-				(_skeleton.get_bone_global_pose(_b_chest_parent).basis.inverse() * turned).get_rotation_quaternion())
+		# faces +Z, so a right turn is negative), and back by the legs' twist
+		# towards a strafe (_twist turns the whole model): turned with the
+		# legs, a strafe to the left swung the left shoulder away from the
+		# fore-end. The turn back is spread over the chest and the two spine
+		# bones below it (_b_spine), so the waist doesn't wring.
+		for bone: int in _b_spine:
+			var angle := -_twist / _b_spine.size() - (float(hold[1]) if bone == _b_chest else 0.0)
+			var turned := Basis(Vector3.UP, angle) * _skeleton.get_bone_global_pose(bone).basis
+			_skeleton.set_bone_pose_rotation(bone, (_skeleton.get_bone_global_pose(
+					_skeleton.get_bone_parent(bone)).basis.inverse() * turned).get_rotation_quaternion())
+		# The left collarbone at rest: the run clips swing it, carrying the
+		# left shoulder back out of reach of the fore-end.
+		_skeleton.set_bone_pose_rotation(_arms[1][3], _skeleton.get_bone_rest(_arms[1][3]).basis.get_rotation_quaternion())
 	var to_rig := global_transform.affine_inverse() * _skeleton.global_transform
 	var shoulder := to_rig * _skeleton.get_bone_global_pose(_arms[0][0]).origin
 	var aim := Basis(Vector3.RIGHT, _look_pitch)
@@ -885,3 +904,4 @@ func flash(amount: float) -> void:
 func _apply_emission() -> void:
 	_armor_mat.emission = _color.lerp(Color.WHITE, 0.5) if _flash <= 0.0 else Color.WHITE
 	_armor_mat.emission_energy_multiplier = _glow * 0.8 + _flash * 1.6
+

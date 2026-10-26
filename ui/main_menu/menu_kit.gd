@@ -109,6 +109,12 @@ static func icon_button(kind: String, text: String, action: Callable) -> Button:
 		b.add_theme_stylebox_override("normal", UiStyle.box(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0.0, 52, 10))
 		b.add_theme_stylebox_override("hover", UiStyle.box(Color(UiStyle.ACCENT, 0.12), Color.TRANSPARENT, 0, UiStyle.SKEW, 52, 10))
 		b.add_theme_stylebox_override("focus", UiStyle.box(Color.TRANSPARENT, Color(UiStyle.ACCENT, 0.8), 1, UiStyle.SKEW, 52, 10))
+		# Pressed too: the theme's pressed plate has the usual margin, so the
+		# text jumped left onto the icon while held.
+		var pressed := UiStyle.box(Color(UiStyle.ACCENT, 0.3), UiStyle.ACCENT, 1, UiStyle.SKEW, 52, 10)
+		b.add_theme_stylebox_override("pressed", pressed)
+		b.add_theme_stylebox_override("hover_pressed", pressed)
+		b.add_theme_stylebox_override("disabled", UiStyle.box(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0.0, 52, 10))
 	b.draw.connect(func() -> void:
 		var c := Color.WHITE if b.is_hovered() or b.has_focus() else UiStyle.TEXT_DIM
 		var at := Vector2(26, b.size.y * 0.5) if not text.is_empty() else b.size * 0.5

@@ -54,9 +54,9 @@ const MESHY_GRIP_SCALE := 2.0  ## a touch smaller than ArmoredRig: slimmer hands
 ## (metres). The Spacer's head bone sits forward in its big helmet, which
 ## left its shoulders too far back to reach the handle.
 const FP_FORWARD := {"spacer": 0.05}
-## Third person: the slim characters bring a long gun back further for the
+## Third person: the slim characters bring a long gun back a little for the
 ## left hand to reach its fore-end (ArmoredRig.MAX_PULL_BACK, metres).
-const PULL_BACK := {"operative": 0.15, "spacer": 0.15}
+const PULL_BACK := {"operative": 0.06, "spacer": 0.06}
 ## First person: the Spacer's long, spiked glove fingers stood out past the
 ## weapon even closed; its hands are drawn smaller still
 ## (ArmoredRig.FP_HAND_SCALE).
