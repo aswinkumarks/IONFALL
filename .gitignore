@@ -20,3 +20,9 @@ eos_credentials.cfg
 # Python
 __pycache__/
 meshy_output/
+
+# Native extension (native/build.sh)
+/native/godot-cpp
+/native/bin/
+/native/src/*.os
+/native/.sconsign.dblite

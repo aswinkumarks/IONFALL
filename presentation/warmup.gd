@@ -176,3 +176,10 @@ func _draw_set(front: Vector3, right: Vector3) -> void:
 		add_child(model)
 		model.global_position = front + right * (w - 3) * 0.2 + Vector3.UP * 0.8
 		w += 1
+	# Contact shadows (BlobShadows, when realtime shadows are off): their
+	# instanced pipeline, compiled here rather than when the first one shows.
+	var blobs := BlobShadows.new()
+	blobs.floor_at_feet = true
+	add_child(blobs)
+	blobs.visible = true
+	blobs.show_at(PackedVector3Array([front - Vector3.UP]))

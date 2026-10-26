@@ -7,18 +7,21 @@ const COLORS := [Color(0.31, 0.89, 1.0), Color(1.0, 0.6, 0.24), Color(0.36, 0.95
 
 var _camera := Camera3D.new()
 var _runners: Array[PlayerVisual] = []
+var _blobs := BlobShadows.new()
 var _time: float = 0.0
 
 
 func _ready() -> void:
 	var station := Maps.presentation(Maps.DEFAULT)
 	add_child(station)
+	RenderLayers.light_dynamic_with_baked_lights(station, Settings.video("lights") == true)
 	Settings.apply_environment(station)
 	for light in station.find_children("*", "DirectionalLight3D", true, false):
 		(light as DirectionalLight3D).shadow_enabled = Settings.video("shadows")
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
 		if section == "video" and is_inside_tree():
 			Settings.apply_environment(station)
+			RenderLayers.light_dynamic_with_baked_lights(station, Settings.video("lights") == true)
 			for light in station.find_children("*", "DirectionalLight3D", true, false):
 				(light as DirectionalLight3D).shadow_enabled = Settings.video("shadows"))
 	_camera.fov = 62.0
@@ -30,6 +33,8 @@ func _ready() -> void:
 		v.setup("", false, COLORS[i % COLORS.size()], i)
 		v.hide_nameplate()
 		_runners.append(v)
+	_blobs.floor_at_feet = true
+	add_child(_blobs)
 	_time = randf() * 100.0
 	_process(0.0)
 
@@ -55,3 +60,8 @@ func _process(delta: float) -> void:
 		s.move_state = PlayerSimState.Move.GROUND
 		s.alive = true
 		_runners[i].update_from(null, s, 1.0, _time)
+	if _blobs.visible:
+		var feet := PackedVector3Array()
+		for v in _runners:
+			feet.append(v.global_position)
+		_blobs.show_at(feet)

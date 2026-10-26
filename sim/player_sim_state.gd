@@ -119,11 +119,53 @@ func aim_pitch() -> float:
 	return clampf(pitch + recoil.y, -PI * 0.49, PI * 0.49)
 
 
+## Every field, written out: copying by name through _fields() took ~25 us,
+## and copies run every tick per player on a host and per predicted tick on
+## a client. test_player_sim_state.gd checks this covers every field.
 func copy() -> PlayerSimState:
 	var s := PlayerSimState.new()
-	for p in _fields():
-		var v: Variant = get(p)
-		s.set(p, v.duplicate() if v is PackedInt32Array or v is PackedByteArray else v)
+	s.position = position
+	s.velocity = velocity
+	s.yaw = yaw
+	s.pitch = pitch
+	s.move_state = move_state
+	s.stance = stance
+	s.sprinting = sprinting
+	s.floor_normal = floor_normal
+	s.ticks_since_floor = ticks_since_floor
+	s.jump_buffer_ticks = jump_buffer_ticks
+	s.air_jumps_left = air_jumps_left
+	s.slide_ticks = slide_ticks
+	s.mantle_tick = mantle_tick
+	s.mantle_start = mantle_start
+	s.mantle_target = mantle_target
+	s.shield = shield
+	s.health = health
+	s.shield_delay_ticks = shield_delay_ticks
+	s.health_delay_ticks = health_delay_ticks
+	s.alive = alive
+	s.respawn_tick = respawn_tick
+	s.spawn_protection_ticks = spawn_protection_ticks
+	s.life_gen = life_gen
+	s.discontinuity_gen = discontinuity_gen
+	s.action_seq = action_seq
+	s.weapon_slot = weapon_slot
+	s.switch_ticks = switch_ticks
+	s.weapons = weapons.duplicate()
+	s.mag = mag.duplicate()
+	s.reserve = reserve.duplicate()
+	s.cooldown = cooldown.duplicate()
+	s.reload = reload.duplicate()
+	s.burst_left = burst_left.duplicate()
+	s.burst_timer = burst_timer.duplicate()
+	s.grenades = grenades
+	s.throw_cooldown = throw_cooldown
+	s.melee_cooldown = melee_cooldown
+	s.recoil = recoil
+	s.recoil_hold = recoil_hold
+	s.last_presses = last_presses.duplicate()
+	s.pending_presses = pending_presses.duplicate()
+	s.input_anomalies = input_anomalies
 	return s
 
 

@@ -32,13 +32,10 @@ static func paths(map_id: String) -> PackedStringArray:
 					out.append(dep)
 			out.append(scene)
 	out.append_array(WeaponModels.paths())
+	# Only the selectable characters: their clips are baked (MeshyRig
+	# anims_path), so the older rigs and the animation library they were
+	# retargeted from never load in a match.
 	out.append_array(MeshyRig.paths())
-	for path: String in [ArmoredRig.SCENE, ArmoredRig.ANIM_SOURCE]:
-		out.append(path)
-	for variant: String in AstronautRig.VARIANTS:
-		out.append(AstronautRig.DIR + variant + ".gltf")
-	for clip: Array in SkinnedRig.CLIPS.values():
-		out.append(clip[0])
 	return out
 
 

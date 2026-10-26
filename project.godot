@@ -53,6 +53,7 @@ locale/translations.dedicated_server=PackedStringArray()
 
 [rendering]
 
+anti_aliasing/quality/use_debanding=true
 textures/default_filters/anisotropic_filtering_level=4
 textures/default_filters/anisotropic_filtering_level.mobile=2
 rendering_device/fallback_to_opengl3=true

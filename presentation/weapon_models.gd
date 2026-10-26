@@ -30,6 +30,12 @@ const MODELS := {
 	&"flux_smg": [0.3, Vector3(0.2, -0.2, -0.458), Vector2(0.0, 0.26), Vector2(0.665, -0.15), Vector2(0.3, 0.08)],
 }
 const GRENADE := "frag_grenade"
+## Past this distance (metres) a model shows its stand-in (far_path, built
+## by tools/bake_weapon_proxies.gd: ~1k triangles instead of 6-8k), for
+## other players' weapons and pickups; a held rifle is ~40 px across there
+## on a phone. Only one of the two draws at a time.
+const FAR_RANGE := 5.0
+const FAR_MARGIN := 0.5
 
 
 ## Every model file, for loading ahead of a match.
@@ -38,7 +44,14 @@ static func paths() -> PackedStringArray:
 	for id: StringName in MODELS:
 		out.append(DIR + String(id) + ".glb")
 	out.append(DIR + GRENADE + ".glb")
+	for p in out.duplicate():
+		out.append(far_path(p))
 	return out
+
+
+## The low-detail stand-in of the model at `model_path`.
+static func far_path(model_path: String) -> String:
+	return model_path.get_basename() + "_far.res"
 
 
 static func has(id: StringName) -> bool:
@@ -76,6 +89,7 @@ static func instantiate_with(id: StringName, p_muzzle: Vector2, p_handle: Vector
 	support.name = "Support"
 	support.position = model.transform * _source_point(p_support)
 	root.add_child(support)
+	RenderLayers.mark_dynamic(root)
 	return root
 
 
@@ -86,13 +100,28 @@ static func grenade(height: float) -> Node3D:
 	model.scale = Vector3.ONE * height / (SOURCE_HALF * 2.0)
 	model.position.y = height * 0.5
 	root.add_child(model)
+	RenderLayers.mark_dynamic(root)
 	return root
 
 
 static func _load(name: String) -> Node3D:
 	var model: Node3D = (load(DIR + name + ".glb") as PackedScene).instantiate()
+	var far_mesh: Mesh = load(far_path(DIR + name + ".glb")) if ResourceLoader.exists(far_path(DIR + name + ".glb")) else null
 	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if far_mesh == null:
+			continue
+		var far := MeshInstance3D.new()
+		far.name = String(mi.name) + "Far"
+		far.mesh = far_mesh
+		far.transform = mi.transform
+		far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		far.set_surface_override_material(0, mi.get_active_material(0))
+		far.visibility_range_begin = FAR_RANGE
+		far.visibility_range_begin_margin = FAR_MARGIN
+		mi.visibility_range_end = FAR_RANGE
+		mi.visibility_range_end_margin = FAR_MARGIN
+		mi.add_sibling(far)
 	return model
 
 
