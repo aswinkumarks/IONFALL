@@ -24,16 +24,19 @@ const EYE_FROM_HEAD := Vector3(0.0, 0.12, 0.0)
 ## Bladed stance: the (hidden) body turns towards the weapon side, bringing
 ## the left shoulder forward so the support arm comes up from below and
 ## reaches the fore-end.
-const STANCE_YAW := -0.75
+const STANCE_YAW := -1.05
+## The arms sit this far ahead of and below where the head bone puts them
+## (camera space): the left hand then reaches the fore-end of the larger
+## weapons, while the left elbow stays below the screen's edge (further
+## forward, the arm's cut-off end showed beside it).
+const ARMS_FORWARD := Vector3(0.0, -0.06, -0.05)
 ## First-person weapons are drawn this much larger than their hip offsets
-## were tuned for, to sit in life-size hands.
-const WEAPON_SCALE := 1.5
+## were tuned for: beside the (smaller, ArmoredRig.FP_HAND_SCALE) hands a
+## life-size weapon looked like a toy.
+const WEAPON_SCALE := 1.75
 ## The weapon and its hip offset are both scaled by this about the eye: the
 ## same picture, but near enough for life-size arms to hold it with both hands.
 const VIEW_DEPTH := 0.85
-## Left-hand support: as far along the weapon as its Support marker (the
-## third-person hold), this far below the barrel.
-const SUPPORT_DROP := 0.035
 ## Melee bash and grenade throw motions (seconds).
 ## Seconds to scope fully in or out.
 const SCOPE_TIME := 0.14
@@ -139,7 +142,7 @@ func set_character(style: String, color: Color, fallback: String = CharacterRig.
 			RenderLayers.mark_dynamic(rig)
 			_arms = rig
 			_arms.rotation.y = STANCE_YAW
-			_arms.position = -EYE_FROM_HEAD - _arms.basis * rig.head_position()
+			_arms.position = -EYE_FROM_HEAD - _arms.basis * rig.head_position() + ARMS_FORWARD
 			_arms_rest = _arms.position
 			return
 		rig.free()
@@ -339,10 +342,7 @@ func update_view(feet: Vector3, eye_height: float, yaw: float, pitch: float, s: 
 			var weapon_node: Node3D = _models[_current_id]
 			var to_rig := _arms.global_transform.affine_inverse()
 			var handle := (weapon_node.get_node("Grip") as Node3D).global_position
-			var along := _muzzle.global_position - handle
-			var marker := (weapon_node.get_node("Support") as Node3D).global_position
-			var support := handle + along * clampf((marker - handle).dot(along) / along.length_squared(), 0.0, 1.0) \
-					- camera.global_basis.y * SUPPORT_DROP
+			var support := (weapon_node.get_node("Support") as Node3D).global_position
 			_arms.pose_first_person(to_rig * weapon_node.global_transform, to_rig * handle, to_rig * support)
 
 

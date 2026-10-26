@@ -35,18 +35,32 @@ const MESHY_UPPER := ["Spine01", "Spine", "neck", "Head", "LeftShoulder", "LeftA
 		"RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const SAMPLE_FPS := 30.0
 ## Finger curl in degrees per joint (base, middle, tip), towards the palm:
-## the right hand closes around the grip, the left cups the fore-end.
-const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [60.0, 75.0, 45.0], "Middle": [70.0, 80.0, 50.0],
+## the right hand closes around the grip (the index finger less, on the
+## trigger), the left cups the fore-end.
+const GRIP_CURL := {"Thumb": [15.0, 30.0, 25.0], "Index": [25.0, 50.0, 35.0], "Middle": [70.0, 80.0, 50.0],
 		"Ring": [75.0, 80.0, 50.0], "Pinky": [80.0, 80.0, 50.0]}
 const SUPPORT_CURL := {"Thumb": [10.0, 20.0, 15.0], "Index": [35.0, 40.0, 25.0], "Middle": [40.0, 45.0, 30.0],
 		"Ring": [45.0, 45.0, 30.0], "Pinky": [50.0, 45.0, 30.0]}
-## The palm's normal in the hand bones' space (fingers +Y).
-const PALM := Vector3(0.0, 0.0, -1.0)
+## First person the left hand cradles the fore-end from below
+## (ArmoredRig.FP_SUPPORT_PALM): its fingers close further, round the far
+## side.
+const FP_SUPPORT_CURL := {"Thumb": [14.0, 28.0, 21.0], "Index": [49.0, 56.0, 35.0], "Middle": [56.0, 63.0, 42.0],
+		"Ring": [63.0, 63.0, 42.0], "Pinky": [70.0, 63.0, 42.0]}
+## Where the palm's centre is from the hand bone (cm), along the hand
+## frame's axes (_hand_frame: thumb side, fingers, palm normal).
+const FP_PALM_CENTRE := Vector3(1.0, 8.0, 2.0)
 const MESHY_GRIP_SCALE := 2.0  ## a touch smaller than ArmoredRig: slimmer hands
 ## First person: how far the arms sit ahead of where the head bone puts them
 ## (metres). The Spacer's head bone sits forward in its big helmet, which
 ## left its shoulders too far back to reach the handle.
 const FP_FORWARD := {"spacer": 0.05}
+## Third person: the slim characters bring a long gun back further for the
+## left hand to reach its fore-end (ArmoredRig.MAX_PULL_BACK, metres).
+const PULL_BACK := {"operative": 0.15, "spacer": 0.15}
+## First person: the Spacer's long, spiked glove fingers stood out past the
+## weapon even closed; its hands are drawn smaller still
+## (ArmoredRig.FP_HAND_SCALE).
+const FP_HAND_SCALES := {"spacer": 0.65}
 
 static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
@@ -126,35 +140,60 @@ func setup(color: Color) -> void:
 
 
 ## The animations don't move the fingers, so the curl goes into the finger
-## bones' rests, once: every pose reset (the tree's, make_first_person's)
-## then leaves them curled, with nothing to redo each frame.
-## First person: the arms are cut from the full mesh (the camera is
-## centimetres from them).
-func make_first_person() -> bool:
-	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
-		mi.mesh = load(finger_mesh_path(character))
-	return super()
-
-
+## bones' rests: the tree's pose resets then leave them curled, with nothing
+## to redo each frame. Again for first person (its left-hand curl).
 func _curl_hands() -> void:
 	_curl(_skeleton, "Right", GRIP_CURL)
-	_curl(_skeleton, "Left", SUPPORT_CURL)
-	_skeleton.reset_bone_poses()
+	_curl(_skeleton, "Left", SUPPORT_CURL if _tree == null or _tree.active else FP_SUPPORT_CURL)
 
 
-## Bends each joint of `side`'s fingers by `curl` degrees about the axis that
-## turns it towards the palm (its direction × the palm normal), in its rest.
+## `side`'s hand frame in its bone's space, from the finger bones: columns
+## thumb side, fingers, palm normal. The auto-rig orients each character's
+## hand bones differently (the Operative's palm faces about 140° from the
+## Sentinel's), so no one axis is the palm for all of them.
+static func _hand_frame(sk: Skeleton3D, side: String) -> Basis:
+	var at := func(f: String) -> Vector3:
+		return sk.get_bone_rest(sk.find_bone("%sHand%s1" % [side, f])).origin
+	var fingers: Vector3 = (at.call("Index") + at.call("Middle") + at.call("Ring") + at.call("Pinky")).normalized()
+	var thumb: Vector3 = at.call("Index") - at.call("Pinky")
+	thumb = (thumb - fingers * thumb.dot(fingers)).normalized()
+	# Mirrored hands: the right palm is thumb × fingers, the left fingers × thumb.
+	var palm := thumb.cross(fingers) if side == "Right" else fingers.cross(thumb)
+	return Basis(thumb, fingers, palm)
+
+
+## Bends each joint of `side`'s fingers by `curl` degrees towards the palm:
+## about the hand's knuckle line (the fingers' direction × the palm normal),
+## the thumb about its own direction × the palm normal. The auto-rig's
+## finger joints zigzag (the Spacer's point half into the palm), so one
+## joint's own direction would bend it sideways. Set in the rest as well as
+## the pose, so pose resets (the tree's each frame) keep it.
 static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
+	var frame := _hand_frame(sk, side)
 	for finger: String in curl:
 		for k in 3:
 			var bone := sk.find_bone("%sHand%s%d" % [side, finger, k + 1])
 			if bone < 0:
 				continue
-			var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
-			var dir := sk.get_bone_rest(next if next >= 0 else bone).origin.normalized()
+			var axis := frame.y.cross(frame.z)
+			if finger == "Thumb":
+				var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
+				axis = sk.get_bone_rest(next if next >= 0 else bone).origin.normalized().cross(frame.z)
+			var q := Quaternion(axis.normalized(), deg_to_rad(curl[finger][k]))
 			var rest := sk.get_bone_rest(bone)
-			var q := Quaternion(dir.cross(PALM).normalized(), deg_to_rad(curl[finger][k]))
 			sk.set_bone_rest(bone, Transform3D(Basis(q).scaled_local(rest.basis.get_scale()), rest.origin))
+			sk.set_bone_pose_rotation(bone, q)
+
+
+## First person: the arms are cut from the full mesh (the camera is
+## centimetres from them), and the left hand cradles the fore-end
+## (FP_SUPPORT_CURL).
+func make_first_person() -> bool:
+	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		mi.mesh = load(finger_mesh_path(character))
+	var ok := super()
+	_curl_hands()
+	return ok
 
 
 ## Adds the skin's binds that `sk` lacks as bones: "<Side>Hand<Finger><n>",
@@ -180,14 +219,24 @@ func head_position() -> Vector3:
 	return super() + Vector3(0.0, 0.0, FP_FORWARD.get(character, 0.0))
 
 
+func _fp_hand_scale() -> float:
+	return FP_HAND_SCALES.get(character, super())
+
+
+func _max_pull_back() -> float:
+	return PULL_BACK.get(character, super())
+
+
 func _grip_local() -> Transform3D:
 	return _grips[character]
 
 
 ## First person: the palm against the handle, fingers curled round it
-## (GRIP_CURL). Hand bone space (cm): fingers +Y, palm -Z, thumb -X.
+## (GRIP_CURL), in this character's hand frames.
 func _fp_hand() -> Array:
-	return [Vector3.UP, Vector3.FORWARD, Vector3(-1.0, 8.0, -2.0)]
+	var h := _hand_frame(_skeleton, "Right")
+	var l := _hand_frame(_skeleton, "Left")
+	return [h.y, h.z, h * FP_PALM_CENTRE, Basis(-l.x, l.y, l.z)]
 
 
 func _arm_chains() -> Array:
