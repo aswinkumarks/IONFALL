@@ -43,6 +43,20 @@ past 2 m. The gun was the excess: 7,571 triangles at any distance before;
 its stand-in drops it to 931 past 5 m (the step at 6 m). Sixteen players
 at play distances now draw about 100k triangles, not 470k.
 
+**Character decimation.** Mesh LODs only trim indices, so every remote
+character still skinned all 26–31k vertices of its full mesh each frame,
+at any distance. In third person, characters now use `ReducedMesh`: the
+mesh's own first LOD becomes the base level (about 10.4k triangles,
+down from 20.7k), the coarser LODs stay, and the vertices none of them use
+are dropped (sentinel 26,156 → 10,763, vanguard 28,758 → 11,593, operative
+26,896 → 11,235, spacer 30,547 → 12,647). It takes 15–19 ms per
+character, during the match's loading screen (`MatchPreload`). First
+person (the arms) and the character screen keep the full mesh. With 16
+characters running on Medium (`build/shots/char_bench.gd`, software
+Vulkan, three runs each) GPU time went from 70.3–72.9 ms to 62.1–64.3 ms,
+about −12%. Renders at 1.5 m, at 3 m and of the crowd differ in at most
+0.03% of pixels.
+
 **Culling check.** The kit's glTFs mark every material double-sided.
 `tools/cull_check` rendered every spawn in four directions (64 views per
 map) with culling as built and with back faces culled per material:

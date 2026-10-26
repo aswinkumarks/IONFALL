@@ -52,6 +52,9 @@ static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
 
 var character: String
+## The full mesh instead of the reduced one (ReducedMesh): set before setup()
+## for close-ups (the character screen); first person switches by itself.
+var full_detail := false
 var _mat: ShaderMaterial
 
 
@@ -101,7 +104,8 @@ func setup(color: Color) -> void:
 	_add_finger_bones(_skeleton, skin)
 	_curl_hands()
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
-		mi.mesh = load(finger_mesh_path(character))
+		var mesh: ArrayMesh = load(finger_mesh_path(character))
+		mi.mesh = mesh if full_detail else ReducedMesh.of(mesh)
 		mi.skin = skin
 		var base := mi.get_active_material(0) as StandardMaterial3D
 		_mat = ShaderMaterial.new()
@@ -119,6 +123,21 @@ func setup(color: Color) -> void:
 ## The animations don't move the fingers, so the curl goes into the finger
 ## bones' rests, once: every pose reset (the tree's, make_first_person's)
 ## then leaves them curled, with nothing to redo each frame.
+## First person: the arms are cut from the full mesh (the camera is
+## centimetres from them).
+func make_first_person() -> bool:
+	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		mi.mesh = load(finger_mesh_path(character))
+	return super()
+
+
+## Builds the characters' reduced meshes as their files load (MatchPreload),
+## so no player joining mid-match builds one.
+static func prepare(path: String, res: Resource) -> void:
+	if res is ArrayMesh and path.ends_with("_fingers_mesh.res"):
+		ReducedMesh.of(res)
+
+
 func _curl_hands() -> void:
 	_curl(_skeleton, "Right", GRIP_CURL)
 	_curl(_skeleton, "Left", SUPPORT_CURL)

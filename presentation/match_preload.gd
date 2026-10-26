@@ -45,7 +45,9 @@ static func run(tree: SceneTree, files: PackedStringArray, progress: Callable = 
 		if not ResourceLoader.exists(files[i]):
 			continue
 		await wait_for_idle_pool(tree)
-		_held.append(load(files[i]))
+		var res := load(files[i])
+		MeshyRig.prepare(files[i], res)
+		_held.append(res)
 		if progress.is_valid():
 			progress.call(float(i + 1) / files.size())
 
