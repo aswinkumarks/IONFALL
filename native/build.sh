@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Builds the IONFALL native extension for this machine (prototype: Linux and
-# Windows desktop). Usage: native/build.sh [template_release|template_debug]
+# Builds the IONFALL native extension. Usage: native/build.sh [linux] [windows]
+# (default: linux). Windows is cross-compiled with mingw-w64 (posix threads).
+#
+# Only release libraries are built; the .gdextension lists them without a
+# debug/release tag, so the editor, debug and release exports all load them.
 #
 # The extension is opt-in: nothing in the repo loads it until this script
-# writes native/bin/ionfall_native.gdextension. Without it the game runs the
-# GDScript code (always the case on the web, PLAN §3.17 browser rule).
+# writes native/bin/ionfall_native.gdextension, listing the platforms built.
+# Without it the game runs the GDScript code (always the case on the web, and
+# on Android until it has a build, PLAN §3.17 browser rule).
 set -euo pipefail
 
 cd "$(dirname "$0")"
-TARGET="${1:-template_release}"
+PLATFORMS=("${@:-linux}")
 # godot-cpp 4.5 bindings; GDExtension is forward compatible, so they load in
 # the pinned Godot 4.7.2 (docs/toolchain.md).
 GODOT_CPP_REF="godot-4.5-stable"
@@ -24,9 +28,25 @@ fi
 # Keep Godot's importer out of godot-cpp (it ships test projects).
 touch godot-cpp/.gdignore
 
-scons target="$TARGET" -j"$(nproc 2>/dev/null || echo 4)"
+LIBRARIES=""
+for p in "${PLATFORMS[@]}"; do
+	case "$p" in
+		linux)
+			scons platform=linux target=template_release -j"$(nproc 2>/dev/null || echo 4)"
+			LIBRARIES+='linux.x86_64 = "res://native/bin/libionfall_native.linux.template_release.x86_64.so"'$'\n'
+			;;
+		windows)
+			scons platform=windows use_mingw=yes target=template_release -j"$(nproc 2>/dev/null || echo 4)"
+			LIBRARIES+='windows.x86_64 = "res://native/bin/libionfall_native.windows.template_release.x86_64.dll"'$'\n'
+			;;
+		*)
+			echo "unknown platform '$p' (linux, windows)" >&2
+			exit 1
+			;;
+	esac
+done
 
-cat > bin/ionfall_native.gdextension <<'EOF'
+cat > bin/ionfall_native.gdextension <<EOF
 [configuration]
 
 entry_symbol = "ionfall_native_init"
@@ -34,9 +54,6 @@ compatibility_minimum = "4.5"
 
 [libraries]
 
-linux.debug.x86_64 = "res://native/bin/libionfall_native.linux.template_debug.x86_64.so"
-linux.release.x86_64 = "res://native/bin/libionfall_native.linux.template_release.x86_64.so"
-windows.debug.x86_64 = "res://native/bin/libionfall_native.windows.template_debug.x86_64.dll"
-windows.release.x86_64 = "res://native/bin/libionfall_native.windows.template_release.x86_64.dll"
+$LIBRARIES
 EOF
-echo "Built native/bin for $TARGET. Run 'godot --headless --import' once so Godot registers it."
+echo "Built native/bin for ${PLATFORMS[*]}. Run 'godot --headless --import' once so Godot registers it."

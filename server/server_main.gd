@@ -27,8 +27,9 @@ func _ready() -> void:
 	_stop_file = Platform.get_user_arg("--stop-file", OS.get_executable_path().get_base_dir().path_join("ionfall_server.stop"))
 	if FileAccess.file_exists(_stop_file):
 		DirAccess.remove_absolute(_stop_file)  # left over from a crash
-	printerr("IONFALL server %s starting (engine %s, compat %s)" % [
+	printerr("IONFALL server %s starting (engine %s, compat %s, native rewind %s)" % [
 		BuildInfo.display_string(), BuildInfo.engine_version, BuildInfo.compat_hash,
+		"on" if ClassDB.class_exists(&"HitboxRewindNative") else "off",
 	])
 	var port := Platform.get_user_arg("--port", str(Protocol.DEFAULT_PORT)).to_int()
 	var bots := clampi(Platform.get_user_arg("--bots", "0").to_int(), 0, Protocol.MAX_PEERS - 1)

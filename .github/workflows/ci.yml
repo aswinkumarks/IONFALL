@@ -96,6 +96,31 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # The native extension (native/, PLAN §3.17) for Linux and Windows
+      # (cross-compiled with mingw-w64). Built before the import so Godot
+      # registers it: the tests then run the native path, and the desktop
+      # exports ship it. Android and the web keep the GDScript path
+      # (export_presets.cfg excludes native/).
+      - name: Install native build tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq scons g++-mingw-w64-x86-64-posix >/dev/null
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+
+      - name: Cache godot-cpp
+        uses: actions/cache@v6
+        with:
+          path: |
+            native/godot-cpp
+            native/.sconsign.dblite
+          key: godot-cpp-${{ hashFiles('native/build.sh', 'native/SConstruct') }}
+          restore-keys: godot-cpp-
+
+      - name: Build the native extension
+        run: bash native/build.sh linux windows
+
       - name: Import project
         run: timeout 600 godot --headless --import
 
@@ -139,6 +164,10 @@ jobs:
           export_preset "Linux" linux x86_64 release build/linux/ionfall.x86_64
           export_preset "Windows" windows x86_64 release build/windows/IONFALL.exe
           export_preset "Web" web wasm32 release build/web/index.html
+          # The desktop builds ship the native extension; the web build doesn't.
+          test -f build/linux/libionfall_native.linux.template_release.x86_64.so
+          test -f build/windows/libionfall_native.windows.template_release.x86_64.dll
+          ! ls build/web | grep -q ionfall_native
 
       # Server builds aren't released any more; the exported game runs the
       # same server (--server), so every map and mode is still checked.
@@ -147,7 +176,8 @@ jobs:
           set -euo pipefail
           for map in station spire foundry; do
             for mode in ffa tdm ctf waves; do
-              timeout 60 build/linux/ionfall.x86_64 --headless -- --server --map $map --mode $mode --no-discovery --smoke-test
+              timeout 60 build/linux/ionfall.x86_64 --headless -- --server --map $map --mode $mode --no-discovery --smoke-test 2>&1 | tee smoke.log
+              grep -q "native rewind on" smoke.log
             done
           done
 
