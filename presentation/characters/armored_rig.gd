@@ -68,7 +68,6 @@ var _tree: AnimationTree
 var _armor_mat := StandardMaterial3D.new()
 var _visor_mat := StandardMaterial3D.new()
 var _body_mat := StandardMaterial3D.new()
-var _hand: BoneAttachment3D
 var _weapon_id: StringName = &""
 var _weapon_node: Node3D
 var _twist: float = 0.0
@@ -81,26 +80,41 @@ var _look_pitch: float = 0.0
 var _weapon_local := Transform3D()
 ## The aim blend's upper end: 1 uses the aim-up clip fully.
 var _aim_up: float = 1.0
+## The held weapon's Grip and Support markers (its own space).
+var _grip_at := Vector3.ZERO
+var _support_at := Vector3.ZERO
+## Looked up once (_cache_bones), not by name every frame: the chest, its
+## parent, the head, its parent, and per arm (right first) [upper arm,
+## forearm, hand, upper arm's parent].
+var _b_chest := -1
+var _b_chest_parent := -1
+var _b_head := -1
+var _b_head_parent := -1
+var _head_rest := Basis()
+var _arms: Array[PackedInt32Array] = []
+## Per arm, skeleton space: [upper arm rest, forearm rest, hand rest] global
+## rests, the shoulder's offset from its parent, and the two bone lengths.
+var _arm_rests: Array = []
+## Animation detail (set_detail): the arms' IK, the bladed stance and the
+## head levelling run only when `_ik`; the tree advances every `_anim_every`
+## frames (0: never), `_anim_phase` frames apart from other characters.
+var _ik := true
+var _anim_every := 1
+var _anim_phase := 0
+var _anim_dt := 0.0
+var _hold: HoldWeapon
 
 
-## Keeps the head upright after the animation: the library's pistol-aim
-## clips bow the neck to sight down a pistol, which read as a head tilted
-## forward. The head keeps its rest (upright) orientation in the skeleton,
-## turned by the look pitch.
-class HeadLevel extends SkeletonModifier3D:
-	var rig: ArmoredRig
-
-	func _process_modification_with_delta(_delta: float) -> void:
-		rig._level_head()
-
-
-## Third person: the arms hold the weapon rather than following the clips,
-## whose two-handed pistol pose clasped both hands behind a rifle's grip.
+## Third person, after the clips: the arms hold the weapon rather than
+## following the clips, whose two-handed pistol pose clasped both hands
+## behind a rifle's grip; then the head is levelled (_level_head). One
+## modifier, not two: each active one costs the skeleton a pass.
 class HoldWeapon extends SkeletonModifier3D:
 	var rig: ArmoredRig
 
 	func _process_modification_with_delta(_delta: float) -> void:
 		rig._hold_weapon()
+		rig._level_head()
 
 
 func setup(color: Color) -> void:
@@ -137,9 +151,6 @@ func setup(color: Color) -> void:
 	armor.set_surface_override_material(1, _visor_mat)
 	_skeleton.add_child(armor)
 	armor.skeleton = NodePath("..")
-	_hand = BoneAttachment3D.new()
-	_hand.bone_name = "hand_r"
-	_skeleton.add_child(_hand)
 	_build_tree(_retargeted(_skeleton), UPPER_BONES)
 
 
@@ -325,19 +336,62 @@ func _build_tree(library: AnimationLibrary, upper_bones: Array) -> void:
 	bt.connect_node("output", 0, "shoot")
 	_tree = AnimationTree.new()
 	_tree.tree_root = bt
+	# Advanced by animate() (_advance), at a rate set_detail picks.
+	_tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	_model.add_child(_tree)
 	_tree.root_node = NodePath("..")
 	_tree.anim_player = _tree.get_path_to(player)
 	_tree.set("parameters/upper/blend_amount", 1.0)
 	_tree.active = true
-	# Holding first: it turns the chest, which the head then undoes.
-	var hold := HoldWeapon.new()
-	hold.rig = self
-	_skeleton.add_child(hold)
-	var level := HeadLevel.new()
-	level.rig = self
-	_skeleton.add_child(level)
+	_hold = HoldWeapon.new()
+	_hold.rig = self
+	_skeleton.add_child(_hold)
 	_skeleton.skeleton_updated.connect(_place_weapon)
+	_cache_bones()
+
+
+func _cache_bones() -> void:
+	var sk := _skeleton
+	_b_chest = sk.find_bone(_chest_bone())
+	_b_chest_parent = sk.get_bone_parent(_b_chest)
+	_b_head = sk.find_bone("Head")
+	_b_head_parent = sk.get_bone_parent(_b_head)
+	if _b_head >= 0:
+		_head_rest = sk.get_bone_global_rest(_b_head).basis.orthonormalized()
+	_arms.clear()
+	_arm_rests.clear()
+	for chain: Array in _arm_chains():
+		var u := sk.find_bone(chain[0])
+		var f := sk.find_bone(chain[1])
+		var h := sk.find_bone(chain[2])
+		_arms.append(PackedInt32Array([u, f, h, sk.get_bone_parent(u)]))
+		var rests := [sk.get_bone_global_rest(u), sk.get_bone_global_rest(f), sk.get_bone_global_rest(h)]
+		_arm_rests.append([rests[0], rests[1], rests[2], sk.get_bone_rest(u).origin,
+				rests[0].origin.distance_to(rests[1].origin), rests[1].origin.distance_to(rests[2].origin)])
+
+
+## Animation detail, for characters far away or off screen (PlayerVisual):
+## `ik` off leaves the arms and head in the clips' pose (the HoldWeapon
+## modifier is off; the weapon still follows the aim); the tree advances
+## every `anim_every` frames (0: paused), `phase` spreading those frames
+## across characters.
+func set_detail(ik: bool, anim_every: int, phase: int = 0) -> void:
+	_ik = ik
+	_anim_every = anim_every
+	_anim_phase = phase
+	if _hold != null:
+		_hold.active = ik
+
+
+func _advance(delta: float) -> void:
+	_anim_dt += delta
+	if not _tree.active or _anim_every <= 0 or (Engine.get_process_frames() + _anim_phase) % _anim_every != 0:
+		return
+	_tree.advance(_anim_dt)
+	_anim_dt = 0.0
+	if not _ik:
+		_hold_weapon()  # the modifier is off: just aim the weapon
+		_place_weapon()
 
 
 ## The animation-library clips for this body: rotations only, except the
@@ -403,46 +457,51 @@ func animate(state: PlayerSimState, delta: float, _height: float) -> void:
 	if _flash > 0.0:
 		_flash = maxf(_flash - delta * 8.0, 0.0)
 		_apply_emission()
+	_advance(delta)
 
 
+## Keeps the head upright after the animation: the library's pistol-aim
+## clips bow the neck to sight down a pistol, which read as a head tilted
+## forward. The head keeps its rest (upright) orientation in the skeleton,
+## turned by the look pitch.
 func _level_head() -> void:
-	var head := _skeleton.find_bone("Head")
-	var parent := _skeleton.get_bone_parent(head)
-	if head < 0 or parent < 0:
+	if _b_head < 0 or _b_head_parent < 0 or not _tree.active:
 		return
 	# The skeleton faces +Z (the model is turned to face -Z), so its right is -X.
-	var upright := Basis(Vector3.LEFT, _look_pitch * HEAD_PITCH) * _skeleton.get_bone_global_rest(head).basis.orthonormalized()
-	var local := _skeleton.get_bone_global_pose(parent).basis.orthonormalized().inverse() * upright
-	_skeleton.set_bone_pose_rotation(head, local.get_rotation_quaternion())
+	var upright := Basis(Vector3.LEFT, _look_pitch * HEAD_PITCH) * _head_rest
+	var local := _skeleton.get_bone_global_pose(_b_head_parent).basis.orthonormalized().inverse() * upright
+	_skeleton.set_bone_pose_rotation(_b_head, local.get_rotation_quaternion())
 
 
 ## Third person: the weapon where _hold_weapon put it, along the look
 ## direction. Held by the hand bone's own rotation, the aim clips (made for a
-## pistol) turned it 90 degrees across the body.
+## pistol) turned it 90 degrees across the body. A child of the rig, so it
+## moves with it between pose updates.
 func _place_weapon() -> void:
 	if _weapon_node != null and is_inside_tree():  # the skeleton updates once more while leaving
-		_weapon_node.global_transform = global_transform * _weapon_local
+		_weapon_node.transform = _weapon_local
 
 
 ## The weapon shouldered along the aim (SHOULDER_TO_HANDLE), the right hand
-## on its handle and the left on the fore-end. Runs after the animation.
+## on its handle and the left on the fore-end (only the weapon when not
+## `_ik`). Runs after the animation.
 func _hold_weapon() -> void:
 	if _weapon_node == null or not _tree.active or not is_inside_tree():
 		return  # first person poses the arms itself (pose_first_person)
-	# Bladed stance: the chest turns right about the skeleton's up (+Y; it
-	# faces +Z, so a right turn is negative).
-	var chest := _skeleton.find_bone(_chest_bone())
-	var parent := _skeleton.get_bone_parent(chest)
-	var turned := Basis(Vector3.UP, -BLADE) * _skeleton.get_bone_global_pose(chest).basis
-	_skeleton.set_bone_pose_rotation(chest,
-			(_skeleton.get_bone_global_pose(parent).basis.inverse() * turned).get_rotation_quaternion())
+	if _ik:
+		# Bladed stance: the chest turns right about the skeleton's up (+Y; it
+		# faces +Z, so a right turn is negative).
+		var turned := Basis(Vector3.UP, -BLADE) * _skeleton.get_bone_global_pose(_b_chest).basis
+		_skeleton.set_bone_pose_rotation(_b_chest,
+				(_skeleton.get_bone_global_pose(_b_chest_parent).basis.inverse() * turned).get_rotation_quaternion())
 	var to_rig := global_transform.affine_inverse() * _skeleton.global_transform
-	var shoulder := to_rig * _skeleton.get_bone_global_pose(_skeleton.find_bone(_arm_chains()[0][0])).origin
+	var shoulder := to_rig * _skeleton.get_bone_global_pose(_arms[0][0]).origin
 	var aim := Basis(Vector3.RIGHT, _look_pitch)
 	var held := aim.scaled_local(Vector3.ONE * _grip_scale())
 	var handle := shoulder + aim * SHOULDER_TO_HANDLE
-	_weapon_local = Transform3D(held, handle - held * (_weapon_node.get_node("Grip") as Node3D).position)
-	_pose_arms(_weapon_local, handle, _weapon_local * (_weapon_node.get_node("Support") as Node3D).position)
+	_weapon_local = Transform3D(held, handle - held * _grip_at)
+	if _ik:
+		_pose_arms(_weapon_local, handle, _weapon_local * _support_at)
 
 
 ## Fire: the upper body plays a recoil.
@@ -456,7 +515,7 @@ func muzzle_position() -> Vector3:
 
 
 func set_weapon(id: StringName) -> void:
-	if id == _weapon_id or _hand == null:
+	if id == _weapon_id or _skeleton == null:
 		return
 	_weapon_id = id
 	hold_model(WeaponModels.instantiate(id))
@@ -467,13 +526,14 @@ func hold_model(w: Node3D) -> void:
 	if _weapon_node != null:
 		_weapon_node.queue_free()
 		_weapon_node = null
-	if w == null or _hand == null:
+	if w == null or _skeleton == null:
 		return
 	# Placed every pose (_place_weapon): the handle in the right hand, the
 	# barrel where the player looks.
-	w.top_level = true
-	_hand.add_child(w)
+	add_child(w)
 	_weapon_node = w
+	_grip_at = (w.get_node("Grip") as Node3D).position
+	_support_at = (w.get_node("Support") as Node3D).position
 	_place_weapon()
 
 
@@ -557,23 +617,18 @@ func _pose_arms(weapon: Transform3D, handle: Vector3, support: Vector3) -> void:
 		var s_palm := w * SUPPORT_PALM
 		s_palm = (s_palm - s_fingers * s_palm.dot(s_fingers)).normalized()
 		support_basis = Basis(s_fingers.cross(s_palm), s_fingers, s_palm) * local.inverse()
-	var chains := _arm_chains()
-	support = to_skel.affine_inverse() * _within_reach(chains[1], to_skel * support, to_skel * handle)
+	support = to_skel.affine_inverse() * _within_reach(1, to_skel * support, to_skel * handle)
 	# Elbows down, out and slightly back (skeleton space: the body faces +Z, its right is -X).
-	_reach(chains[0], to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
-	_reach(chains[1], to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
+	_reach(0, to_skel * hand_pos, (to_skel.basis * hand_basis).orthonormalized(), Vector3(-0.5, -1.0, -0.6))
+	_reach(1, to_skel * support, (to_skel.basis * support_basis).orthonormalized(), Vector3(0.3, -1.0, -0.8))
 
 
 ## The point nearest `want` along the weapon (from `handle` towards `want`)
-## that arm `chain` reaches (SUPPORT_REACH), skeleton space.
-func _within_reach(chain: Array, want: Vector3, handle: Vector3) -> Vector3:
-	var sk := _skeleton
-	var joints: Array[Vector3] = []
-	for bone: String in chain:
-		joints.append(sk.get_bone_global_rest(sk.find_bone(bone)).origin)
-	var u := sk.find_bone(chain[0])
-	var shoulder := sk.get_bone_global_pose(sk.get_bone_parent(u)) * sk.get_bone_rest(u).origin
-	var reach := (joints[0].distance_to(joints[1]) + joints[1].distance_to(joints[2])) * SUPPORT_REACH
+## that arm `arm` (0 right, 1 left) reaches (SUPPORT_REACH), skeleton space.
+func _within_reach(arm: int, want: Vector3, handle: Vector3) -> Vector3:
+	var rests: Array = _arm_rests[arm]
+	var shoulder := _skeleton.get_bone_global_pose(_arms[arm][3]) * (rests[3] as Vector3)
+	var reach: float = (rests[4] + rests[5]) * SUPPORT_REACH
 	if want.distance_to(shoulder) <= reach:
 		return want
 	# The far end of the weapon line within the reach sphere:
@@ -588,21 +643,23 @@ func _within_reach(chain: Array, want: Vector3, handle: Vector3) -> Vector3:
 	return handle + d * clampf((-b + sqrt(disc)) / (2.0 * a), 0.0, 1.0)
 
 
-## Two-bone IK in skeleton space: upper arm and forearm bend in the plane
-## towards `pole` so the hand lands on `target`; the hand takes `hand_basis`
-## (identity basis: keep the forearm's).
-func _reach(chain: Array, target: Vector3, hand_basis: Basis, pole: Vector3) -> void:
+## Two-bone IK in skeleton space: arm `arm`'s (0 right, 1 left) upper arm
+## and forearm bend in the plane towards `pole` so the hand lands on
+## `target`; the hand takes `hand_basis` (identity basis: keep the forearm's).
+func _reach(arm: int, target: Vector3, hand_basis: Basis, pole: Vector3) -> void:
 	var sk := _skeleton
-	var u := sk.find_bone(chain[0])
-	var f := sk.find_bone(chain[1])
-	var h := sk.find_bone(chain[2])
-	var rest_u := sk.get_bone_global_rest(u)
-	var rest_f := sk.get_bone_global_rest(f)
-	var rest_h := sk.get_bone_global_rest(h)
-	var l1 := rest_u.origin.distance_to(rest_f.origin)
-	var l2 := rest_f.origin.distance_to(rest_h.origin)
-	var parent := sk.get_bone_global_pose(sk.get_bone_parent(u))
-	var shoulder := parent * sk.get_bone_rest(u).origin
+	var bones := _arms[arm]
+	var rests: Array = _arm_rests[arm]
+	var u := bones[0]
+	var f := bones[1]
+	var h := bones[2]
+	var rest_u: Transform3D = rests[0]
+	var rest_f: Transform3D = rests[1]
+	var rest_h: Transform3D = rests[2]
+	var l1: float = rests[4]
+	var l2: float = rests[5]
+	var parent := sk.get_bone_global_pose(bones[3])
+	var shoulder := parent * (rests[3] as Vector3)
 	var to_target := target - shoulder
 	var d := clampf(to_target.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
 	var dir := to_target.normalized()

@@ -82,7 +82,7 @@ func _ready() -> void:
 	var q := Platform.get_user_arg("--quality").split(",")
 	if QUALITY.has(q[0]):
 		_quality_override = q[0]
-		_override_preset = QUALITY[q[0]].duplicate()
+		_override_preset = preset_for(q[0], Platform.is_mobile()).duplicate()
 		for pair in q.slice(1):
 			var key := pair.get_slice("=", 0)
 			if _override_preset.has(key) or DEFAULTS.video.has(key):
@@ -291,6 +291,10 @@ const QUALITY := {
 	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
 			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "probe": true, "lights": true},
 }
+## Phone-only changes to a preset's extras. The reflection probe costs the
+## Mi 11X ~0.9 ms of GPU time, so phones leave it off on Medium; desktops
+## keep it (m4.md).
+const MOBILE_EXTRAS := {"medium": {"probe": false}}
 const QUALITY_NAMES := ["low", "medium", "high", "ultra", "custom"]
 const PRESET_KEYS := ["render_scale", "shadows", "glow", "effects"]
 
@@ -312,7 +316,14 @@ func quality_preset() -> Dictionary:
 	if not _override_preset.is_empty():
 		return _override_preset
 	var q: String = get_value("video", "quality")
-	return QUALITY.get(q, QUALITY[default_quality()])
+	return preset_for(q if QUALITY.has(q) else default_quality(), Platform.is_mobile())
+
+
+## Preset `q`'s values on a phone (`mobile`) or elsewhere (MOBILE_EXTRAS).
+static func preset_for(q: String, mobile: bool) -> Dictionary:
+	if mobile and MOBILE_EXTRAS.has(q):
+		return (QUALITY[q] as Dictionary).merged(MOBILE_EXTRAS[q], true)
+	return QUALITY[q]
 
 
 func load_settings() -> void:

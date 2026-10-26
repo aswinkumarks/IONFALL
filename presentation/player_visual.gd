@@ -39,12 +39,25 @@ var shield: float = 0.0  ## at the latest update
 var _shell: MeshInstance3D
 var _shell_mat: ShaderMaterial
 var _shell_t: float = 0.0
+var _near := true
+var _detail := Vector2i(1, 1)  ## [ik, anim_every] last sent to the rig
+var _phase := 0
 
 const SHIELD_SHADER := preload("res://presentation/shield.gdshader")
 const NAMEPLATE_RANGE := 30.0  ## metres
 ## The bar under the nameplate, in texels (Sprite3D pixel_size 0.005: 0.6 m).
 const BAR_SIZE := Vector2i(120, 13)
 const SHELL_SECONDS := 0.3
+## Animation detail (CharacterRig.set_detail), by distance from the camera:
+## the arms hold the weapon by IK within IK_RANGE (a metre either side
+## before switching, so it doesn't flicker at the edge); past it the clips
+## advance every 2nd frame, past FAR_RANGE every 3rd, and off screen every
+## OFFSCREEN_EVERY (shadows can still show them).
+const IK_RANGE := 15.0
+const FAR_RANGE := 30.0
+const OFFSCREEN_EVERY := 6
+## Half the body's extent, for the on-screen test (metres).
+const BODY_RADIUS := 1.2
 
 
 ## `variant` picks the character model (e.g. one astronaut per player);
@@ -55,6 +68,7 @@ func setup(display_name: String, is_bot: bool, p_color: Color, variant: int = 0,
 	rig = CharacterRig.create(rig_style, variant)
 	add_child(rig)
 	rig.setup(p_color)
+	_phase = get_instance_id() % 12  # spreads reduced-rate frames; not the shared RNG
 	_label = Label3D.new()
 	_label.text = ("[BOT] " if is_bot else "") + display_name
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -109,11 +123,13 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 		_shell_mat.set_shader_parameter("strength", _shell_t / SHELL_SECONDS * 1.4)
 		_shell.visible = _shell_t > 0.0
 	if not cur.alive:
+		_set_detail(false, 0)
 		return
 	# Never interpolate across a respawn or teleport (PLAN §3.3.4).
 	var from := prev if prev != null and prev.discontinuity_gen == cur.discontinuity_gen else cur
 	position = from.position.lerp(cur.position, alpha)
 	rotation.y = lerp_angle(from.yaw, cur.yaw, alpha)
+	_update_detail()
 	var target_h := 1.8 if cur.stance == PlayerSimState.Stance.STAND else 1.2
 	_height = lerpf(_height, target_h, 0.3)
 	var held := cur.weapon()
@@ -126,6 +142,29 @@ func update_from(prev: PlayerSimState, cur: PlayerSimState, alpha: float, time: 
 	if cur.spawn_protection_ticks > 0:
 		shimmer = 0.6 + 0.6 * sin(time * 18.0)
 	rig.set_glow(shimmer)
+
+
+## Picks the rig's animation detail from where the camera sees it.
+func _update_detail() -> void:
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if camera == null:
+		_set_detail(true, 1)
+		return
+	var centre := global_position + Vector3(0.0, 0.9, 0.0)
+	var d := camera.global_position.distance_to(centre)
+	_near = d < IK_RANGE + (1.0 if _near else -1.0)
+	for plane: Plane in camera.get_frustum():
+		if plane.distance_to(centre) > BODY_RADIUS:
+			_set_detail(false, OFFSCREEN_EVERY)
+			return
+	_set_detail(_near, 1 if _near else (2 if d < FAR_RANGE else 3))
+
+
+func _set_detail(ik: bool, anim_every: int) -> void:
+	var detail := Vector2i(1 if ik else 0, anim_every)
+	if detail != _detail:
+		_detail = detail
+		rig.set_detail(ik, anim_every, _phase)
 
 
 ## The bar under the nameplate: the shield in the HUD's shield colour while

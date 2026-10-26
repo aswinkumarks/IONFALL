@@ -99,6 +99,7 @@ func setup(color: Color) -> void:
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0]
 	var skin: Skin = load(finger_skin_path(character))
 	_add_finger_bones(_skeleton, skin)
+	_curl_hands()
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
 		mi.mesh = load(finger_mesh_path(character))
 		mi.skin = skin
@@ -112,22 +113,20 @@ func setup(color: Color) -> void:
 		mi.material_override = _mat
 	for a: AnimationPlayer in _model.find_children("*", "AnimationPlayer", true, false):
 		a.queue_free()  # Meshy's rig-check clip; the tree drives the skeleton
-	_hand = BoneAttachment3D.new()
-	_hand.bone_name = "RightHand"
-	_skeleton.add_child(_hand)
 	_build_tree(_retarget_to(character, _skeleton, String(_model.get_path_to(_skeleton))), MESHY_UPPER)
-	_curl_hands()
 
 
-## The animations don't move the fingers, so their curl is set once (again
-## after make_first_person resets the pose).
+## The animations don't move the fingers, so the curl goes into the finger
+## bones' rests, once: every pose reset (the tree's, make_first_person's)
+## then leaves them curled, with nothing to redo each frame.
 func _curl_hands() -> void:
 	_curl(_skeleton, "Right", GRIP_CURL)
 	_curl(_skeleton, "Left", SUPPORT_CURL)
+	_skeleton.reset_bone_poses()
 
 
 ## Bends each joint of `side`'s fingers by `curl` degrees about the axis that
-## turns it towards the palm (its direction × the palm normal).
+## turns it towards the palm (its direction × the palm normal), in its rest.
 static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
 	for finger: String in curl:
 		for k in 3:
@@ -136,21 +135,9 @@ static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
 				continue
 			var next := sk.find_bone("%sHand%s%d" % [side, finger, k + 2])
 			var dir := sk.get_bone_rest(next if next >= 0 else bone).origin.normalized()
-			sk.set_bone_pose_rotation(bone, Quaternion(dir.cross(PALM).normalized(), deg_to_rad(curl[finger][k])))
-
-
-## The animation tree resets the fingers (it has no tracks for them) each
-## frame in third person: curl them again after the clips.
-func _hold_weapon() -> void:
-	super()
-	if _tree.active:
-		_curl_hands()
-
-
-func make_first_person() -> bool:
-	var ok := super()
-	_curl_hands()
-	return ok
+			var rest := sk.get_bone_rest(bone)
+			var q := Quaternion(dir.cross(PALM).normalized(), deg_to_rad(curl[finger][k]))
+			sk.set_bone_rest(bone, Transform3D(Basis(q).scaled_local(rest.basis.get_scale()), rest.origin))
 
 
 ## Adds the skin's binds that `sk` lacks as bones: "<Side>Hand<Finger><n>",

@@ -44,3 +44,13 @@ func test_quality_preset_writes_its_values_and_manual_change_goes_custom() -> vo
 
 func test_platform_default_quality() -> void:
 	assert_true(Settings.QUALITY.has(Settings.default_quality()))
+
+
+## Phones leave the reflection probe off on Medium (~0.9 ms of GPU on the
+## Mi 11X, m4.md); desktops keep it, and other presets are unchanged.
+func test_phone_medium_has_no_reflection_probe() -> void:
+	assert_false(Settings.preset_for("medium", true).probe)
+	assert_true(Settings.preset_for("medium", false).probe)
+	assert_true(Settings.QUALITY.medium.probe, "the shared preset isn't changed")
+	assert_eq(Settings.preset_for("high", true), Settings.QUALITY.high)
+	assert_eq(Settings.preset_for("medium", true).render_scale, Settings.QUALITY.medium.render_scale)

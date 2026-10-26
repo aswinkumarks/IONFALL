@@ -97,7 +97,7 @@ func _check_fingers(c: String) -> void:
 		assert_true(on_fingers.has(name), "%s: %s moves vertices" % [c, name])
 
 
-## The pistol-aim clips bow the neck; ArmoredRig.HeadLevel keeps the head
+## The pistol-aim clips bow the neck; ArmoredRig._level_head keeps the head
 ## upright (rest orientation) when looking straight ahead.
 func test_head_stays_level_while_aiming() -> void:
 	for style: String in ["armored", "sentinel"]:
@@ -111,7 +111,7 @@ func test_head_stays_level_while_aiming() -> void:
 		var sk: Skeleton3D = rig._skeleton
 		var head := sk.find_bone("Head")
 		var final_up := [Vector3.ZERO]
-		# Read after the modifiers (HeadLevel) have run.
+		# Read after the HoldWeapon modifier (_level_head) has run.
 		sk.skeleton_updated.connect(func() -> void: final_up[0] = sk.get_bone_global_pose(head).basis.orthonormalized().y)
 		for i in 30:
 			rig.animate(s, 1.0 / 60.0, 1.8)
