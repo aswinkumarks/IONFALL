@@ -141,6 +141,8 @@ func _ready() -> void:
 		MatchPreload.release()
 	get_tree().root.get_window().focus_exited.connect(_on_focus_lost)
 	Diagnostics.net_info = _net_info
+	if Platform.user_args.has("--aa-bench"):  # dev: MSAA vs FXAA on the device (AaBench)
+		add_child(AaBench.new())
 	if Platform.user_args.has("--adpf"):  # ADPF spike (docs/decisions/0004-thermals-adpf.md)
 		Platform.start_performance_hints(1000.0 / maxf(float(Settings.get_value("video", "fps_cap")), 1.0))
 	# Static world bodies become queryable after the first physics step.
@@ -827,7 +829,8 @@ func _log_perf(delta: float) -> void:
 		return
 	Platform.report_frame_work((Performance.get_monitor(Performance.TIME_PROCESS) \
 			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0 + RenderingServer.get_frame_setup_time_cpu())
-	if Settings.get_value("video", "adaptive_quality") and not _paused:
+	# Not during an AA benchmark: a step-down would change what it measures.
+	if Settings.get_value("video", "adaptive_quality") and not _paused and not AaBench.running:
 		var step := _adaptive.add_frame(delta, int(Settings.get_value("video", "fps_cap")))
 		if not step.is_empty():
 			Platform.perf_log("QUALITY step-down %s" % step)

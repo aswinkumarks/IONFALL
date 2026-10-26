@@ -34,6 +34,7 @@ const SCHEMA := {
 		["video", "shadows", "SETTING_SHADOWS", "check"],
 		["video", "glow", "SETTING_GLOW", "check"],
 		["video", "effects", "SETTING_EFFECTS", "percent", 0.25, 1.0, 0.05],
+		["video", "anti_aliasing", "SETTING_ANTI_ALIASING", "choice", Settings.ANTI_ALIASING],
 		["video", "adaptive_quality", "SETTING_ADAPTIVE_QUALITY", "check"],
 	],
 	"SETTINGS_TAB_GAME": [

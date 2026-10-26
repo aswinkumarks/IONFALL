@@ -32,6 +32,7 @@ const DEFAULTS := {
 		"glow": true,
 		"effects": 1.0,  ## particle density
 		"adaptive_quality": true,  ## automatic step-down when slow or hot (PLAN §3.10)
+		"anti_aliasing": "auto",  ## auto (the preset's) / off / fxaa / msaa_2x / msaa_4x
 	},
 	"input": {
 		"sensitivity_x": 1.0,
@@ -179,8 +180,9 @@ func apply_video() -> void:
 	else:
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	root.scaling_3d_scale = scale
-	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][preset.msaa]
-	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if preset.fxaa else Viewport.SCREEN_SPACE_AA_DISABLED
+	var aa := anti_aliasing_for(str(get_value("video", "anti_aliasing")), preset)
+	root.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][aa.x]
+	root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if aa.y == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	root.anisotropic_filtering_level = preset.aniso
 	root.mesh_lod_threshold = preset.lod
 	RenderingServer.directional_shadow_atlas_set_size(preset.shadow_size, true)
@@ -336,6 +338,28 @@ func quality_preset() -> Dictionary:
 		return _override_preset
 	var q: String = get_value("video", "quality")
 	return preset_for(q if QUALITY.has(q) else default_quality(), Platform.is_mobile())
+
+
+## The anti-aliasing setting's choices. On tile-based phone GPUs (Adreno,
+## Mali) MSAA resolves in tile memory and may cost less than FXAA's full
+## screen pass (0.5 ms on the Mi 11X, m4.md); `--aa-bench` measures them
+## on the device (AaBench).
+const ANTI_ALIASING := ["auto", "off", "fxaa", "msaa_2x", "msaa_4x"]
+
+
+## [MSAA level (0 off, 1 2x, 2 4x), FXAA (1 on)] for anti-aliasing setting
+## `choice` with `preset` (QUALITY) as "auto".
+static func anti_aliasing_for(choice: String, preset: Dictionary) -> Vector2i:
+	match choice:
+		"off":
+			return Vector2i(0, 0)
+		"fxaa":
+			return Vector2i(0, 1)
+		"msaa_2x":
+			return Vector2i(1, 0)
+		"msaa_4x":
+			return Vector2i(2, 0)
+	return Vector2i(int(preset.get("msaa", 0)), 1 if preset.get("fxaa", false) else 0)
 
 
 ## Preset `q`'s values on a phone (`mobile`) or elsewhere (MOBILE_EXTRAS).

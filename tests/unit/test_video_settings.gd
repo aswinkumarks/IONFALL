@@ -66,3 +66,30 @@ func test_menu_mode_restores_the_fps_cap() -> void:
 		assert_lte(in_menu, Settings.MENU_FPS)
 	else:
 		assert_eq(in_menu, Engine.max_fps, "desktops keep their cap in menus")
+
+
+## The anti-aliasing setting: "auto" follows the preset, the rest override it.
+func test_anti_aliasing_choices() -> void:
+	assert_eq(Settings.anti_aliasing_for("auto", Settings.QUALITY.high), Vector2i(1, 0), "High: MSAA 2x")
+	assert_eq(Settings.anti_aliasing_for("auto", Settings.QUALITY.medium), Vector2i(0, 0), "Medium: none")
+	assert_eq(Settings.anti_aliasing_for("off", Settings.QUALITY.ultra), Vector2i(0, 0))
+	assert_eq(Settings.anti_aliasing_for("fxaa", Settings.QUALITY.medium), Vector2i(0, 1))
+	assert_eq(Settings.anti_aliasing_for("msaa_2x", Settings.QUALITY.low), Vector2i(1, 0))
+	assert_eq(Settings.anti_aliasing_for("msaa_4x", Settings.QUALITY.low), Vector2i(2, 0))
+	var before: Variant = Settings.get_value("video", "anti_aliasing")
+	Settings.set_value("video", "anti_aliasing", "msaa_2x")
+	assert_eq(get_tree().root.msaa_3d, Viewport.MSAA_2X, "applied to the window")
+	assert_eq(get_tree().root.screen_space_aa, Viewport.SCREEN_SPACE_AA_DISABLED)
+	Settings.set_value("video", "anti_aliasing", before)
+
+
+## AaBench switches the viewport's mode without saving the setting.
+func test_aa_bench_switches_modes() -> void:
+	var vp := SubViewport.new()
+	add_child_autofree(vp)
+	AaBench.apply(vp, "fxaa")
+	assert_eq(vp.screen_space_aa, Viewport.SCREEN_SPACE_AA_FXAA)
+	assert_eq(vp.msaa_3d, Viewport.MSAA_DISABLED)
+	AaBench.apply(vp, "msaa_4x")
+	assert_eq(vp.msaa_3d, Viewport.MSAA_4X)
+	assert_eq(vp.screen_space_aa, Viewport.SCREEN_SPACE_AA_DISABLED)

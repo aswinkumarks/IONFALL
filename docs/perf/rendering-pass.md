@@ -20,10 +20,28 @@ weapon stand-ins by the weapon models' import script.
 | Triplanar → planar UVs on map panels | `MapMaterials`, as the map loads | 1 texture fetch per pixel instead of 3 on 13 Station surfaces and the slabs, walls and cover of Spire and Foundry. Every converted face is axis-aligned, so the image is unchanged; geometry and lightmap UVs are untouched, so no rebake |
 | Back-face culling on 5 kit materials | same | crates (~50k triangles per map), floor trims, trims, cables, decals; MI_Trim_01/02 stay double-sided (below) |
 | Weapon stand-ins past 5 m | `tools/weapon_import.gd` (the weapons' import script), `WeaponModels.FAR_RANGE` | other players' guns and pickups: 6–8k → ~1k triangles each; same material and vertex format, so no new pipelines |
-| Character textures 2048² → 1024² | `.import` size limits | ¼ of the VRAM for the 12 character textures (the in-game mesh already has LODs down to 4–5k triangles) |
+| Character textures 2048² → 1024² | `.import` size limits | ¼ of the VRAM for the 12 character textures |
 | Baked accent lights off moving things on phones | `RenderLayers` | characters, weapons, the first-person arms, pickups and flags take the accents from the lightmap probes instead of a real-time omni pass where effect lights are off (Low, Medium); desktops keep the coloured rim light |
 | CTF flag light only with effect lights | `FlagVisuals` | no moving omni (and its pipeline compiles) on phones |
 | Nameplates in 2D | `Nameplates` | about 4 draw calls per player (text, outline, bar, team mark) → a few for all of them; still hidden behind walls (a line-of-sight ray per player every 0.1 s) and faded past 30 m |
+
+**Character and weapon triangles, measured.** The review estimated 16
+players at ~470k triangles from the models' full detail (21k per
+character, 8k per gun). Drawn triangles for one character with a pulse
+rifle (Mobile renderer, `RENDER_TOTAL_PRIMITIVES_IN_FRAME`):
+
+| Distance | Medium (scale 0.6, LOD threshold 2) | High (scale 1.0, threshold 1) |
+|---|---|---|
+| 2 m | 12,848 | 17,962 |
+| 4 m | 12,848 | 12,848 |
+| 6 m and on | 6,208 | 6,208 |
+
+The character is already at its coarsest LOD (vanguard: 5,277 of 20,783)
+from 2 m on Medium and from 4 m on High: the mesh's own LODs do the work,
+so it needs no further decimation, and a lower LOD bias changed nothing
+past 2 m. The gun was the excess: 7,571 triangles at any distance before;
+its stand-in drops it to 931 past 5 m (the step at 6 m). Sixteen players
+at play distances now draw about 100k triangles, not 470k.
 
 **Culling check.** The kit's glTFs mark every material double-sided.
 `tools/cull_check` rendered every spawn in four directions (64 views per
@@ -64,6 +82,7 @@ corridor they turned grey).
 | `glow_bloom` 0: only emissives past the HDR threshold glow; the whole frame no longer hazes | same |
 | Debanding | `project.godot` |
 | Specular anti-aliasing: roughness raised where the normal map varies within a texel (less shimmer at 0.6 render scale), baked at import | the ORM / metal-rough textures of the kit, characters and weapons |
+| Anti-aliasing setting: Auto (the preset's) / Off / FXAA / MSAA 2× / MSAA 4× | `Settings.anti_aliasing_for`, Video tab |
 | Blob shadows under characters when realtime shadows are off (Low, phone Medium) | `BlobShadows`: one MultiMesh draw, a floor ray per character, fading with height; compiled in the warm-up |
 
 ## Download and memory
@@ -86,8 +105,13 @@ or script errors (warm-up 0.5–0.7 s).
 
 1. Mi 11X, Medium, 16 combatants: a 20-minute combat soak (m4.md setup),
    comparing PERF `gpu_p50`/`gpu_p95` and the hitch count with m4.md.
-2. 2× MSAA instead of nothing on Adreno: launch with
-   `--quality medium,msaa=1` and compare `gpu_p95` and edges against
-   `--quality medium` (FXAA cost 0.5 ms in m4.md).
+2. MSAA against FXAA on Adreno: launch with
+   `--play --autopilot --aa-bench --perf-log --aa-bench-quit` (AaBench).
+   After 20 s it runs each anti-aliasing mode for 20 s, twice, with the
+   adaptive governor held still, and logs one `AA_BENCH` line per mode
+   (GPU and frame p50/p95). If MSAA 2× costs about what FXAA did
+   (0.5 ms, m4.md) or less, make it phone Medium's default
+   (`QUALITY.medium.msaa = 1`). The run works end to end here, on software
+   Vulkan, whose numbers say nothing about a phone GPU.
 3. Check that the blob shadows read well at the phone's brightness, and
    the AgX grade on the phone's panel.
