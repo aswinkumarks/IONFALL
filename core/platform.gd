@@ -53,6 +53,10 @@ func _ready() -> void:
 		var path := external.path_join("launch_args.txt")
 		user_args.append_array(FileAccess.get_file_as_string(path).strip_edges().split(" ", false))
 		DirAccess.remove_absolute(path)
+	game_log = GameLog.open(GameLog.default_dir(external))
+	if game_log != null:
+		OS.add_logger(game_log)
+		_log_header.call_deferred()  # after the other autoloads (BuildInfo) are ready
 	storage_available = _probe_storage()
 	if not storage_available:
 		push_warning("Platform: user:// is not writable; the profile won't be saved.")
@@ -64,6 +68,8 @@ func _ready() -> void:
 ## turn it into ui_cancel, so every screen handles it like Escape (close a
 ## panel, go up a page, pause, ask to quit).
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and game_log != null:
+		print("Session end")  # a log without it: the game froze, crashed or was killed
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_android():
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST and not is_mobile() and not is_web() and _quit_watchdog == null:
@@ -210,6 +216,16 @@ func external_files_dir() -> String:
 
 
 var _external_dir: String = ""
+
+## The session's copy of the log next to the game (GameLog), or null.
+var game_log: GameLog
+
+
+func _log_header() -> void:
+	print("IONFALL %s, engine %s, compat %s" % [BuildInfo.display_string(), BuildInfo.engine_version, BuildInfo.compat_hash])
+	print("%s %s, %s, %d threads, GPU %s (%s)" % [OS.get_name(), OS.get_version(), OS.get_processor_name(),
+			OS.get_processor_count(), RenderingServer.get_video_adapter_name(), RenderingServer.get_video_adapter_api_version()])
+	print("Arguments: %s" % " ".join(OS.get_cmdline_args() + PackedStringArray(["--"]) + user_args))
 
 
 ## Prints a line for measurements and, with `--perf-log`, appends it to

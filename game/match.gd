@@ -50,6 +50,7 @@ var _info: Label
 var _time: float = 0.0
 var _loadout: Array[WeaponData] = []
 var _spawns: Array[Transform3D] = []
+var _host_silent: bool = false  ## no packets from the host for 3 s (logged once per stretch)
 var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended)
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
 var _online_code: String = ""  ## hosting online: the invite code (decision 0005)
@@ -554,6 +555,10 @@ func _watch_connection() -> void:
 	if client.local_id == 0:
 		return  # still connecting: ENet reports failure
 	var silent := client.seconds_silent()
+	if (silent >= 3.0) != _host_silent:
+		_host_silent = silent >= 3.0
+		Platform.perf_log("NET host silent for 3 s%s" % (" (paused)" if client.host_paused else "") if _host_silent
+				else "NET host back")
 	if silent >= 10.0:
 		_fail("NET_HOST_LOST")
 	elif silent >= 3.0:
@@ -1475,6 +1480,8 @@ func _make_confirm_panel() -> Control:
 ## Offline, pausing stops the simulation. Online matches can't pause: the
 ## panel only stops local input (PLAN §3.5.1).
 func _set_paused(paused: bool) -> void:
+	if paused != _paused:
+		Platform.perf_log("MATCH %s" % ("paused" if paused else "resumed"))
 	_paused = paused
 	_pause_panel.visible = paused
 	_kill_feed.visible = not paused  # on touch it sits where the pause scoreboard opens
@@ -1610,4 +1617,5 @@ func _on_resumed() -> void:
 
 func _on_focus_lost() -> void:
 	if _started and not _paused:
+		Platform.perf_log("MATCH window lost focus: pausing")
 		_set_paused(true)
