@@ -147,6 +147,50 @@ func test_command_bursts_cause_no_visible_corrections() -> void:
 	assert_lte(c.view_anomalies, 2, "bursts don't trip view-tick validation")
 
 
+## Regression (found online, EOS relay): a host hitch slips the server's
+## clock behind the client's, the server then dropped every command as too
+## far ahead and the client's player froze for the rest of the match.
+func test_server_clock_slip_recovers() -> void:
+	await wait_seconds(2.0)
+	server.set_physics_process(false)  # the host stalls for a second
+	await wait_seconds(1.0)
+	server.set_physics_process(true)
+	await wait_seconds(2.0)
+	var c: ServerSession.Client = server.clients.values()[0]
+	var synth_before := c.synthesized
+	var anomalies_before := server.anomalies
+	await wait_seconds(2.0)
+	gut.p("resyncs %d, synthesized %d, anomalies %d, buffer %.1f" % [client.resyncs,
+			c.synthesized - synth_before, server.anomalies - anomalies_before, c.buffer_avg])
+	assert_gt(client.resyncs, 0, "the prediction re-anchored to the server's clock")
+	assert_lt(c.synthesized - synth_before, 10, "the server uses the client's own commands again")
+	assert_eq(server.anomalies - anomalies_before, 0, "no commands dropped as too far ahead")
+
+
+## Regression (found online, EOS relay): each long hold of our commands
+## leaves the server's last processed command further behind its clock
+## (it stalls, then synthesizes one per tick), until every command we send is
+## too far ahead and the player is pulled back for the rest of the match.
+func test_long_command_holds_dont_lock_out_the_client() -> void:
+	client.transport.conditioner.rtt_ms = 200.0
+	client.transport.conditioner.burst_every_ms = 700
+	client.transport.conditioner.burst_hold_ms = 400
+	await wait_seconds(6.0)
+	client.transport.conditioner.burst_every_ms = 0
+	await wait_seconds(2.0)
+	var c: ServerSession.Client = server.clients.values()[0]
+	var synth_before := c.synthesized
+	var anomalies_before := server.anomalies
+	var resyncs_before := client.resyncs
+	await wait_seconds(3.0)
+	gut.p("lag %d ticks, resyncs %d, synthesized %d, anomalies %d, buffer %.1f" % [
+			server.world.tick - c.last_processed, client.resyncs - resyncs_before,
+			c.synthesized - synth_before, server.anomalies - anomalies_before, c.buffer_avg])
+	assert_lt(c.synthesized - synth_before, 10, "the server uses the client's own commands again")
+	assert_eq(server.anomalies - anomalies_before, 0, "no commands dropped as too far ahead")
+	assert_eq(client.resyncs - resyncs_before, 0, "the prediction settles instead of resyncing over and over")
+
+
 func test_snapshots_keep_decoding_under_heavy_loss() -> void:
 	client.transport.conditioner.loss = 0.3
 	await wait_seconds(2.0)

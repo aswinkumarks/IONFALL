@@ -14,6 +14,15 @@ const HISTORY_TICKS := 120
 const VISIBLE_CORRECTION_M := 0.05
 const SNAP_CORRECTION_M := 1.0
 const CORRECTION_BLEND_TICKS := 6.0
+## How far our commands may lead the server's command count before the prediction
+## re-anchors to it. The server drops commands more than MAX_TARGET_BUFFER +
+## MAX_FUTURE_TICKS ahead of what it has processed, and time dilation can't
+## win that back: an empty buffer speeds us up. (Trailing needs no check:
+## late commands empty the buffer too, and dilation catches us up.)
+const MAX_LEAD_TICKS := ServerSession.MAX_TARGET_BUFFER + ServerSession.MAX_FUTURE_TICKS - 2
+## Snapshots in a row past that before re-anchoring (~0.5 s), so a burst of
+## late snapshots doesn't throw the prediction away.
+const DRIFT_SNAPSHOTS := 15
 
 var transport := Transport.new()
 var world: SimWorld  ## client-side world: only the predicted local player
@@ -64,6 +73,7 @@ var wave: Dictionary = {}  ## co-op: latest snapshot's wave status (Snapshot.wav
 var corrections: int = 0
 var visible_corrections: int = 0
 var snaps: int = 0
+var resyncs: int = 0  ## prediction re-anchored to the server's clock
 var undecodable_snapshots: int = 0
 var correction_offset := Vector3.ZERO
 
@@ -74,6 +84,7 @@ var _events: Array[Dictionary] = []
 var _acc: float = 0.0
 var _rate: float = 1.0
 var _ready_to_predict: bool = false
+var _drift_run: int = 0
 var _loaded_sent: bool = false
 var _ping_timer: float = 0.0
 var _pings_sent: int = 0
@@ -393,13 +404,27 @@ func _reconcile(snap: Snapshot) -> void:
 	var server := snap.owner_state
 	var c := snap.last_cmd_tick
 	# Keep the prediction a sane distance ahead of the server; resync if not.
+	# The server takes our commands in order, one per tick, and drops any too
+	# far ahead of the last one it ran. That command count drifts from its
+	# clock (a host hitch, or a stall on late commands it never makes up), and
+	# once our commands are too far ahead of it every one is dropped: re-anchor
+	# to where it will be when our next command arrives.
+	var arrival := c + 2.0 * clock.one_way_ticks()
+	var anchored := ceili(arrival) + ServerSession.TARGET_BUFFER + 1
+	var lead := pred_tick - arrival
+	_drift_run = _drift_run + 1 if lead > MAX_LEAD_TICKS else 0
 	var ahead := pred_tick - c
-	if ahead < 0 or ahead > HISTORY_TICKS - 10:
+	if ahead < 0 or ahead > HISTORY_TICKS - 10 or _drift_run >= DRIFT_SNAPSHOTS:
 		pred.restore(server)
 		prev_state = pred.state.copy()
-		pred_tick = maxi(pred_tick, c + 1 + ServerSession.TARGET_BUFFER)
+		pred_tick = maxi(anchored, c + 1)
 		_commands.clear()
 		_predicted.clear()
+		Platform.perf_log("NET prediction resync: lead %.0f ticks, ahead of last command %d" % [lead, ahead])
+		_drift_run = 0
+		resyncs += 1
+		_pings_sent = 0  # a burst of pings brings the clock along too
+		_ping_timer = 0.0
 		return
 	var predicted: PlayerSimState = _predicted.get(c)
 	if predicted != null and not _differs(predicted, server):
