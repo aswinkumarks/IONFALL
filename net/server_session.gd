@@ -234,10 +234,17 @@ func add_wave_bot(difficulty: int) -> SimPlayer:
 	var bot_name: String = BOT_NAMES[_bot_seq % BOT_NAMES.size()]
 	var id := 1000 + _bot_seq
 	if bot_nav == null:
-		return add_bot(bot_name, TargetDummyDriver.new(_bot_seq * 50))
+		return _unshielded(add_bot(bot_name, TargetDummyDriver.new(_bot_seq * 50)))
 	var brain := BotBrain.new(world, bot_nav, id, _rng.randi(), difficulty)
 	brain.hunt = true
-	return add_bot(bot_name, brain)
+	return _unshielded(add_bot(bot_name, brain))
+
+
+## Co-op wave bots fight on health alone: no energy shield.
+func _unshielded(p: SimPlayer) -> SimPlayer:
+	p.max_shield = 0.0
+	Health.reset(p.state, 0.0)
+	return p
 
 
 func remove_bot(id: int) -> void:

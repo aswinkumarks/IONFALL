@@ -44,8 +44,10 @@ func _enter_tree() -> void:
 	api.peer_authentication_failed.connect(func(id: int) -> void: _authenticating.erase(id))
 	api.peer_packet.connect(_on_peer_packet)
 	api.connected_to_server.connect(func() -> void: connected.emit())
-	api.connection_failed.connect(func() -> void: connection_failed.emit("connection failed"))
-	api.server_disconnected.connect(func() -> void: disconnected.emit())
+	# Deferred: these come from inside the multiplayer poll, and listeners
+	# close the peer (leaving the lobby), which crashes the engine mid-poll.
+	api.connection_failed.connect(func() -> void: connection_failed.emit.call_deferred("connection failed"))
+	api.server_disconnected.connect(func() -> void: disconnected.emit.call_deferred())
 
 
 func _exit_tree() -> void:
@@ -229,7 +231,9 @@ func _on_auth(id: int, data: PackedByteArray) -> void:
 		var reply := Protocol.decode_hello_reply(data)
 		if reply.is_empty() or not reply.accepted:
 			_reject_reason = reply.get("reason", "bad server reply")
-			connection_failed.emit(_reject_reason)
+			# Out of the auth callback first: a listener closing the peer from
+			# in here crashed the game (rejoining a lobby you were removed from).
+			connection_failed.emit.call_deferred(_reject_reason)
 			close.call_deferred()
 		else:
 			api.complete_auth(id)
