@@ -65,7 +65,8 @@ func _run(maps: Array) -> void:
 		RenderLayers.light_dynamic_with_baked_lights(presentation, Settings.video("lights") == true)
 		Settings.apply_environment(presentation)
 		MapDetail.apply(presentation, map_id, MeshyRig.current_tier())
-		var spawn: Transform3D = gameplay.spawn_points()[int(Platform.get_user_arg("--spawn", "0"))]
+		await get_tree().physics_frame  # the map's colliders become queryable
+		var spawn := _open_spawn(gameplay.spawn_points())
 		var forward := -spawn.basis.z
 		forward.y = 0.0
 		forward = forward.normalized()
@@ -88,6 +89,20 @@ func _run(maps: Array) -> void:
 		presentation.queue_free()
 		gameplay.queue_free()
 		await get_tree().process_frame
+
+
+## The first spawn with a clear view 16 m ahead at eye height (so the row
+## isn't behind a wall), else the first.
+func _open_spawn(spawns: Array[Transform3D]) -> Transform3D:
+	var space := get_world_3d().direct_space_state
+	for t in spawns:
+		var forward := -t.basis.z
+		forward.y = 0.0
+		var eye := t.origin + Vector3.UP * 1.6
+		var q := PhysicsRayQueryParameters3D.create(eye, eye + forward.normalized() * (DISTANCES[-1] + 1.0))
+		if space.intersect_ray(q).is_empty():
+			return t
+	return spawns[0]
 
 
 ## The floor under `at` (from up to 3 m above it), else `at`.
