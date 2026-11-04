@@ -1,5 +1,6 @@
 extends GutTest
-## Pickups (PLAN §2.3): power weapons replace the primary, which drops; a
+## Pickups (PLAN §2.3): weapons are taken only on interact, never by
+## running over them; power weapons replace the primary, which drops; a
 ## dead player's power weapon drops with its ammo and despawns after 20 s;
 ## a spot's timer starts only when its previous instance is gone; grenades
 ## +1 up to 2; contention goes to the closest player.
@@ -34,10 +35,11 @@ func before_each() -> void:
 	_run(5)
 
 
-func _run(ticks: int, press_a: Array = []) -> Array[Dictionary]:
+func _run(ticks: int, press_a: Array = [], press_b: Array = []) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	for i in ticks:
-		world.step({1: input_a.cmd(world.tick, Vector2.ZERO, 0, press_a if i == 0 else []), 2: input_b.cmd(world.tick)})
+		world.step({1: input_a.cmd(world.tick, Vector2.ZERO, 0, press_a if i == 0 else []),
+				2: input_b.cmd(world.tick, Vector2.ZERO, 0, press_b if i == 0 else [])})
 		events.append_array(world.drain_events())
 	return events
 
@@ -52,8 +54,12 @@ func _item(weapon: int) -> SimWorld.Item:
 func test_power_weapon_replaces_primary_and_it_drops() -> void:
 	assert_not_null(_item(Weapons.RAIL), "the rail is on its spot")
 	SimHarness.place(a, RAIL_SPOT + Vector3(0, 0.05, 0), 0.0)
-	var events := _run(2)
-	assert_eq(a.state.weapons[0], Weapons.RAIL, "auto pickup into the primary slot")
+	_run(5)
+	assert_ne(a.state.weapons[0], Weapons.RAIL, "running over it doesn't take it")
+	assert_not_null(_item(Weapons.RAIL))
+	assert_true(SimWorld.needs_interact(a.state, Weapons.RAIL), "the HUD prompts for interact")
+	var events := _run(2, [Action.INTERACT])
+	assert_eq(a.state.weapons[0], Weapons.RAIL, "interact takes it into the primary slot")
 	assert_eq(a.state.mag[0], Loadouts.RAIL.mag_size)
 	assert_eq(a.state.weapon_slot, 0)
 	assert_null(_item(Weapons.RAIL))
@@ -72,7 +78,7 @@ func test_power_weapon_replaces_primary_and_it_drops() -> void:
 
 func test_dead_player_drops_power_weapon_then_spot_timer() -> void:
 	SimHarness.place(a, RAIL_SPOT + Vector3(0, 0.05, 0), 0.0)
-	_run(2)
+	_run(2, [Action.INTERACT])
 	SimHarness.place(a, Vector3(10, 0.05, 10), 0.0)
 	a.state.mag[0] = 1
 	world._kill(a, 2, Loadouts.PULSE, false)
@@ -101,6 +107,6 @@ func test_grenades_cap_at_two() -> void:
 func test_contention_goes_to_the_closest() -> void:
 	SimHarness.place(a, RAIL_SPOT + Vector3(0.9, 0.05, 0), 0.0)
 	SimHarness.place(b, RAIL_SPOT + Vector3(-0.3, 0.05, 0), 0.0)
-	_run(1)
+	_run(1, [Action.INTERACT], [Action.INTERACT])
 	assert_eq(b.state.weapons[0], Weapons.RAIL, "B was closer")
 	assert_ne(a.state.weapons[0], Weapons.RAIL)

@@ -2,13 +2,13 @@ class_name WaveDirector
 extends RefCounted
 ## Co-op waves (PLAN §2.4): the humans (team 0) hold out against waves of
 ## bots (team 1). A wave's bots don't respawn: they leave shortly after
-## dying. Fallen humans wait for the end of the wave and come back when it
-## is cleared. Clearing Balance.MODES.wave_count waves wins; everyone down at
+## dying. Fallen humans respawn after the usual team delay while a teammate
+## is still standing, and at once when the wave is cleared. Clearing Balance.MODES.wave_count waves wins; everyone down at
 ## once loses. Server only; clients see `wave`, `enemies_left()` and
 ## `ticks_to_next()` in snapshots.
 
 const CLEANUP_TICKS := 120  ## a dead wave bot leaves after 2 s
-const NEVER := 0x7FFFFFFF  ## a fallen human's respawn tick while the wave lasts
+const NEVER := 0x7FFFFFFF  ## a dead wave bot's respawn tick: it never comes back
 
 var wave: int = 0  ## the current (or last) wave, 0 before the first
 var fighting: bool = false
@@ -80,8 +80,6 @@ func step() -> int:
 		humans += 1
 		if p.state.alive:
 			standing += 1
-		elif fighting:
-			p.state.respawn_tick = NEVER  # back when the wave is cleared
 	if humans == 0:
 		return 0
 	if fighting:

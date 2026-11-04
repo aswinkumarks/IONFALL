@@ -144,6 +144,8 @@ func command_for(tick: int, p: SimPlayer) -> PlayerCommand:
 		Goal.RETREAT, Goal.PICKUP, Goal.OBJECTIVE:
 			move = _follow(tick, p, _path_goal)
 			held |= Held.SPRINT if move.length() > 0.5 else 0
+			if goal == Goal.PICKUP and _power_weapon_in_reach(p):
+				_press(Action.INTERACT)  # weapons aren't taken by walking over them
 		_:
 			if _destination != Vector3.INF:
 				move = _follow(tick, p, _destination)
@@ -336,6 +338,21 @@ func _wanted_item(p: SimPlayer) -> Vector3:
 			best_d = d
 			best = it.position
 	return best
+
+
+## Whether a power weapon lies within pickup reach while `p` holds none (so
+## interact takes it, not the primary it drops a tick later).
+func _power_weapon_in_reach(p: SimPlayer) -> bool:
+	var s := p.state
+	if s.weapon(0).is_power_weapon:
+		return false
+	for it: SimWorld.Item in _world.items:
+		if it.weapon < 0 or not Weapons.at(it.weapon).is_power_weapon:
+			continue
+		var d := s.position - it.position
+		if Vector2(d.x, d.z).length() <= Balance.PLAYER.pickup_radius and absf(d.y) <= SimWorld.PICKUP_HEIGHT:
+			return true
+	return false
 
 
 func _retreat_point(p: SimPlayer, threat: SimPlayer) -> Vector3:

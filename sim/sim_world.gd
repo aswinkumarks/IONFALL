@@ -248,7 +248,7 @@ func step(commands: Dictionary, stalled: Dictionary = {}) -> void:
 			_kill(fallen, 0, null, false)
 	for id in ids:
 		var s: PlayerSimState = players[id].state
-		Health.tick_regen(s)
+		Health.tick_regen(s, players[id].max_shield)
 		if s.spawn_protection_ticks > 0:
 			s.spawn_protection_ticks -= 1
 		if lag_compensation and native_rewind != null:
@@ -722,7 +722,7 @@ func _step_pickups(ids: Array, interacting: Dictionary) -> void:
 
 
 ## Whether `p` takes `it` now: grenades below the cap; ammo for a weapon it
-## carries; a power weapon if it holds none; anything else on interact.
+## carries; a new weapon only on interact (never by walking over it).
 func _wants(p: SimPlayer, it: Item, interact: bool) -> bool:
 	var s := p.state
 	if it.weapon < 0:
@@ -734,12 +734,10 @@ func _wants(p: SimPlayer, it: Item, interact: bool) -> bool:
 	return interact or not needs_interact(s, it.weapon)
 
 
-## Picking up `weapon` would swap out the primary by choice (interact):
-## anything but a power weapon while holding none, or ammo for a carried one.
+## Picking up `weapon` needs interact: any weapon not already carried (it
+## swaps out the primary). Grenades and ammo for a carried one are automatic.
 static func needs_interact(s: PlayerSimState, weapon: int) -> bool:
-	if weapon < 0 or s.weapons.find(weapon) >= 0:
-		return false
-	return not (Weapons.at(weapon).is_power_weapon and not s.weapon(0).is_power_weapon)
+	return weapon >= 0 and s.weapons.find(weapon) < 0
 
 
 func _take(p: SimPlayer, it: Item) -> void:
@@ -903,7 +901,7 @@ func _spawn(p: SimPlayer) -> void:
 	s.life_gen += 1
 	s.discontinuity_gen += 1
 	s.pending_presses = PackedByteArray([0, 0, 0, 0, 0, 0, 0])
-	Health.reset(s)
+	Health.reset(s, p.max_shield)
 	_damage_log.erase(p.net_id)
 	s.init_weapons(p.loadout)
 	p.apply_stance_shape(s.stance)

@@ -13,6 +13,7 @@ var display_name: String = ""
 var character: int = 0  ## cosmetic (CharacterRig.SELECTABLE index); presentation only
 var color: int = 0  ## cosmetic (PlayerVisual.PALETTE index, 0 = auto); presentation only
 var team: int = 0
+var max_shield: float = Balance.PLAYER.max_shield  ## 0 for co-op wave bots: health only
 var config: MovementConfig
 ## Issued at every spawn; pickups change the slots in `state` for this life.
 var loadout: Array[WeaponData] = []

@@ -43,21 +43,22 @@ static func apply(s: PlayerSimState, amount: float, headshot: bool, multiplier: 
 	return r
 
 
-static func tick_regen(s: PlayerSimState) -> void:
+## `max_shield`: this player's shield cap (co-op wave bots have none).
+static func tick_regen(s: PlayerSimState, max_shield: float = Balance.PLAYER.max_shield) -> void:
 	if not s.alive:
 		return
 	if s.shield_delay_ticks > 0:
 		s.shield_delay_ticks -= 1
 	else:
-		s.shield = minf(Balance.PLAYER.max_shield, s.shield + Balance.PLAYER.shield_regen_per_tick())
+		s.shield = minf(max_shield, s.shield + Balance.PLAYER.shield_regen_per_tick())
 	if s.health_delay_ticks > 0:
 		s.health_delay_ticks -= 1
-	elif s.shield >= Balance.PLAYER.max_shield:
+	elif s.shield >= max_shield:
 		s.health = minf(Balance.PLAYER.max_health, s.health + Balance.PLAYER.health_regen_per_tick())
 
 
-static func reset(s: PlayerSimState) -> void:
-	s.shield = Balance.PLAYER.max_shield
+static func reset(s: PlayerSimState, max_shield: float = Balance.PLAYER.max_shield) -> void:
+	s.shield = max_shield
 	s.health = Balance.PLAYER.max_health
 	s.shield_delay_ticks = 0
 	s.health_delay_ticks = 0

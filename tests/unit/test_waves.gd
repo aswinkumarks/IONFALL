@@ -1,7 +1,7 @@
 extends GutTest
 ## Co-op waves (PLAN §2.4): humans on team 0 against bot waves on team 1;
-## waves grow, dead wave bots leave, fallen humans wait for the end of the
-## wave, clearing wave 10 wins, everyone down loses; the wave status and
+## waves grow, dead wave bots leave, wave bots have no shield, fallen humans
+## respawn while a teammate stands and at once when the wave is cleared, clearing wave 10 wins, everyone down loses; the wave status and
 ## events reach clients.
 
 var server: ServerSession
@@ -74,9 +74,12 @@ func test_cleared_wave_scores_and_revives() -> void:
 	var mate := world.add_player(2, SimHarness.loadout(), "mate", false)
 	server._join_team(mate)
 	world._kill(me, 0, null, false)
-	_tick(400)
-	assert_false(me.state.alive, "no respawn during the wave")
-	assert_eq(me.state.respawn_tick, WaveDirector.NEVER)
+	_tick(Balance.MODES.team_respawn_ticks - 10)
+	assert_false(me.state.alive, "the usual respawn delay")
+	_tick(20)
+	assert_true(me.state.alive, "back mid-wave while a teammate stands")
+	assert_true(server.waves.fighting)
+	world._kill(me, 0, null, false)
 	_kill_wave()
 	assert_eq(server.bots.size(), 0, "dead wave bots leave")
 	assert_false(server.waves.fighting, "wave cleared")
@@ -86,6 +89,33 @@ func test_cleared_wave_scores_and_revives() -> void:
 	_until_fighting()
 	assert_eq(server.waves.wave, 2)
 	assert_gt(server.waves.wave_size(2, 2), server.waves.wave_size(1, 2), "waves grow")
+
+
+func test_wave_bots_have_no_shield() -> void:
+	_play()
+	_until_fighting()
+	assert_gt(server.bots.size(), 0)
+	for id: int in server.bots:
+		var bot: SimPlayer = world.players[id]
+		assert_eq(bot.state.shield, 0.0, "wave bots fight on health alone")
+	_tick(Balance.PLAYER.shield_delay_ticks + 60)
+	for id: int in server.bots:
+		assert_eq(world.players[id].state.shield, 0.0, "and their shield never regenerates")
+	assert_eq(world.players[ServerSession.LOCAL_PLAYER_ID].state.shield, Balance.PLAYER.max_shield,
+			"humans keep theirs")
+
+
+func test_last_human_down_loses_with_a_respawn_pending() -> void:
+	_play()
+	_until_fighting()
+	var me: SimPlayer = world.players[ServerSession.LOCAL_PLAYER_ID]
+	var mate := world.add_player(2, SimHarness.loadout(), "mate", false)
+	server._join_team(mate)
+	world._kill(me, 0, null, false)
+	_tick(2)
+	world._kill(mate, 0, null, false)
+	_tick(2)
+	assert_eq(server.phase, MatchPhase.POST_MATCH, "nobody standing: the respawn doesn't save the team")
 
 
 func test_everyone_down_loses() -> void:

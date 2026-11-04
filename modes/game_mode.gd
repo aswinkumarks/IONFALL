@@ -55,8 +55,8 @@ static func score_limit(mode: int) -> int:
 	return Balance.MODES.ffa_score_limit
 
 
-## Respawn delay (PLAN §2.5), from Balance.MODES (co-op: at the end of the
-## wave instead, see WaveDirector).
+## Respawn delay (PLAN §2.5), from Balance.MODES (co-op: only while a
+## teammate stands, and at once when a wave is cleared; see WaveDirector).
 static func respawn_ticks(mode: int) -> int:
 	return Balance.MODES.ffa_respawn_ticks if mode == FFA else Balance.MODES.team_respawn_ticks
 

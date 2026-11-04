@@ -176,6 +176,26 @@ func test_the_host_removes_a_player_who_cannot_return() -> void:
 	assert_eq(host.members.size(), 2, "only the host removes players")
 
 
+## Regression: rejoining a lobby you were removed from crashed the game. The
+## lobby screen leaves (closing the connection) as soon as it hears the
+## refusal, which came from inside the handshake callback.
+func test_a_removed_player_rejoining_leaves_cleanly() -> void:
+	var a := _join("Alpha")
+	await wait_until(func() -> bool: return host.members.size() == 2, 5.0)
+	host.kick(a.my_id())
+	await wait_until(func() -> bool: return a.transport.api.multiplayer_peer == null, 3.0)
+	var again := _join("Alpha")
+	var reasons: Array[String] = []
+	again.closed.connect(func(reason: String) -> void:
+		reasons.append(reason)
+		again.leave())  # what the lobby screen does
+	await wait_until(func() -> bool: return not reasons.is_empty(), 5.0)
+	assert_eq(reasons, ["LOBBY_KICKED"] as Array[String])
+	await wait_physics_frames(10)
+	assert_null(again.transport.api.multiplayer_peer, "closed")
+	assert_eq(host.members.size(), 1, "still off the list")
+
+
 func test_the_host_names_and_colours_the_teams() -> void:
 	var a := _join("Alpha")
 	await wait_until(func() -> bool: return a.members.size() == 2, 5.0)
