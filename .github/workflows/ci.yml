@@ -91,6 +91,7 @@ jobs:
 
       # Godot reads JAVA_HOME when it first creates its editor settings (import step).
       - name: Set up JDK 17
+        if: github.event_name != 'pull_request'  # builds only after merging (main), on tags and by hand
         uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -112,6 +113,7 @@ jobs:
       # never committed. With the repository secrets set, client builds get it
       # and show online play; without them they're LAN-only.
       - name: EOS credentials from secrets
+        if: github.event_name != 'pull_request'  # builds only after merging (main), on tags and by hand
         env:
           EOS_PRODUCT_ID: ${{ secrets.EOS_PRODUCT_ID }}
           EOS_SANDBOX_ID: ${{ secrets.EOS_SANDBOX_ID }}
@@ -126,6 +128,7 @@ jobs:
           echo "EOS credentials written: online play enabled in client builds"
 
       - name: Export desktop and web builds
+        if: github.event_name != 'pull_request'  # builds only after merging (main), on tags and by hand
         env:
           IONFALL_BUILD_NUMBER: "0"
         run: |
@@ -143,6 +146,7 @@ jobs:
       # Server builds aren't released any more; the exported game runs the
       # same server (--server), so every map and mode is still checked.
       - name: Smoke test the exported game as a server (every map and mode)
+        if: github.event_name != 'pull_request'  # builds only after merging (main), on tags and by hand
         run: |
           set -euo pipefail
           for map in station spire foundry; do
@@ -152,6 +156,7 @@ jobs:
           done
 
       - name: Install Android SDK packages
+        if: github.event_name != 'pull_request'  # builds only after merging (main), on tags and by hand
         run: |
           set -euo pipefail
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
@@ -164,6 +169,7 @@ jobs:
       # ANDROID_UPLOAD_KEY_PASSWORD; docs/release/releasing.md), and also
       # give a universal APK for sideloading. Everything else is debug-signed.
       - name: Export Android and run 16 KB checks
+        if: github.event_name != 'pull_request'  # builds only after merging (main), on tags and by hand
         env:
           BUNDLETOOL: /home/runner/bundletool.jar
           KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
