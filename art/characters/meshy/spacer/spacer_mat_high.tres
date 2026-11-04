@@ -1,0 +1,19 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://presentation/characters/meshy_character.gdshader" id="1_xigr7"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/spacer/spacer_Image_0.png" id="2_l825a"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/spacer/spacer_Image_1.jpg" id="3_bpoym"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/spacer/spacer_normal.jpg" id="4_57rks"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_xigr7")
+shader_parameter/albedo_tex = ExtResource("2_l825a")
+shader_parameter/mr_tex = ExtResource("3_bpoym")
+shader_parameter/normal_tex = ExtResource("4_57rks")
+shader_parameter/team_color = Color(0.31, 0.89, 1, 1)
+shader_parameter/plate_tint = 0.6
+shader_parameter/rim = 0.35
+shader_parameter/floor_light = 0.04
+shader_parameter/glow = 0.0
+shader_parameter/flash = 0.0

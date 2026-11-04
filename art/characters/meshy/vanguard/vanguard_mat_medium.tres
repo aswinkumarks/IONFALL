@@ -1,0 +1,19 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://presentation/characters/meshy_character.gdshader" id="1_010vm"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/vanguard/vanguard_albedo_1k.png" id="2_55aji"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/vanguard/vanguard_mr_1k.png" id="3_5pwaw"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/vanguard/vanguard_normal_1k.png" id="4_0rwcr"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_010vm")
+shader_parameter/albedo_tex = ExtResource("2_55aji")
+shader_parameter/mr_tex = ExtResource("3_5pwaw")
+shader_parameter/normal_tex = ExtResource("4_0rwcr")
+shader_parameter/team_color = Color(0.31, 0.89, 1, 1)
+shader_parameter/plate_tint = 0.6
+shader_parameter/rim = 0.35
+shader_parameter/floor_light = 0.04
+shader_parameter/glow = 0.0
+shader_parameter/flash = 0.0

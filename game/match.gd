@@ -40,6 +40,7 @@ var hud: Hud
 var touch := TouchControls.new()
 
 var _visuals: Dictionary = {}  ## net id -> PlayerVisual
+var _visual_tier := MeshyRig.current_tier()  ## the character tier _visuals were built at
 var _prev: Dictionary = {}  ## host: net id -> PlayerSimState at the previous tick
 var _started: bool = false
 var _paused: bool = false
@@ -117,10 +118,13 @@ func _ready() -> void:
 	add_child(presentation)
 	_apply_shadows(presentation)
 	Settings.apply_environment(presentation)
+	MapDetail.apply(presentation, config.map, MeshyRig.current_tier())
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
 		if section == "video":
 			_apply_shadows(presentation)
-			Settings.apply_environment(presentation))
+			Settings.apply_environment(presentation)
+			MapDetail.apply(presentation, config.map, MeshyRig.current_tier())
+			_rebuild_visuals_for_tier())
 	add_child(input)
 	add_child(view)
 	add_child(effects)
@@ -1109,6 +1113,18 @@ func _visual_for(id: int, display_name: String, is_bot: bool, character: int, co
 			v.set_team(team, color.lightened(0.35))
 		_visuals[id] = v
 	return v
+
+
+## A quality change that moves characters to another tier (MeshyRig.TIERS)
+## rebuilds the players' bodies; the next frame makes them again.
+func _rebuild_visuals_for_tier() -> void:
+	var tier := MeshyRig.current_tier()
+	if tier == _visual_tier:
+		return
+	_visual_tier = tier
+	for id in _visuals:
+		_visuals[id].queue_free()
+	_visuals.clear()
 
 
 func _prune_visuals(seen: Dictionary) -> void:

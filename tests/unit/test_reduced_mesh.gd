@@ -1,6 +1,7 @@
 extends GutTest
-## ReducedMesh: third-person characters draw and skin their first LOD; first
-## person and the character screen keep the full mesh.
+## ReducedMesh and the character quality tiers (MeshyRig.TIERS): medium and
+## low draw and skin their mesh's first and second LOD; first person and the
+## character screen keep the full mesh.
 
 
 func test_compact_keeps_only_used_vertices() -> void:
@@ -38,23 +39,47 @@ func test_characters_reduce_to_their_first_lod() -> void:
 				(r[0][Mesh.ARRAY_VERTEX] as PackedVector3Array).size() * bones_per, c + ": skin weights kept per vertex")
 
 
-## The saved third-person meshes (tools/bake_reduced_characters.gd) are
-## the reduction of the current full meshes, with the coarser LODs kept.
-func test_saved_reduced_meshes_match_the_full_ones() -> void:
+## The saved tier meshes (tools/bake_character_tiers.gd) are the current
+## full meshes: high in full, medium from LOD 1, low from LOD 2, each with
+## its coarser LODs and no material.
+func test_saved_tier_meshes_match_the_full_ones() -> void:
 	for c: String in CharacterRig.SELECTABLE:
 		var full: ArrayMesh = load(MeshyRig.finger_mesh_path(c))
-		var saved: ArrayMesh = load(MeshyRig.reduced_mesh_path(c))
 		var lods := ReducedMesh.lods_of(full, 0)
-		assert_eq(saved.surface_get_array_index_len(0), (lods[0][1] as PackedInt32Array).size(), c + ": base is LOD 1")
-		assert_lt(saved.surface_get_array_len(0), full.surface_get_array_len(0) / 2, c + ": vertices")
-		assert_eq(ReducedMesh.lods_of(saved, 0).size(), lods.size() - 1, c + ": coarser LODs kept")
-		assert_eq(saved.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS,
-				full.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS, c + ": same skinning")
+		var high: ArrayMesh = load(MeshyRig.tier_mesh_path(c, "high"))
+		assert_eq(high.surface_get_array_index_len(0), full.surface_get_array_index_len(0), c + ": high is the full mesh")
+		for t: int in [1, 2]:
+			var saved: ArrayMesh = load(MeshyRig.tier_mesh_path(c, MeshyRig.TIERS[t]))
+			assert_eq(saved.surface_get_array_index_len(0), (lods[t - 1][1] as PackedInt32Array).size(),
+					"%s %s: base is LOD %d" % [c, MeshyRig.TIERS[t], t])
+			assert_eq(ReducedMesh.lods_of(saved, 0).size(), lods.size() - t, c + ": coarser LODs kept")
+			assert_eq(saved.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS,
+					full.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS, c + ": same skinning")
+		var medium: ArrayMesh = load(MeshyRig.tier_mesh_path(c, "medium"))
+		var low: ArrayMesh = load(MeshyRig.tier_mesh_path(c, "low"))
+		assert_lt(medium.surface_get_array_len(0), full.surface_get_array_len(0) / 2, c + ": medium skins under half")
+		assert_lt(low.surface_get_array_len(0), full.surface_get_array_len(0) / 3, c + ": low skins under a third")
+		assert_lt(low.surface_get_array_index_len(0), full.surface_get_array_index_len(0) / 3, c + ": low draws under a third")
+		for m: ArrayMesh in [high, medium, low]:
+			assert_null(m.surface_get_material(0), c + ": no material (the tier's comes with the rig)")
 
 
-func test_rigs_pick_the_mesh_for_their_view() -> void:
-	var full: ArrayMesh = load(MeshyRig.finger_mesh_path("vanguard"))
-	var reduced: ArrayMesh = load(MeshyRig.reduced_mesh_path("vanguard"))
+## Each tier's material: 2K PBR, 1K PBR, one small flat texture on the
+## stylized shader.
+func test_tier_materials() -> void:
+	for c: String in CharacterRig.SELECTABLE:
+		var high: ShaderMaterial = load(MeshyRig.tier_material_path(c, "high"))
+		var medium: ShaderMaterial = load(MeshyRig.tier_material_path(c, "medium"))
+		var low: ShaderMaterial = load(MeshyRig.tier_material_path(c, "low"))
+		assert_eq(high.shader, MeshyRig.SHADER)
+		assert_eq((high.get_shader_parameter("albedo_tex") as Texture2D).get_width(), 2048, c + ": high 2K")
+		assert_eq((medium.get_shader_parameter("normal_tex") as Texture2D).get_width(), 1024, c + ": medium 1K")
+		assert_eq(low.shader, MeshyRig.STYLIZED_SHADER)
+		assert_eq((low.get_shader_parameter("albedo_tex") as Texture2D).get_width(), 512, c + ": low 512")
+		assert_null(low.get_shader_parameter("normal_tex"), c + ": low has no normal map")
+
+
+func test_rigs_pick_the_tier_for_their_view() -> void:
 	var third := MeshyRig.new("vanguard")
 	add_child_autofree(third)
 	third.setup(Color.ORANGE)
@@ -62,9 +87,28 @@ func test_rigs_pick_the_mesh_for_their_view() -> void:
 	close.full_detail = true
 	add_child_autofree(close)
 	close.setup(Color.ORANGE)
-	var mesh_of := func(r: Node) -> Mesh:
-		return (r.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
-	assert_same(mesh_of.call(third), reduced, "third person: reduced")
-	assert_same(mesh_of.call(close), full, "close-up: full")
+	var mi_of := func(r: Node) -> MeshInstance3D:
+		return r.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	assert_eq(third.tier, MeshyRig.current_tier(), "third person: the quality's tier")
+	assert_same(mi_of.call(third).mesh, load(MeshyRig.tier_mesh_path("vanguard", third.tier)))
+	assert_eq(close.tier, "high", "close-up: high")
+	assert_same(mi_of.call(close).mesh, load(MeshyRig.tier_mesh_path("vanguard", "high")))
+	var mat := mi_of.call(third).material_override as ShaderMaterial
+	assert_ne(mat, load(MeshyRig.tier_material_path("vanguard", third.tier)), "a copy: the colour is per player")
+	assert_eq(mat.get_shader_parameter("team_color"), Color.ORANGE)
 	assert_true(third.make_first_person())
-	assert_ne(mesh_of.call(third), reduced, "first person cuts its arms from the full mesh")
+	var arms: Mesh = mi_of.call(third).mesh
+	assert_gt(arms.get_faces().size(), (load(MeshyRig.tier_mesh_path("vanguard", "medium")) as Mesh).get_faces().size() / 10,
+			"first person: arms cut from the full mesh")
+
+
+## The rig scene carries no mesh or material, so a character loads only its
+## tier's textures.
+func test_rig_scenes_load_no_source_textures() -> void:
+	for c: String in CharacterRig.SELECTABLE:
+		var model: Node = (load(MeshyRig.rig_scene_path(c)) as PackedScene).instantiate()
+		var mis := model.find_children("*", "MeshInstance3D", true, false)
+		assert_eq(mis.size(), 1, c)
+		assert_null((mis[0] as MeshInstance3D).mesh, c + ": no mesh")
+		assert_eq(model.find_children("*", "Skeleton3D", true, false).size(), 1, c + ": skeleton kept")
+		model.free()
