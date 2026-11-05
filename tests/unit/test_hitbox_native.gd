@@ -100,17 +100,17 @@ func test_match_is_identical_with_native_rewind() -> void:
 			return
 
 
-## [event log, hit count] of RewindFixture's scripted fight, 8 players, 30 s.
+## [event log, hit count] of NativeParityCheck's scripted fight, 8 players, 30 s.
 func _scripted_match(native: bool) -> Array:
 	var world := SimHarness.make_world(5)
 	if not native:
 		world.native_rewind = null
 	add_child(world)
-	var inputs := RewindFixture.start_fight(world, 8)
+	var inputs := NativeParityCheck.start_fight(world, 8)
 	var log: Array[String] = []
 	var hits := 0
 	for t in 1800:
-		world.step(RewindFixture.fight_commands(world, inputs, t))
+		world.step(NativeParityCheck.fight_commands(world, inputs, t))
 		for e in world.drain_events():
 			log.append("%d %s" % [world.tick, e])
 			if e.type == "hit":

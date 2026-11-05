@@ -3,6 +3,14 @@ description: >
   LFS files, the build version, Godot 4 with its export templates, and the
   imported project: what every CI job starts from. Run actions/checkout first.
 
+inputs:
+  native:
+    description: >
+      Platforms to build the native extension for before the import
+      (native/build.sh: linux, windows, android), or empty for none. Android
+      needs the SDK and NDK installed first.
+    default: ""
+
 runs:
   using: composite
   steps:
@@ -67,6 +75,38 @@ runs:
         path: .godot
         key: godot-import-${{ env.GODOT_VERSION }}-${{ hashFiles('.lfs-ids', '**/*.import', 'project.godot') }}
         restore-keys: godot-import-${{ env.GODOT_VERSION }}-
+
+    # The native extension (native/, PLAN §3.17). Built before the import so
+    # Godot registers it: the tests then run the native path and the exports
+    # ship it. The web keeps the GDScript path (export_presets.cfg excludes
+    # native/ there).
+    - name: Install native build tools
+      if: inputs.native != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq scons >/dev/null
+        if [[ " ${{ inputs.native }} " == *" windows "* ]]; then
+          sudo apt-get install -y -qq g++-mingw-w64-x86-64-posix >/dev/null
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+        fi
+
+    - name: Cache godot-cpp
+      if: inputs.native != ''
+      uses: actions/cache@v6
+      with:
+        path: |
+          native/godot-cpp
+          native/.sconsign.dblite
+        key: godot-cpp-${{ inputs.native }}-${{ hashFiles('native/build.sh', 'native/SConstruct') }}
+        restore-keys: godot-cpp-${{ inputs.native }}-
+
+    - name: Build the native extension
+      if: inputs.native != ''
+      shell: bash
+      run: bash native/build.sh ${{ inputs.native }}
 
     - name: Import project
       shell: bash

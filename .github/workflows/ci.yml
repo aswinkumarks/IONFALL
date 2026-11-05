@@ -30,6 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/godot-project
+        with:
+          native: linux
 
       - name: Layer check (simulation/presentation split)
         run: python3 tools/check_layers.py
@@ -48,6 +50,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/godot-project
+        with:
+          native: linux windows
 
       - name: EOS credentials from secrets
         env:
@@ -72,6 +76,10 @@ jobs:
           export_preset "Linux" linux x86_64 release build/linux/ionfall.x86_64
           export_preset "Windows" windows x86_64 release build/windows/IONFALL.exe
           export_preset "Web" web wasm32 release build/web/index.html
+          # The desktop builds ship the native extension; the web build doesn't.
+          test -f build/linux/libionfall_native.linux.template_release.x86_64.so
+          test -f build/windows/libionfall_native.windows.template_release.x86_64.dll
+          ! ls build/web | grep -q ionfall_native
 
       # Server builds aren't released any more; the exported game runs the
       # same server (--server), so every map and mode is still checked.
@@ -80,9 +88,13 @@ jobs:
           set -euo pipefail
           for map in station spire foundry; do
             for mode in ffa tdm ctf waves; do
-              timeout 60 build/linux/ionfall.x86_64 --headless -- --server --map $map --mode $mode --no-discovery --smoke-test
+              timeout 60 build/linux/ionfall.x86_64 --headless -- --server --map $map --mode $mode --no-discovery --smoke-test 2>&1 | tee smoke.log
+              grep -q "native rewind on" smoke.log
             done
           done
+          # The scripted fight gives the same events with and without it.
+          timeout 300 build/linux/ionfall.x86_64 --headless -- --native-parity 2>&1 | tee parity.log
+          grep -q "NATIVE_PARITY OK" parity.log
 
       - name: Package for the release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -129,7 +141,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Before the project setup: the NDK also builds the native extension.
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK" >/dev/null
+
+      # linux too, so the editor doing the export loads the extension.
       - uses: ./.github/actions/godot-project
+        with:
+          native: linux android
 
       - name: EOS credentials from secrets
         env:
@@ -139,12 +161,6 @@ jobs:
           EOS_CLIENT_ID: ${{ secrets.EOS_CLIENT_ID }}
           EOS_CLIENT_SECRET: ${{ secrets.EOS_CLIENT_SECRET }}
         run: bash tools/ci_eos_credentials.sh
-
-      - name: Install Android SDK packages
-        run: |
-          set -euo pipefail
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK" >/dev/null
 
       # Release tags are signed with the Play upload key when its secrets are
       # set (ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_KEY_ALIAS,
@@ -171,6 +187,7 @@ jobs:
           if grep -q "ERROR" export.log; then echo "::error::Android export logged errors"; exit 1; fi
           rm -f "$RUNNER_TEMP/upload.jks"
           test -f build/android/ionfall.apk
+          unzip -l build/android/ionfall.apk | grep -q "lib/arm64-v8a/libionfall_native"
           bash tools/check_16kb.sh build/android/ionfall.apk
           if [ "$CONFIG" = release ]; then
             mkdir -p dist
