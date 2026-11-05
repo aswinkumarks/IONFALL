@@ -45,7 +45,8 @@ Status as of 2026-10-23. ✅ done · ⏳ in progress · 👤 needs the owner
    `docs/release/privacy-policy.md`; it can then go on the public GitHub Pages site.
 3. **Epic terms** and a **name check** for "IONFALL".
 4. **Play Console:** create the app (`io.github.aswinkumarks.ionfall`),
-   upload `build/android/ionfall.aab` to **closed testing**, fill in the
+   upload an AAB to **closed testing** (builds are APK only: set the
+   Android preset's export format back to AAB for Play), fill in the
    listing (`store-listing.md`, `art/`), Data Safety (`data-safety.md`),
    content rating and target audience; 12 testers for 14 days if Play asks.
 5. After closed testing: promote to production, tag `v1.0.0`.
