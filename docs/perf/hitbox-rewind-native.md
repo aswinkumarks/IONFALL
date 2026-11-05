@@ -1,10 +1,10 @@
 # Native hitbox rewind (2026-10-25)
 
 PLAN §3.17 names hitbox rewind as a likely GDExtension candidate. This is
-that extension, measured on its own and inside `SimWorld`. It's **opt-in**:
-nothing loads it until `native/build.sh` is run. Without it (CI, release
-builds today, always on the web) `SimWorld` runs the GDScript code, which
-gives the same hits.
+that extension, measured on its own and inside `SimWorld`. CI builds it for
+Linux, Windows and Android (`native/build.sh linux windows android`) and the
+release builds ship it. The web always runs the GDScript code, which gives
+the same hits; so does a local checkout until `native/build.sh` is run.
 
 ## What it is
 
@@ -23,8 +23,9 @@ It follows the GDScript arithmetic step for step (Vector3 in float, scalars
 in double, built with `-ffp-contract=off`), so hits are **bit-for-bit the
 same**. `tests/unit/test_hitbox_native.gd` checks that for `sample()`,
 `intersect()` and `trace()` on histories with deaths, respawns and teleports
-(about 32,000 asserts). Without the extension those tests pass as skipped, so
-CI is unchanged.
+(about 32,000 asserts). CI builds the extension before running the tests, so
+they run there; without it they pass as skipped. The exported Linux game's
+smoke test checks that the server reports `native rewind on`.
 
 ## In SimWorld
 
@@ -105,22 +106,26 @@ are built once and reused for all ten pellets.
 
 - **A phone-host soak** (PLAN §3.5.1): 4 and 8 combatants on the Mi 11X,
   tick p99 against the 4 ms budget. That needs the Android build below.
-- **Builds for other platforms**: only Linux x86_64 was built and run.
-  Windows and Android (arm64, pinned NDK, 16 KB alignment, §3.18) need
-  `native/build.sh` entries and CI jobs.
+- **Windows parity**: the parity tests run on Linux only; the Windows DLL
+  is built with the same `-ffp-contract=off` x86_64 SSE maths but hasn't
+  been run against the GDScript path on Windows (`IONFALL.exe -- --native-parity`
+  from a console shows the result).
 - **ARM parity**: on x86_64 the native path and GDScript agree bit for bit.
   On Android the engine is built with clang, which may fuse multiply-adds in
   the engine's own Vector3 maths; the native library doesn't. Hits are
   resolved only on the host, so a difference would only move a capsule edge
-  by rounding error, not desync anyone. Run the parity test on a phone
-  before shipping there.
+  by rounding error, not desync anyone. `--native-parity`
+  (`game/native_parity_check.gd`) runs the scripted fight on both paths in
+  an exported game and prints `NATIVE_PARITY OK` or the first differing
+  event; CI runs it on the Linux export. On a phone: put `--native-parity`
+  in the app's `files/launch_args.txt` and read `adb logcat -s godot`.
 
 ## Reproduce
 
 ```bash
-pip install scons                       # once
-native/build.sh template_release        # fetches pinned godot-cpp, builds native/bin/
-native/build.sh template_debug          # the library the editor binary loads
+pip install scons                       # once (and mingw-w64, posix threads, for windows)
+native/build.sh linux windows android   # fetches pinned godot-cpp, builds native/bin/ (release libraries,
+                                        # which the editor and debug exports load too)
 godot --headless --import
 godot --headless -s addons/gut/gut_cmdln.gd -gconfig=.gutconfig.json -gselect=test_hitbox_native.gd
 godot --headless -s tools/bench/bench_hitbox_rewind.gd -- --players 16
