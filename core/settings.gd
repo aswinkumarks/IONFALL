@@ -172,9 +172,8 @@ func apply_video() -> void:
 		res_scale = clampf(float(res.y) / maxf(DisplayServer.window_get_size().y, 1.0), 0.25, 1.0)
 	var preset := quality_preset()
 	var scale := clampf(float(video("render_scale")) * res_scale, 0.25, 1.0)
-	# FSR only helps when actually upscaling; it also sharpens. Desktops run
-	# Forward+ (project.godot); the Mobile renderer (phones) doesn't support
-	# FSR and would warn, so phones get bilinear.
+	# FSR only helps when actually upscaling; it also sharpens. The Mobile
+	# renderer (phones) doesn't support it and would warn, so they get bilinear.
 	if preset.upscale == "fsr" and scale < 0.99 and RenderingServer.get_current_rendering_method() == "forward_plus":
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 		root.fsr_sharpness = 0.35
@@ -303,16 +302,16 @@ func set_value(section: String, key: String, value: Variant) -> void:
 ## (changing them by hand switches the preset to "custom"); the rest is
 ## applied from the preset ("custom" keeps the last preset's extras).
 const QUALITY := {
-	"low": {"render_scale": 0.6, "shadows": false, "glow": false, "effects": 0.4, "upscale": "fsr", "msaa": 0,
-			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0, "detail": "low", "ssao": false, "probe": false, "lights": false},
+	"low": {"render_scale": 0.6, "shadows": false, "glow": false, "effects": 0.4, "upscale": "bilinear", "msaa": 0,
+			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0, "detail": "low", "probe": false, "lights": false},
 	## Phone default: sized to hold 60 fps on the Mi 11X (docs/perf/m2-station.md,
 	## m4.md: FXAA off kept GPU frames under the vsync budget).
 	"medium": {"render_scale": 0.6, "shadows": false, "glow": true, "effects": 0.7, "upscale": "fsr", "msaa": 0,
-			"fxaa": false, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0, "detail": "medium", "ssao": false, "probe": true, "lights": false},
+			"fxaa": false, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0, "detail": "medium", "probe": true, "lights": false},
 	"high": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 1,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "detail": "high", "ssao": true, "probe": true, "lights": true},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "detail": "high", "probe": true, "lights": true},
 	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "detail": "high", "ssao": true, "probe": true, "lights": true},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "detail": "high", "probe": true, "lights": true},
 }
 ## Phone-only changes to a preset's extras. The reflection probe costs the
 ## Mi 11X ~0.9 ms of GPU time, so phones leave it off on Medium; desktops
@@ -398,12 +397,6 @@ func apply_environment(root: Node) -> void:
 		if env == null:
 			continue
 		env.glow_enabled = bool(video("glow"))
-		# Ambient occlusion grounds the players and the kit's corners
-		# (Forward+, the desktop renderer, only).
-		env.ssao_enabled = video("ssao") == true and RenderingServer.get_current_rendering_method() == "forward_plus"
-		env.ssao_radius = 1.2
-		env.ssao_intensity = 1.6
-		env.ssao_detail = 0.5
 		env.adjustment_enabled = true
 		env.adjustment_contrast = 1.08
 		env.adjustment_saturation = 1.12
