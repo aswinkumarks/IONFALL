@@ -50,10 +50,14 @@ func init_platform() -> String:
 	if not EOS.PlatformSdk.PlatformInterface.create(create):
 		return "EOS platform could not be created"
 	_platform_ready = true
-	if Platform.user_args.has("--eos-log"):  # dev: the SDK's own log
-		IEOS.logging_interface_callback.connect(func(msg: Dictionary) -> void:
-			print("EOS %s %s: %s" % [msg.get("level", ""), msg.get("category", ""), msg.get("message", "")]))
-		EOS.Logging.set_log_level(EOS.Logging.LogCategory.AllCategories, EOS.Logging.LogLevel.Info)
+	# The SDK's own log into ours: its warnings and errors always, everything
+	# down to Info with `--eos-log`.
+	IEOS.logging_interface_callback.connect(func(msg: Dictionary) -> void:
+		Log.write(Log.Level.INFO if Platform.user_args.has("--eos-log") else Log.Level.WARN, "eos",
+				"%s %s: %s" % [msg.get("level", ""), msg.get("category", ""), msg.get("message", "")]))
+	EOS.Logging.set_log_level(EOS.Logging.LogCategory.AllCategories,
+			EOS.Logging.LogLevel.Info if Platform.user_args.has("--eos-log") else EOS.Logging.LogLevel.Warning)
+	Log.i("online", "EOS platform created")
 	return ""
 
 

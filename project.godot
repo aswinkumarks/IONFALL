@@ -21,6 +21,7 @@ config/project_settings_override="user://renderer.cfg"
 
 [autoload]
 
+LogService="*res://core/log_service.gd"
 Platform="*res://core/platform.gd"
 Events="*res://core/events.gd"
 BuildInfo="*res://core/build_info.gd"

@@ -34,6 +34,7 @@ func _ready() -> void:
 	_backend = script.new()
 	_backend.name = "EOS"
 	add_child(_backend)
+	Log.i("online", "Epic Online Services backend ready")
 
 
 func available() -> bool:
@@ -62,9 +63,15 @@ func ensure_signed_in(display_name: String) -> String:
 	if _signed_in:
 		return ""
 	_signing_in = true
+	var started := Time.get_ticks_msec()
+	Log.i("online", "signing in as \"%s\"" % display_name)
 	var err: String = await _backend.sign_in_async(display_name)
 	_signing_in = false
 	_signed_in = err.is_empty()
+	if _signed_in:
+		Log.i("online", "signed in (%d ms)" % (Time.get_ticks_msec() - started))
+	else:
+		Log.e("online", "sign-in failed after %d ms: %s" % [Time.get_ticks_msec() - started, err])
 	return err
 
 
@@ -76,6 +83,10 @@ func host(display_name: String, max_members: int, info: Dictionary = {}) -> Dict
 		return {"error": err}
 	var hosted: Dictionary = await _backend.host_async(max_members, info)
 	hosting_code = hosted.get("code", "")
+	if hosted.has("error"):
+		Log.e("online", "hosting failed: %s" % hosted.error)
+	else:
+		Log.i("online", "hosting with invite code %s (max %d, %s)" % [hosting_code, max_members, info])
 	return hosted
 
 
@@ -98,7 +109,7 @@ func update_info(info: Dictionary) -> void:
 		_info_pending = {}
 		var err: String = await _backend.update_async(sending)
 		if not err.is_empty():
-			push_warning("Online: %s" % err)
+			Log.w("online", "updating the game's listing failed: %s" % err)
 		await get_tree().create_timer(1.0).timeout  # stay well inside EOS's rate limits
 	_info_sending = false
 
@@ -110,6 +121,7 @@ func list_games(display_name: String) -> Dictionary:
 	if not err.is_empty():
 		return {"error": err}
 	var listed: Variant = await _backend.list_async()
+	Log.i("online", "listed %s" % ("%d games" % listed.size() if listed is Array else str(listed)))
 	return {"games": listed} if listed is Array else listed
 
 
@@ -119,7 +131,10 @@ func join(display_name: String, invite_code: String) -> Dictionary:
 	var err := await ensure_signed_in(display_name)
 	if not err.is_empty():
 		return {"error": err}
-	return await _backend.join_async(invite_code)
+	Log.i("online", "joining invite code %s" % invite_code)
+	var joined: Dictionary = await _backend.join_async(invite_code)
+	_log_join(joined)
+	return joined
 
 
 ## Connects to a known host (from the browser, or the lobby before the
@@ -128,12 +143,24 @@ func connect_to(display_name: String, host_id: String) -> Dictionary:
 	var err := await ensure_signed_in(display_name)
 	if not err.is_empty():
 		return {"error": err}
-	return await _backend.connect_async(host_id)
+	Log.i("online", "connecting to host %s" % host_id)
+	var joined: Dictionary = await _backend.connect_async(host_id)
+	_log_join(joined)
+	return joined
 
 
 ## Host: closes the invite code.
 func stop_hosting() -> void:
+	if not hosting_code.is_empty():
+		Log.i("online", "closing invite code %s" % hosting_code)
 	hosting_code = ""
 	_info_pending = {}
 	if _backend != null:
 		await _backend.leave_async()
+
+
+func _log_join(joined: Dictionary) -> void:
+	if joined.has("error"):
+		Log.w("online", "join failed: %s" % joined.error)
+	else:
+		Log.i("online", "connecting through EOS P2P to host %s" % joined.get("host_id", "?"))

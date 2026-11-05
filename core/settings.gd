@@ -192,6 +192,10 @@ func apply_video() -> void:
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	_apply_fps_cap()
+	Log.d("settings", "video applied: window %s, 3D scale %.2f (%s), msaa %d, fxaa %s, aniso %d, lod %.1f, shadows %d px (soft %d), fps cap %d" % [
+			DisplayServer.window_get_size() if desktop else Vector2i.ZERO, scale,
+			"fsr" if root.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR else "bilinear", aa.x, aa.y == 1,
+			preset.aniso, preset.lod, preset.shadow_size, preset.soft_shadows, Engine.max_fps])
 
 
 ## Menus and the lobby on a phone run at most MENU_FPS: their backdrop is
@@ -274,11 +278,14 @@ func video(key: String) -> Variant:
 
 ## The governor lowers `key` for this session (AdaptiveQuality).
 func set_adaptive(key: String, value: Variant) -> void:
+	Log.i("settings", "adaptive quality: %s = %s for this session" % [key, value])
 	adaptive[key] = value
 	Events.settings_changed.emit("video", key, value)
 
 
 func set_value(section: String, key: String, value: Variant) -> void:
+	if not _applying_preset:
+		Log.d("settings", "%s/%s = %s" % [section, key, value if key not in ["keymap", "touch_layout"] else "(changed)"])
 	_cfg.set_value(section, key, value)
 	if section == "video" and key == "renderer":
 		write_renderer_override(renderer_for(str(value), RenderingServer.get_video_adapter_type()))
@@ -387,7 +394,7 @@ func _sync_renderer() -> void:
 	write_renderer_override(wanted)
 	# Not under the editor's debugger: a restart would drop its session.
 	if wanted != current and OS.get_environment(RENDERER_RESTART_ENV) != "1" and not EngineDebugger.is_active():
-		print("Settings: restarting with the %s renderer" % wanted)
+		Log.i("settings", "restarting with the %s renderer (running %s)" % [wanted, current])
 		OS.set_environment(RENDERER_RESTART_ENV, "1")
 		var args := OS.get_cmdline_args()
 		if not OS.get_cmdline_user_args().is_empty():
@@ -435,13 +442,19 @@ func load_settings() -> void:
 	var text := AtomicFile.read_text(PATH, func(t: String) -> bool:
 		return ConfigFile.new().parse(t) == OK)
 	if not text.is_empty():
-		_cfg.parse(text)
+		var err := _cfg.parse(text)
+		Log.i("settings", "loaded %s: %s" % [PATH, error_string(err)])
+	else:
+		Log.i("settings", "no saved settings: defaults (%s)" % ("unreadable file" if FileAccess.file_exists(PATH) else "first start"))
 
 
 func save_settings() -> Error:
 	if not Platform.storage_available:
 		return ERR_UNAVAILABLE
-	return AtomicFile.write_text(PATH, _cfg.encode_to_text())
+	var err := AtomicFile.write_text(PATH, _cfg.encode_to_text())
+	if err != OK:
+		Log.e("settings", "saving failed: %s" % error_string(err))
+	return err
 
 
 ## Applies the quality preset's environment parts (glow) and colour grading
