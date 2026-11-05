@@ -10,7 +10,7 @@ signal closed
 ## choice ([..., choices] where choices is an Array or the name of a Settings
 ## method returning one; string choices are shown via "SETTING_VALUE_<X>" keys
 ## or as-is for resolutions), action ([..., method]: a button calling it).
-const DESKTOP_ONLY := ["display_mode"]
+const DESKTOP_ONLY := ["display_mode", "renderer"]
 const SCHEMA := {
 	"SETTINGS_TAB_CONTROLS": [
 		["input", "sensitivity_x", "SETTING_SENS_X", "slider", 0.1, 5.0, 0.05],
@@ -36,6 +36,7 @@ const SCHEMA := {
 		["video", "effects", "SETTING_EFFECTS", "percent", 0.25, 1.0, 0.05],
 		["video", "anti_aliasing", "SETTING_ANTI_ALIASING", "choice", Settings.ANTI_ALIASING],
 		["video", "adaptive_quality", "SETTING_ADAPTIVE_QUALITY", "check"],
+		["video", "renderer", "SETTING_RENDERER", "choice", Settings.RENDERERS],
 	],
 	"SETTINGS_TAB_GAME": [
 		["profile", "browser_players", "SETTING_BROWSER_PLAYERS", "check"],

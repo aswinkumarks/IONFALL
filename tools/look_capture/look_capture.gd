@@ -80,7 +80,7 @@ func _run(maps: Array) -> void:
 				var s := _states[i]
 				s.position = _floor(spawn.origin + forward * d + right * (i - (_states.size() - 1) * 0.5) * SPACING)
 				s.yaw = atan2(forward.x, forward.z)  # facing the camera
-			_camera.look_at_from_position(eye, spawn.origin + forward * d + Vector3.UP * 1.1, Vector3.UP)
+			_camera.look_at_from_position(eye, _floor(spawn.origin + forward * d) + Vector3.UP * 1.1, Vector3.UP)
 			await _shot(log, map_id, "%dm" % int(d))
 		for v in _visuals:
 			v.queue_free()
@@ -91,18 +91,36 @@ func _run(maps: Array) -> void:
 		await get_tree().process_frame
 
 
-## The first spawn with a clear view 16 m ahead at eye height (so the row
-## isn't behind a wall), else the first.
+## The spawn and facing with the most open view: clear 16 m ahead at eye height, and
+## floor at its height under each character at each shot distance (not off
+## a ledge) with a line of sight to it (not behind cover).
 func _open_spawn(spawns: Array[Transform3D]) -> Transform3D:
 	var space := get_world_3d().direct_space_state
-	for t in spawns:
+	var best := spawns[0]
+	var best_score := -1
+	var views: Array[Transform3D] = []
+	for t in spawns:  # each spawn's own facing first, then turned ones
+		for turn: float in [0.0, -45.0, 45.0, -90.0, 90.0, 180.0]:
+			views.append(Transform3D(t.basis.rotated(Vector3.UP, deg_to_rad(turn)), t.origin))
+	for t in views:
 		var forward := -t.basis.z
 		forward.y = 0.0
+		forward = forward.normalized()
+		var right := forward.cross(Vector3.UP)
 		var eye := t.origin + Vector3.UP * 1.6
-		var q := PhysicsRayQueryParameters3D.create(eye, eye + forward.normalized() * (DISTANCES[-1] + 1.0))
-		if space.intersect_ray(q).is_empty():
-			return t
-	return spawns[0]
+		var q := PhysicsRayQueryParameters3D.create(eye, eye + forward * (DISTANCES[-1] + 1.0))
+		var score := 0 if not space.intersect_ray(q).is_empty() else 1
+		for d: float in DISTANCES:
+			for i in CharacterRig.SELECTABLE.size():
+				var at := _floor(t.origin + forward * d + right * (i - (CharacterRig.SELECTABLE.size() - 1) * 0.5) * SPACING)
+				var sight := PhysicsRayQueryParameters3D.create(eye, at + Vector3.UP * 1.2)
+				if absf(at.y - t.origin.y) < 1.0 and space.intersect_ray(sight).is_empty():
+					score += 1
+		if score > best_score:
+			best = t
+			best_score = score
+	print("look_capture: spawn at %s, %d/%d clear" % [best.origin, best_score, 1 + DISTANCES.size() * CharacterRig.SELECTABLE.size()])
+	return best
 
 
 ## The floor under `at` (from up to 3 m above it), else `at`.

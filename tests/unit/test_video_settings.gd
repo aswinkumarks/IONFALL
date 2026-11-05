@@ -113,3 +113,22 @@ func test_aa_bench_switches_modes() -> void:
 	AaBench.apply(vp, "msaa_4x")
 	assert_eq(vp.msaa_3d, Viewport.MSAA_4X)
 	assert_eq(vp.screen_space_aa, Viewport.SCREEN_SPACE_AA_DISABLED)
+
+
+func test_renderer_choice_writes_the_startup_override() -> void:
+	var before: String = Settings.get_value("video", "renderer")
+	assert_eq(ProjectSettings.get_setting("application/config/project_settings_override"), Settings.RENDERER_OVERRIDE)
+	Settings.set_value("video", "renderer", "forward_plus")
+	var cfg := ConfigFile.new()
+	assert_eq(cfg.load(Settings.RENDERER_OVERRIDE), OK, "Forward+ writes the override")
+	assert_eq(cfg.get_value("rendering", "renderer/rendering_method"), "forward_plus")
+	Settings.set_value("video", "renderer", "mobile")
+	assert_false(FileAccess.file_exists(Settings.RENDERER_OVERRIDE), "Mobile is project.godot's: no override")
+	Settings.set_value("video", "renderer", before)
+
+
+func test_ssao_only_on_high_presets() -> void:
+	assert_false(Settings.QUALITY.low.get("ssao", false))
+	assert_false(Settings.QUALITY.medium.get("ssao", false))
+	assert_true(Settings.QUALITY.high.ssao)
+	assert_true(Settings.QUALITY.ultra.ssao)

@@ -7,13 +7,18 @@ extends RefCounted
 ## - low: the clean stylized look: colour and lightmap only, no normal,
 ##   occlusion or roughness maps (one texture fetch per pixel).
 ## And each map's exposure (Maps.LIST "exposure"): the kit interiors
-## (Spire, Foundry) read too dark at 1.0, Station too bright.
+## (Spire, Foundry) read too dark at 1.0, Station too bright; and the
+## reflection probe's strength by renderer.
 ## Nothing runs per frame: low and medium are material copies made once
 ## per material and set as surface overrides.
 
 const PANEL_ALBEDO := "res://art/textures/station_panel_albedo.png"
 const PANEL_NORMAL := "res://art/textures/station_panel_normal.png"
 const PANEL_ORM := "res://art/textures/station_panel_orm.png"
+## The reflection probe's strength under Forward+ (the desktop renderer
+## option): its reflections are far stronger than the Mobile renderer's, and
+## at full strength the light strips tint every metal surface cyan.
+const FORWARD_PLUS_PROBE := 0.35
 
 
 ## Applies the quality tier `detail` (MeshyRig.TIERS) and map `map_id`'s
@@ -26,6 +31,9 @@ static func apply(root: Node, map_id: String, detail: String) -> void:
 		var env: Environment = (we as WorldEnvironment).environment
 		if env != null:
 			env.tonemap_exposure = exposure
+	var forward_plus := RenderingServer.get_current_rendering_method() == "forward_plus"
+	for probe: ReflectionProbe in root.find_children("*", "ReflectionProbe", true, false):
+		probe.intensity = FORWARD_PLUS_PROBE if forward_plus else 1.0
 	var copies := {}  ## source material -> its copy for this tier
 	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
 		if mi.mesh == null:

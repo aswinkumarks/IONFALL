@@ -33,6 +33,7 @@ const DEFAULTS := {
 		"effects": 1.0,  ## particle density
 		"adaptive_quality": true,  ## automatic step-down when slow or hot (PLAN §3.10)
 		"anti_aliasing": "auto",  ## auto (the preset's) / off / fxaa / msaa_2x / msaa_4x
+		"renderer": "mobile",  ## desktop: mobile / forward_plus, from the next start (RENDERER_OVERRIDE)
 	},
 	"input": {
 		"sensitivity_x": 1.0,
@@ -173,7 +174,7 @@ func apply_video() -> void:
 	var preset := quality_preset()
 	var scale := clampf(float(video("render_scale")) * res_scale, 0.25, 1.0)
 	# FSR only helps when actually upscaling; it also sharpens. The Mobile
-	# renderer (phones) doesn't support it and would warn, so they get bilinear.
+	# renderer doesn't support it and would warn, so it gets bilinear.
 	if preset.upscale == "fsr" and scale < 0.99 and RenderingServer.get_current_rendering_method() == "forward_plus":
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 		root.fsr_sharpness = 0.35
@@ -278,6 +279,8 @@ func set_adaptive(key: String, value: Variant) -> void:
 
 func set_value(section: String, key: String, value: Variant) -> void:
 	_cfg.set_value(section, key, value)
+	if section == "video" and key == "renderer":
+		write_renderer_override(str(value))
 	if section == "video":
 		adaptive.clear()
 	if section == "video" and not _applying_preset:
@@ -309,9 +312,9 @@ const QUALITY := {
 	"medium": {"render_scale": 0.6, "shadows": false, "glow": true, "effects": 0.7, "upscale": "fsr", "msaa": 0,
 			"fxaa": false, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0, "detail": "medium", "probe": true, "lights": false},
 	"high": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 1,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "detail": "high", "probe": true, "lights": true},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "detail": "high", "ssao": true, "probe": true, "lights": true},
 	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "detail": "high", "probe": true, "lights": true},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "detail": "high", "ssao": true, "probe": true, "lights": true},
 }
 ## Phone-only changes to a preset's extras. The reflection probe costs the
 ## Mi 11X ~0.9 ms of GPU time, so phones leave it off on Medium; desktops
@@ -349,6 +352,24 @@ func quality_preset() -> Dictionary:
 ## screen pass (0.5 ms on the Mi 11X, m4.md); `--aa-bench` measures them
 ## on the device (AaBench).
 const ANTI_ALIASING := ["auto", "off", "fxaa", "msaa_2x", "msaa_4x"]
+## Desktop renderers. Mobile is the default: on integrated GPUs Forward+
+## costs about twice the GPU time (docs/perf/graphics-tiers.md); on a
+## dedicated GPU it adds ambient occlusion (High, Ultra) and FSR upscaling.
+const RENDERERS := ["mobile", "forward_plus"]
+## Read at startup (project.godot application/config/project_settings_override):
+## the renderer can't change while the game runs.
+const RENDERER_OVERRIDE := "user://renderer.cfg"
+
+
+## Writes the renderer choice for the next start: Forward+ as an override
+## file, Mobile (project.godot's) as none.
+static func write_renderer_override(renderer: String) -> void:
+	if renderer == "forward_plus":
+		var f := FileAccess.open(RENDERER_OVERRIDE, FileAccess.WRITE)
+		if f != null:
+			f.store_string('[rendering]\n\nrenderer/rendering_method="forward_plus"\n')
+	elif FileAccess.file_exists(RENDERER_OVERRIDE):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(RENDERER_OVERRIDE))
 
 
 ## [MSAA level (0 off, 1 2x, 2 4x), FXAA (1 on)] for anti-aliasing setting
@@ -397,6 +418,12 @@ func apply_environment(root: Node) -> void:
 		if env == null:
 			continue
 		env.glow_enabled = bool(video("glow"))
+		# Ambient occlusion grounds the players and the kit's corners
+		# (Forward+ only: the desktop renderer option).
+		env.ssao_enabled = video("ssao") == true and RenderingServer.get_current_rendering_method() == "forward_plus"
+		env.ssao_radius = 1.2
+		env.ssao_intensity = 1.6
+		env.ssao_detail = 0.5
 		env.adjustment_enabled = true
 		env.adjustment_contrast = 1.08
 		env.adjustment_saturation = 1.12
