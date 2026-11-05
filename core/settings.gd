@@ -33,7 +33,7 @@ const DEFAULTS := {
 		"effects": 1.0,  ## particle density
 		"adaptive_quality": true,  ## automatic step-down when slow or hot (PLAN §3.10)
 		"anti_aliasing": "auto",  ## auto (the preset's) / off / fxaa / msaa_2x / msaa_4x
-		"renderer": "mobile",  ## desktop: mobile / forward_plus, from the next start (RENDERER_OVERRIDE)
+		"renderer": "auto_gpu",  ## desktop: auto_gpu / mobile / forward_plus (RENDERERS)
 	},
 	"input": {
 		"sensitivity_x": 1.0,
@@ -89,6 +89,7 @@ func _ready() -> void:
 			var key := pair.get_slice("=", 0)
 			if _override_preset.has(key) or DEFAULTS.video.has(key):
 				_override_preset[key] = str_to_var(pair.get_slice("=", 1))
+	_sync_renderer()
 	apply_video()
 	apply_audio()
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
@@ -280,7 +281,7 @@ func set_adaptive(key: String, value: Variant) -> void:
 func set_value(section: String, key: String, value: Variant) -> void:
 	_cfg.set_value(section, key, value)
 	if section == "video" and key == "renderer":
-		write_renderer_override(str(value))
+		write_renderer_override(renderer_for(str(value), RenderingServer.get_video_adapter_type()))
 	if section == "video":
 		adaptive.clear()
 	if section == "video" and not _applying_preset:
@@ -352,13 +353,45 @@ func quality_preset() -> Dictionary:
 ## screen pass (0.5 ms on the Mi 11X, m4.md); `--aa-bench` measures them
 ## on the device (AaBench).
 const ANTI_ALIASING := ["auto", "off", "fxaa", "msaa_2x", "msaa_4x"]
-## Desktop renderers. Mobile is the default: on integrated GPUs Forward+
-## costs about twice the GPU time (docs/perf/graphics-tiers.md); on a
-## dedicated GPU it adds ambient occlusion (High, Ultra) and FSR upscaling.
-const RENDERERS := ["mobile", "forward_plus"]
+## Desktop renderers. "auto_gpu" (the default) is Forward+ on a dedicated
+## GPU, where it adds ambient occlusion (High, Ultra) and FSR upscaling, and
+## Mobile on an integrated one, where Forward+ costs about twice the GPU time
+## (docs/perf/graphics-tiers.md).
+const RENDERERS := ["auto_gpu", "mobile", "forward_plus"]
+## Set for the one restart into the chosen renderer (_sync_renderer).
+const RENDERER_RESTART_ENV := "IONFALL_RENDERER_RESTART"
 ## Read at startup (project.godot application/config/project_settings_override):
 ## the renderer can't change while the game runs.
 const RENDERER_OVERRIDE := "user://renderer.cfg"
+
+
+## The renderer (rendering method) setting `choice` runs on a GPU of type
+## `adapter` (RenderingDevice.DeviceType).
+static func renderer_for(choice: String, adapter: int) -> String:
+	if choice == "auto_gpu":
+		return "forward_plus" if adapter == RenderingDevice.DEVICE_TYPE_DISCRETE_GPU else "mobile"
+	return choice if choice in RENDERERS else "mobile"
+
+
+## Desktop: when the renderer running isn't the setting's (first start on a
+## dedicated GPU, or the override file lost), writes the override and
+## restarts into it, once.
+func _sync_renderer() -> void:
+	var current := RenderingServer.get_current_rendering_method()
+	if not has_window_modes() or current == "gl_compatibility":
+		return
+	var wanted := renderer_for(str(get_value("video", "renderer")), RenderingServer.get_video_adapter_type())
+	write_renderer_override(wanted)
+	# Not under the editor's debugger: a restart would drop its session.
+	if wanted != current and OS.get_environment(RENDERER_RESTART_ENV) != "1" and not EngineDebugger.is_active():
+		print("Settings: restarting with the %s renderer" % wanted)
+		OS.set_environment(RENDERER_RESTART_ENV, "1")
+		var args := OS.get_cmdline_args()
+		if not OS.get_cmdline_user_args().is_empty():
+			args.append("--")
+			args.append_array(OS.get_cmdline_user_args())
+		OS.set_restart_on_exit(true, args)
+		get_tree().quit.call_deferred()
 
 
 ## Writes the renderer choice for the next start: Forward+ as an override

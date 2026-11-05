@@ -132,3 +132,12 @@ func test_ssao_only_on_high_presets() -> void:
 	assert_false(Settings.QUALITY.medium.get("ssao", false))
 	assert_true(Settings.QUALITY.high.ssao)
 	assert_true(Settings.QUALITY.ultra.ssao)
+
+
+func test_auto_renderer_is_forward_plus_on_dedicated_gpus_only() -> void:
+	assert_eq(Settings.DEFAULTS.video.renderer, "auto_gpu")
+	assert_eq(Settings.renderer_for("auto_gpu", RenderingDevice.DEVICE_TYPE_DISCRETE_GPU), "forward_plus")
+	assert_eq(Settings.renderer_for("auto_gpu", RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU), "mobile")
+	assert_eq(Settings.renderer_for("mobile", RenderingDevice.DEVICE_TYPE_DISCRETE_GPU), "mobile")
+	assert_eq(Settings.renderer_for("forward_plus", RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU), "forward_plus")
+	assert_eq(Settings.renderer_for("bogus", RenderingDevice.DEVICE_TYPE_DISCRETE_GPU), "mobile")

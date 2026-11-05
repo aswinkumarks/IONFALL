@@ -12,7 +12,7 @@ Measured with `tools/look_capture` (each map alone, then the four characters at
 
 The worst shot per preset moved by at most 0.2 ms on Low, Medium and High.
 
-## Forward+ on desktop: an option, not the default
+## Forward+ on desktop: on dedicated GPUs
 
 Forward+ adds ambient occlusion (High, Ultra) and FSR1 upscaling. On this GPU it
 costs about twice as much as Mobile for the same scene:
@@ -25,13 +25,15 @@ costs about twice as much as Mobile for the same scene:
 | Forward+, no SSAO, no MSAA | 11.2 / 12.0 ms |
 | Low: Forward+ FSR1 / bilinear / Mobile bilinear | 4.2 / 2.6 / 2.3 ms |
 
-The extra cost is in the renderer itself, not in its effects, so Mobile stays
-the default and Forward+ is a Video setting for dedicated GPUs
-(`Settings.RENDERERS`). The renderer is chosen at startup, so the setting writes
-`user://renderer.cfg`, which project.godot names as its
-`project_settings_override`; it applies from the next start.
+The extra cost is in the renderer itself, not in its effects. So the Video >
+Renderer setting defaults to "auto_gpu": Forward+ on a dedicated GPU, Mobile on
+an integrated one (`Settings.renderer_for`); Mobile and Forward+ can also be
+chosen. The renderer is fixed at startup: the setting writes
+`user://renderer.cfg` (project.godot's `project_settings_override`), and when
+the running renderer isn't the chosen one (a first start on a dedicated GPU)
+the game restarts into it once (`Settings._sync_renderer`).
 
-Forward+ (via the setting), means over the 12 shots: Medium 7.84 ms, High
-21.23 ms. Its reflection probe is far stronger than Mobile's and tinted every
+Forward+ on this GPU, means (worst) over the 12 shots: Medium 7.84 ms, High
+21.08 (24.84) ms, Ultra 27.27 (33.41) ms. Its reflection probe is far stronger than Mobile's and tinted every
 metal surface with the light strips' cyan; MapDetail lowers it to 0.35 under
 Forward+. Measure again on a dedicated-GPU PC (PLAN.md M6).

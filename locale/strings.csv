@@ -172,6 +172,7 @@ SETTING_VALUE_LOW,Low
 SETTING_VALUE_MEDIUM,Medium
 SETTING_VALUE_HIGH,High
 SETTING_VALUE_ULTRA,Ultra
+SETTING_VALUE_AUTO_GPU,Auto (Forward+ on dedicated GPUs)
 SETTING_VALUE_MOBILE,Fast (best for integrated graphics)
 SETTING_VALUE_FORWARD_PLUS,"Forward+ (ambient occlusion, FSR; dedicated GPU)"
 SETTING_VALUE_CUSTOM,Custom
