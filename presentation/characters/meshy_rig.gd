@@ -116,8 +116,13 @@ static func tier_mesh_path(c: String, t: String) -> String:
 	return DIR + c + "/" + c + "_mesh_" + t + ".res"
 
 
+## Builds that leave the 2K textures out (the Android presets) have no
+## high material: high detail falls back to the 1K medium one.
 static func tier_material_path(c: String, t: String) -> String:
-	return DIR + c + "/" + c + "_mat_" + t + ".tres"
+	var path := DIR + c + "/" + c + "_mat_" + t + ".tres"
+	if t == "high" and not ResourceLoader.exists(path):
+		return tier_material_path(c, "medium")
+	return path
 
 
 static func scene_path(c: String) -> String:
