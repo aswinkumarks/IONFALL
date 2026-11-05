@@ -51,6 +51,7 @@ var _info: Label
 var _time: float = 0.0
 var _loadout: Array[WeaponData] = []
 var _spawns: Array[Transform3D] = []
+var _host_silent: bool = false  ## no packets from the host for 3 s (logged once per stretch)
 var _paused_at_ms: int = 0  ## when the app was last suspended (0: not suspended)
 var _reconnect_until_ms: int = 0  ## reconnecting while non-zero
 var _online_code: String = ""  ## hosting online: the invite code (decision 0005)
@@ -578,6 +579,12 @@ func _watch_connection() -> void:
 	if client.local_id == 0:
 		return  # still connecting: ENet reports failure
 	var silent := client.seconds_silent()
+	if (silent >= 3.0) != _host_silent:
+		_host_silent = silent >= 3.0
+		if _host_silent:
+			Log.w("match", "no packets from the host for 3 s%s" % (" (host paused)" if client.host_paused else ""))
+		else:
+			Log.i("match", "the host is responding again")
 	if silent >= 10.0:
 		_fail("NET_HOST_LOST")
 	elif silent >= 3.0:
@@ -1649,4 +1656,5 @@ func _on_resumed() -> void:
 
 func _on_focus_lost() -> void:
 	if _started and not _paused:
+		Log.i("match", "window lost focus: pausing")
 		_set_paused(true)
