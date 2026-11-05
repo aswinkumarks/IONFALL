@@ -132,9 +132,67 @@ func _perf_line() -> void:
 	_worst_ms = 0.0
 
 
+## Static memory is only counted in debug builds; release builds report the
+## process's resident set from /proc on Linux and the native heap on Android.
 func _memory() -> String:
-	return "memory %.0f MB, video %.0f MB" % [Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
-			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0]
+	var mem := "memory %.0f MB" % (Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0)
+	if not OS.is_debug_build():
+		mem = "memory n/a"
+		if OS.get_name() == "Android":
+			var debug: Variant = _java_class("android.os.Debug")
+			if debug != null:
+				mem = "native heap %.0f MB" % (float(debug.call("getNativeHeapAllocatedSize")) / 1048576.0)
+		else:
+			var rss := _kb(_proc_field(_read_file("/proc/self/status"), "VmRSS"))
+			if rss > 0:
+				mem = "resident %.0f MB" % (rss / 1024.0)
+	return "%s, video %.0f MB" % [mem, Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0]
+
+
+## A system file's text. Android apps can't open /proc through FileAccess,
+## but can read it with cat (one process, for the session header only).
+static func _read_file(file: String) -> String:
+	if OS.get_name() == "Android":
+		var out := []
+		return str(out[0]) if OS.execute("/system/bin/cat", [file], out) == 0 and not out.is_empty() else ""
+	var f := FileAccess.open(file, FileAccess.READ)
+	if f == null:
+		return ""
+	var text := ""
+	while not f.eof_reached():  # /proc files report length 0: read by line
+		text += f.get_line() + "\n"
+	return text
+
+
+## The value of a "Key: value" line, or "".
+static func _proc_field(text: String, key: String) -> String:
+	for line in text.split("\n"):
+		if line.begins_with(key) and line.contains(":"):
+			return line.get_slice(":", 1).strip_edges()
+	return ""
+
+
+## "123 kB" as a number, or -1.
+static func _kb(field: String) -> float:
+	return float(field.get_slice(" ", 0)) if field != "" else -1.0
+
+
+static func _java_class(name: String) -> Variant:
+	if not Engine.has_singleton("JavaClassWrapper"):
+		return null
+	return Engine.get_singleton("JavaClassWrapper").call("wrap", name)
+
+
+## The CPU name; Android's is blank, so the SoC model from android.os.Build.
+static func _cpu_name() -> String:
+	var name := OS.get_processor_name()
+	if name == "" and OS.get_name() == "Android":
+		var build: Variant = _java_class("android.os.Build")
+		if build != null:
+			name = str(build.get("SOC_MODEL"))  # Android 12+
+			if name in ["", "unknown", "<null>"]:
+				name = str(build.get("HARDWARE"))
+	return name if name != "" else "unknown CPU"
 
 
 ## The session header: what a bug report needs to know about this run.
@@ -143,10 +201,18 @@ func _system_info() -> void:
 			BuildInfo.artifact_id, BuildInfo.protocol_version, BuildInfo.engine_version,
 			"debug" if OS.is_debug_build() else "release"])
 	Log.i("sys", "%s %s %s on %s, %s (%d threads), locale %s" % [OS.get_name(), OS.get_distribution_name(), OS.get_version(), OS.get_model_name(),
-			OS.get_processor_name(), OS.get_processor_count(), OS.get_locale()])
+			_cpu_name(), OS.get_processor_count(), OS.get_locale()])
 	var mem := OS.get_memory_info()
-	Log.i("sys", "RAM %.1f GB, %.1f GB free" % [float(mem.get("physical", -1)) / 1073741824.0,
-			float(mem.get("available", -1)) / 1073741824.0])
+	var total := float(mem.get("physical", -1))
+	var free := float(mem.get("available", -1))
+	if total <= 0:  # Android doesn't fill these in
+		var meminfo := _read_file("/proc/meminfo")
+		total = _kb(_proc_field(meminfo, "MemTotal")) * 1024.0
+		free = _kb(_proc_field(meminfo, "MemAvailable")) * 1024.0
+	if total > 0:
+		Log.i("sys", "RAM %.1f GB, %.1f GB free" % [total / 1073741824.0, free / 1073741824.0])
+	else:
+		Log.i("sys", "RAM unknown")
 	var adapter_types := ["other", "integrated", "dedicated", "virtual", "cpu"]
 	Log.i("sys", "GPU %s (%s, %s), %s %s, renderer %s" % [RenderingServer.get_video_adapter_name(),
 			RenderingServer.get_video_adapter_vendor(),
@@ -169,3 +235,4 @@ func _system_info() -> void:
 				values[key] = Settings.get_value(section, key)
 		Log.d("sys", "settings %s: %s" % [section, values])
 	Log.flush()
+
