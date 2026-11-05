@@ -54,6 +54,13 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-web.zip' --dir dl
           unzip -q dl/*-web.zip -d out/play
           test -f out/index.html && test -f out/play/index.html
+          # Godot's page has only a bare <title>: give search engines a
+          # description and the canonical address too.
+          SITE=https://aswinkumarks.github.io/IONFALL
+          sed -i "s|<title>[^<]*</title>|<title>Play IONFALL in your browser: free sci-fi arena FPS</title>\n\t\t<meta name=\"description\" content=\"Play IONFALL, a free open-source sci-fi arena shooter, in your browser: single player against bots, no install.\">\n\t\t<link rel=\"canonical\" href=\"$SITE/play/\">|" out/play/index.html
+          grep -q 'rel="canonical"' out/play/index.html
+          # The sitemap's last-modified date: this deploy.
+          sed -i "s|</loc></url>|</loc><lastmod>$(date -u +%Y-%m-%d)</lastmod></url>|" out/sitemap.xml
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

@@ -5,7 +5,7 @@ or play with friends over the local network or the internet. Phones and PCs play
 
 **▶ [Play in your browser](https://aswinkumarks.github.io/IONFALL/play/)** (single player, no install) ·
 [Website](https://aswinkumarks.github.io/IONFALL/) ·
-**[Download v0.9](https://github.com/aswinkumarks/IONFALL/releases/tag/v0.9)** ·
+**[Download the latest release](https://github.com/aswinkumarks/IONFALL/releases/latest)** ·
 [Roadmap](https://github.com/users/aswinkumarks/projects/5)
 
 ![A match on Meridian Station](docs/media/match.jpg)
