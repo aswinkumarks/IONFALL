@@ -380,7 +380,10 @@ func _sync_renderer() -> void:
 	var current := RenderingServer.get_current_rendering_method()
 	if not has_window_modes() or current == "gl_compatibility":
 		return
-	var wanted := renderer_for(str(get_value("video", "renderer")), RenderingServer.get_video_adapter_type())
+	var adapter := RenderingServer.get_video_adapter_type()
+	if Platform.get_user_arg("--gpu-type") == "discrete":  # dev: the dedicated-GPU path on any PC
+		adapter = RenderingDevice.DEVICE_TYPE_DISCRETE_GPU
+	var wanted := renderer_for(str(get_value("video", "renderer")), adapter)
 	write_renderer_override(wanted)
 	# Not under the editor's debugger: a restart would drop its session.
 	if wanted != current and OS.get_environment(RENDERER_RESTART_ENV) != "1" and not EngineDebugger.is_active():
