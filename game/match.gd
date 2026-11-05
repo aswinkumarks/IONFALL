@@ -120,12 +120,17 @@ func _ready() -> void:
 	add_child(presentation)
 	_apply_shadows(presentation)
 	Settings.apply_environment(presentation)
-	MapDetail.apply(presentation, config.map, MeshyRig.current_tier())
+	var map_tier := [MeshyRig.current_tier()]  ## boxed: the lambda below updates it
+	MapDetail.apply(presentation, config.map, map_tier[0])
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
 		if section == "video":
 			_apply_shadows(presentation)
 			Settings.apply_environment(presentation)
-			MapDetail.apply(presentation, config.map, MeshyRig.current_tier())
+			# Only on a tier change: it walks the map and copies its materials,
+			# too slow for every slider step or adaptive step-down.
+			if MeshyRig.current_tier() != map_tier[0]:
+				map_tier[0] = MeshyRig.current_tier()
+				MapDetail.apply(presentation, config.map, map_tier[0])
 			_rebuild_visuals_for_tier())
 	add_child(input)
 	add_child(view)

@@ -47,7 +47,9 @@ static func _android_log_dir() -> String:
 func _ready() -> void:
 	# The click trail: every button press, with its text and where it is.
 	get_tree().node_added.connect(func(node: Node) -> void:
-		if node is BaseButton:
+		# Once per button: a reparented one enters the tree again.
+		if node is BaseButton and not node.has_meta(&"_log_hooked"):
+			node.set_meta(&"_log_hooked", true)
 			(node as BaseButton).pressed.connect(_on_button.bind(node)))
 	get_tree().scene_changed.connect(func() -> void:
 		var scene := get_tree().current_scene

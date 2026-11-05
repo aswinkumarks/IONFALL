@@ -288,7 +288,7 @@ func set_value(section: String, key: String, value: Variant) -> void:
 		Log.d("settings", "%s/%s = %s" % [section, key, value if key not in ["keymap", "touch_layout"] else "(changed)"])
 	_cfg.set_value(section, key, value)
 	if section == "video" and key == "renderer":
-		write_renderer_override(renderer_for(str(value), RenderingServer.get_video_adapter_type()))
+		write_renderer_override(renderer_for(str(value), _adapter_type()))
 	if section == "video":
 		adaptive.clear()
 	if section == "video" and not _applying_preset:
@@ -387,13 +387,12 @@ func _sync_renderer() -> void:
 	var current := RenderingServer.get_current_rendering_method()
 	if not has_window_modes() or current == "gl_compatibility":
 		return
-	var adapter := RenderingServer.get_video_adapter_type()
-	if Platform.get_user_arg("--gpu-type") == "discrete":  # dev: the dedicated-GPU path on any PC
-		adapter = RenderingDevice.DEVICE_TYPE_DISCRETE_GPU
-	var wanted := renderer_for(str(get_value("video", "renderer")), adapter)
+	var wanted := renderer_for(str(get_value("video", "renderer")), _adapter_type())
 	write_renderer_override(wanted)
-	# Not under the editor's debugger: a restart would drop its session.
-	if wanted != current and OS.get_environment(RENDERER_RESTART_ENV) != "1" and not EngineDebugger.is_active():
+	# Not under the editor's debugger (a restart would drop its session), nor
+	# for tool scenes and scripts: their callers wait on this process.
+	if wanted != current and OS.get_environment(RENDERER_RESTART_ENV) != "1" and not EngineDebugger.is_active() \
+			and not _runs_other_scene():
 		Log.i("settings", "restarting with the %s renderer (running %s)" % [wanted, current])
 		OS.set_environment(RENDERER_RESTART_ENV, "1")
 		var args := OS.get_cmdline_args()
@@ -402,6 +401,22 @@ func _sync_renderer() -> void:
 			args.append_array(OS.get_cmdline_user_args())
 		OS.set_restart_on_exit(true, args)
 		get_tree().quit.call_deferred()
+
+
+## The GPU type renderer_for decides by; --gpu-type discrete tries the
+## dedicated-GPU path on any PC (dev).
+func _adapter_type() -> int:
+	if Platform.get_user_arg("--gpu-type") == "discrete":
+		return RenderingDevice.DEVICE_TYPE_DISCRETE_GPU
+	return RenderingServer.get_video_adapter_type()
+
+
+## Started on a tool scene or a script rather than the game's main scene.
+static func _runs_other_scene() -> bool:
+	for arg in OS.get_cmdline_args():
+		if arg in ["-s", "--script"] or arg.ends_with(".tscn") or arg.ends_with(".scn"):
+			return true
+	return false
 
 
 ## Writes the renderer choice for the next start: Forward+ as an override

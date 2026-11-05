@@ -110,6 +110,15 @@ static func open(p_dir: String = "") -> String:
 		n += 1
 		path = dir + PREFIX + stamp + "_%d.log" % n
 	_file = FileAccess.open(path, FileAccess.WRITE)
+	if _file == null and dir != DIR:  # the folder exists but can't be written
+		var tried := dir
+		dir = DIR
+		DirAccess.make_dir_recursive_absolute(dir)
+		previous = sessions()
+		path = dir + path.get_file()
+		_file = FileAccess.open(path, FileAccess.WRITE)
+		if _file != null:
+			push_warning("Log: can't write %s; logging to %s" % [tried, dir])
 	if _file == null:
 		path = ""
 		push_warning("Log: can't write %s (%s); logging to the console only" % [dir, error_string(FileAccess.get_open_error())])
@@ -166,9 +175,10 @@ static func ended_cleanly(file: String) -> bool:
 static func report_text(max_lines: int = RECENT) -> String:
 	var out := ""
 	var all := sessions()
-	if all.size() >= 2 and not ended_cleanly(all[-2]):
-		var lines := FileAccess.get_file_as_string(all[-2]).split("\n")
-		out += "### previous session (did not close normally): %s\n%s\n\n" % [all[-2].get_file(),
+	all.erase(path)  # this session's file, if it opened
+	if not all.is_empty() and not ended_cleanly(all[-1]):
+		var lines := FileAccess.get_file_as_string(all[-1]).split("\n")
+		out += "### previous session (did not close normally): %s\n%s\n\n" % [all[-1].get_file(),
 				"\n".join(lines.slice(maxi(lines.size() - max_lines, 0)))]
 	out += "### this session: %s\n%s" % [path.get_file(), recent_text(max_lines)]
 	return out
