@@ -9,17 +9,18 @@ extends RefCounted
 ## character screen keep the full mesh (MeshyRig.full_detail).
 ##
 ## Built from the mesh's own LODs (no new simplification) and saved by
-## tools/bake_reduced_characters.gd as MeshyRig.reduced_mesh_path.
+## tools/bake_character_tiers.gd as MeshyRig.tier_mesh_path.
 
 
-## `mesh` with LOD 1 as its base level, or `mesh` itself where it has no LODs
-## (or no CPU-side data).
-static func build(mesh: ArrayMesh) -> ArrayMesh:
+## `mesh` with LOD `base_lod` (1 = the first coarser level) as its base level
+## and no surface materials (the rig brings its quality tier's), or `mesh`
+## itself where it has no LODs (or no CPU-side data).
+static func build(mesh: ArrayMesh, base_lod: int = 1) -> ArrayMesh:
 	var out := ArrayMesh.new()
 	out.custom_aabb = mesh.custom_aabb
 	for s in mesh.get_surface_count():
 		var arrays := mesh.surface_get_arrays(s)
-		var lods := lods_of(mesh, s)
+		var lods := lods_of(mesh, s).slice(base_lod - 1)
 		if lods.is_empty() or (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
 			return mesh
 		var levels: Array[PackedInt32Array] = []
@@ -32,7 +33,6 @@ static func build(mesh: ArrayMesh) -> ArrayMesh:
 		var flags: int = mesh.surface_get_format(s) & (Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS | Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES)
 		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, reduced[0], [], coarser, flags)
 		out.surface_set_name(s, mesh.surface_get_name(s))
-		out.surface_set_material(s, mesh.surface_get_material(s))
 	return out
 
 

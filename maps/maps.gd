@@ -14,6 +14,7 @@ const LIST := {
 		"thumb": "res://ui/maps/station.png",
 		"gameplay": "res://maps/station/gameplay.tscn",
 		"presentation": "res://maps/station/presentation.tscn",
+		"exposure": 0.85,  ## MapDetail: tonemap exposure
 	},
 	"spire": {
 		"name": "MAP_SPIRE",
@@ -21,6 +22,7 @@ const LIST := {
 		"thumb": "res://ui/maps/spire.png",
 		"gameplay": "res://maps/spire/gameplay.tscn",
 		"presentation": "res://maps/spire/presentation.tscn",
+		"exposure": 1.35,  ## MapDetail: tonemap exposure
 	},
 	"foundry": {
 		"name": "MAP_FOUNDRY",
@@ -28,6 +30,7 @@ const LIST := {
 		"thumb": "res://ui/maps/foundry.png",
 		"gameplay": "res://maps/foundry/gameplay.tscn",
 		"presentation": "res://maps/foundry/presentation.tscn",
+		"exposure": 1.3,  ## MapDetail: tonemap exposure
 	},
 	"test_arena": {
 		"name": "MAP_TEST_ARENA",

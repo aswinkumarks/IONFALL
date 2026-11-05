@@ -17,9 +17,11 @@ run/flush_stdout_on_print=true
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+config/project_settings_override="user://renderer.cfg"
 
 [autoload]
 
+LogService="*res://core/log_service.gd"
 Platform="*res://core/platform.gd"
 Events="*res://core/events.gd"
 BuildInfo="*res://core/build_info.gd"

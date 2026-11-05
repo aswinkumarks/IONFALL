@@ -1,11 +1,13 @@
 extends CanvasLayer
-## Debug overlay showing frame-time percentiles and build info (PLAN §3.15).
+## Debug overlay showing frame-time percentiles, build info and the session
+## log, which it can copy for a bug report (PLAN §3.15).
 ## The active match adds network rows through `Diagnostics.net_info`.
 
 @onready var _label: Label = %StatsLabel
 
 var _refresh_timer := 0.0
 var _replay_result: String = ""
+var _log_status: String = ""
 
 
 func _ready() -> void:
@@ -38,6 +40,27 @@ func _ready() -> void:
 	lighting.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://maps/lighting_test/lighting_test.tscn"))
 	add_child(lighting)
+	# Session logs for bug reports (Log, docs/logging.md): this session's log,
+	# and the previous one when it didn't close normally, to the clipboard.
+	var copy := Button.new()
+	copy.text = "Copy log"
+	copy.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 8)
+	copy.position.x += 570
+	copy.pressed.connect(func() -> void:
+		Log.flush()
+		var text := Log.report_text()
+		DisplayServer.clipboard_set(text)
+		_log_status = "copied %d log lines to the clipboard" % text.count("\n"))
+	add_child(copy)
+	if Settings.has_window_modes():
+		var folder := Button.new()
+		folder.text = "Open log folder"
+		folder.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 8)
+		folder.position.x += 760
+		folder.pressed.connect(func() -> void:
+			Log.flush()
+			OS.shell_open(ProjectSettings.globalize_path(Log.dir)))
+		add_child(folder)
 
 
 func _process(delta: float) -> void:
@@ -61,6 +84,9 @@ func _process(delta: float) -> void:
 		Diagnostics.live_particles,
 		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 	]
+	_label.text += "\nlog %s" % (ProjectSettings.globalize_path(Log.path) if not Log.path.is_empty() else "(console only)")
+	if not _log_status.is_empty():
+		_label.text += "\n" + _log_status
 	if not _replay_result.is_empty():
 		_label.text += "\n" + _replay_result
 	if Diagnostics.net_info.is_valid():

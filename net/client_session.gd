@@ -105,10 +105,16 @@ func join(address: String, port: int, movement_config: MovementConfig, weapons: 
 	world.configure(1, movement, spawns)
 	add_child(world)
 	add_child(transport)
-	transport.connection_failed.connect(func(reason: String) -> void: failed.emit(reason))
-	transport.disconnected.connect(func() -> void: left.emit("disconnected"))
+	transport.connection_failed.connect(func(reason: String) -> void:
+		Log.w("client", "join failed: %s" % reason)
+		failed.emit(reason))
+	transport.disconnected.connect(func() -> void:
+		Log.w("client", "lost the server after %.1f s of silence" % seconds_silent())
+		left.emit("disconnected"))
 	transport.message.connect(_on_message)
 	_last_packet_ms = Time.get_ticks_msec()
+	Log.i("client", "joining the match as \"%s\" (character %d, colour %d, primary %d%s%s)" % [player_name, character,
+			color, primary, ", spectating" if spectate else "", ", reconnecting" if reconnect_token != 0 else ""])
 	var hello := Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id,
 			uuid, player_name, reconnect_token, character, color, primary, spectate)
 	return transport.join_peer(peer, hello) if peer != null else transport.join(address, port, hello)
@@ -127,6 +133,8 @@ func seconds_silent() -> float:
 
 
 func leave() -> void:
+	Log.i("client", "leaving the match (%d corrections, %d snaps, %d resyncs, %d bad snapshots)" % [corrections, snaps,
+			resyncs, undecodable_snapshots])
 	transport.close()
 
 
@@ -297,6 +305,7 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 	match Protocol.message_type(data):
 		Protocol.Msg.NOTICE:
 			var code := Protocol.decode_notice(data)
+			Log.i("client", "server notice %d" % code)
 			if code == Protocol.Notice.HOST_PAUSED:
 				host_paused = true
 			elif code == Protocol.Notice.HOST_RESUMED:
@@ -330,10 +339,13 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 				GameMode.team_names = w.team_names
 				GameMode.team_colors = w.team_colors
 				_metrics_start_ms = Time.get_ticks_msec()
+				Log.i("client", "welcomed: player %d, match %08x, map %s, phase %d" % [local_id, match_id, map_id, phase])
 				joined.emit()
 		Protocol.Msg.PHASE:
 			var p := Protocol.decode_phase(data)
 			if not p.is_empty():
+				if p.phase != phase or p.match_id != match_id:
+					Log.i("client", "phase %d -> %d (match %08x)" % [phase, p.phase, p.match_id])
 				match_id = p.match_id
 				phase = p.phase
 				phase_seq = p.phase_seq
@@ -348,6 +360,7 @@ func _handle_message(_id: int, data: PackedByteArray) -> void:
 		Protocol.Msg.RESULTS:
 			var res := Protocol.decode_results(data)
 			if not res.is_empty():
+				Log.i("client", "match results %s" % res.get("result_id", "?"))
 				res["type"] = "results"
 				res["id"] = "r:" + res.result_id
 				_events.append(res)
@@ -443,6 +456,7 @@ func _reconcile(snap: Snapshot) -> void:
 	if before_disc != pred.state.discontinuity_gen or error > SNAP_CORRECTION_M:
 		if before_disc == pred.state.discontinuity_gen:
 			snaps += 1
+			Log.d("client", "prediction snap #%d: %.2f m off at tick %d (rtt %.0f ms)" % [snaps, error, c, clock.rtt_ms])
 		correction_offset = Vector3.ZERO
 		prev_state = pred.state.copy()
 	else:

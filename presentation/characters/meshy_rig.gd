@@ -13,6 +13,15 @@ extends ArmoredRig
 
 const DIR := "res://art/characters/meshy/"
 const SHADER := preload("res://presentation/characters/meshy_character.gdshader")
+const STYLIZED_SHADER := preload("res://presentation/characters/meshy_character_stylized.gdshader")
+## Quality tiers (Settings preset "detail"), each its own mesh and
+## material baked from the one source model (tools/bake_character_tiers.gd):
+## high = full mesh, 2K PBR textures; medium = half the triangles, 1K
+## textures; low = a quarter, one 512 posterized texture, stylized shader.
+const TIERS := ["high", "medium", "low"]
+## High keeps the full mesh's finer levels further out (its LODs dropped to
+## a quarter of the triangles from 4 m).
+const HIGH_LOD_BIAS := 3.0
 ## Animation-library bone -> Meshy bone.
 const BONE_MAP := {
 	"pelvis": "Hips", "spine_01": "Spine02", "spine_02": "Spine01", "spine_03": "Spine", "neck_01": "neck",
@@ -66,9 +75,11 @@ static var _libraries := {}  ## character -> AnimationLibrary, baked once
 static var _grips := {}  ## character -> GRIP in its hand space
 
 var character: String
-## The full mesh instead of the reduced one (reduced_mesh_path): set before setup()
-## for close-ups (the character screen); first person switches by itself.
+## The high tier whatever the quality: set before setup() for close-ups
+## (the character screen); first person switches by itself.
 var full_detail := false
+## The tier this rig was built with (TIERS).
+var tier := "high"
 var _mat: ShaderMaterial
 
 
@@ -80,8 +91,38 @@ func _init(p_character: String = "sentinel") -> void:
 static func paths() -> PackedStringArray:
 	var out := PackedStringArray()
 	for c: String in CharacterRig.SELECTABLE:
-		out.append_array([scene_path(c), finger_mesh_path(c), reduced_mesh_path(c), finger_skin_path(c), anims_path(c)])
+		out.append_array([rig_scene_path(c), tier_mesh_path(c, current_tier()), tier_material_path(c, current_tier()),
+				finger_skin_path(c), anims_path(c)])
 	return out
+
+
+## The tier the current quality settings draw characters at.
+static func current_tier() -> String:
+	# Looked up, not named: tools and the editor run without the autoload.
+	var settings: Node = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Settings") \
+			if Engine.get_main_loop() is SceneTree and not Engine.is_editor_hint() else null
+	if settings == null:
+		return "high"
+	var t := str(settings.call("video", "detail"))
+	return t if TIERS.has(t) else "high"
+
+
+## The model without mesh or material (tools/bake_character_tiers.gd).
+static func rig_scene_path(c: String) -> String:
+	return DIR + c + "/" + c + "_rig.scn"
+
+
+static func tier_mesh_path(c: String, t: String) -> String:
+	return DIR + c + "/" + c + "_mesh_" + t + ".res"
+
+
+## Builds that leave the 2K textures out (the Android presets) have no
+## high material: high detail falls back to the 1K medium one.
+static func tier_material_path(c: String, t: String) -> String:
+	var path := DIR + c + "/" + c + "_mat_" + t + ".tres"
+	if t == "high" and not ResourceLoader.exists(path):
+		return tier_material_path(c, "medium")
+	return path
 
 
 static func scene_path(c: String) -> String:
@@ -92,12 +133,6 @@ static func scene_path(c: String) -> String:
 ## (tools/rig_meshy_fingers.gd).
 static func finger_mesh_path(c: String) -> String:
 	return DIR + c + "/" + c + "_fingers_mesh.res"
-
-
-## The third-person mesh (ReducedMesh, saved by
-## tools/bake_reduced_characters.gd).
-static func reduced_mesh_path(c: String) -> String:
-	return DIR + c + "/" + c + "_reduced_mesh.res"
 
 
 static func finger_skin_path(c: String) -> String:
@@ -116,7 +151,8 @@ func setup(color: Color) -> void:
 	# still tilts.
 	_aim_up = 0.0
 	_color = color
-	_model = (load(scene_path(character)) as PackedScene).instantiate()
+	tier = "high" if full_detail else current_tier()
+	_model = (load(rig_scene_path(character)) as PackedScene).instantiate()
 	_model.rotation.y = PI  # faces +Z; Godot forward is -Z
 	add_child(_model)
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0]
@@ -124,16 +160,13 @@ func setup(color: Color) -> void:
 	_add_finger_bones(_skeleton, skin)
 	_curl_hands()
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
-		mi.mesh = load(finger_mesh_path(character) if full_detail else reduced_mesh_path(character))
+		mi.mesh = load(tier_mesh_path(character, tier))
 		mi.skin = skin
-		var base := mi.get_active_material(0) as StandardMaterial3D
-		_mat = ShaderMaterial.new()
-		_mat.shader = SHADER
-		_mat.set_shader_parameter("albedo_tex", base.albedo_texture)
-		_mat.set_shader_parameter("mr_tex", base.metallic_texture)
-		_mat.set_shader_parameter("normal_tex", base.normal_texture)
+		_mat = (load(tier_material_path(character, tier)) as ShaderMaterial).duplicate()
 		_mat.set_shader_parameter("team_color", color)
 		mi.material_override = _mat
+		if tier == "high":
+			mi.lod_bias = HIGH_LOD_BIAS
 	for a: AnimationPlayer in _model.find_children("*", "AnimationPlayer", true, false):
 		a.queue_free()  # Meshy's rig-check clip; the tree drives the skeleton
 	_build_tree(_retarget_to(character, _skeleton, String(_model.get_path_to(_skeleton))), MESHY_UPPER)
@@ -190,7 +223,7 @@ static func _curl(sk: Skeleton3D, side: String, curl: Dictionary) -> void:
 ## (FP_SUPPORT_CURL).
 func make_first_person() -> bool:
 	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
-		mi.mesh = load(finger_mesh_path(character))
+		mi.mesh = load(tier_mesh_path(character, "high"))
 	var ok := super()
 	_curl_hands()
 	return ok

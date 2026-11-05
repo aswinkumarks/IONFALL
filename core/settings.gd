@@ -33,6 +33,7 @@ const DEFAULTS := {
 		"effects": 1.0,  ## particle density
 		"adaptive_quality": true,  ## automatic step-down when slow or hot (PLAN §3.10)
 		"anti_aliasing": "auto",  ## auto (the preset's) / off / fxaa / msaa_2x / msaa_4x
+		"renderer": "auto_gpu",  ## desktop: auto_gpu / mobile / forward_plus (RENDERERS)
 	},
 	"input": {
 		"sensitivity_x": 1.0,
@@ -88,6 +89,7 @@ func _ready() -> void:
 			var key := pair.get_slice("=", 0)
 			if _override_preset.has(key) or DEFAULTS.video.has(key):
 				_override_preset[key] = str_to_var(pair.get_slice("=", 1))
+	_sync_renderer()
 	apply_video()
 	apply_audio()
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
@@ -173,7 +175,7 @@ func apply_video() -> void:
 	var preset := quality_preset()
 	var scale := clampf(float(video("render_scale")) * res_scale, 0.25, 1.0)
 	# FSR only helps when actually upscaling; it also sharpens. The Mobile
-	# renderer (phones) doesn't support it and would warn, so they get bilinear.
+	# renderer doesn't support it and would warn, so it gets bilinear.
 	if preset.upscale == "fsr" and scale < 0.99 and RenderingServer.get_current_rendering_method() == "forward_plus":
 		root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 		root.fsr_sharpness = 0.35
@@ -190,6 +192,10 @@ func apply_video() -> void:
 	RenderingServer.directional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	RenderingServer.positional_soft_shadow_filter_set_quality(preset.soft_shadows)
 	_apply_fps_cap()
+	Log.d("settings", "video applied: window %s, 3D scale %.2f (%s), msaa %d, fxaa %s, aniso %d, lod %.1f, shadows %d px (soft %d), fps cap %d" % [
+			DisplayServer.window_get_size() if desktop else Vector2i.ZERO, scale,
+			"fsr" if root.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR else "bilinear", aa.x, aa.y == 1,
+			preset.aniso, preset.lod, preset.shadow_size, preset.soft_shadows, Engine.max_fps])
 
 
 ## Menus and the lobby on a phone run at most MENU_FPS: their backdrop is
@@ -272,12 +278,17 @@ func video(key: String) -> Variant:
 
 ## The governor lowers `key` for this session (AdaptiveQuality).
 func set_adaptive(key: String, value: Variant) -> void:
+	Log.i("settings", "adaptive quality: %s = %s for this session" % [key, value])
 	adaptive[key] = value
 	Events.settings_changed.emit("video", key, value)
 
 
 func set_value(section: String, key: String, value: Variant) -> void:
+	if not _applying_preset:
+		Log.d("settings", "%s/%s = %s" % [section, key, value if key not in ["keymap", "touch_layout"] else "(changed)"])
 	_cfg.set_value(section, key, value)
+	if section == "video" and key == "renderer":
+		write_renderer_override(renderer_for(str(value), _adapter_type()))
 	if section == "video":
 		adaptive.clear()
 	if section == "video" and not _applying_preset:
@@ -303,15 +314,15 @@ func set_value(section: String, key: String, value: Variant) -> void:
 ## applied from the preset ("custom" keeps the last preset's extras).
 const QUALITY := {
 	"low": {"render_scale": 0.6, "shadows": false, "glow": false, "effects": 0.4, "upscale": "bilinear", "msaa": 0,
-			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0, "probe": false, "lights": false},
+			"fxaa": false, "shadow_size": 1024, "soft_shadows": 0, "aniso": 0, "lod": 4.0, "detail": "low", "probe": false, "lights": false},
 	## Phone default: sized to hold 60 fps on the Mi 11X (docs/perf/m2-station.md,
 	## m4.md: FXAA off kept GPU frames under the vsync budget).
 	"medium": {"render_scale": 0.6, "shadows": false, "glow": true, "effects": 0.7, "upscale": "fsr", "msaa": 0,
-			"fxaa": false, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0, "probe": true, "lights": false},
+			"fxaa": false, "shadow_size": 2048, "soft_shadows": 0, "aniso": 2, "lod": 2.0, "detail": "medium", "probe": true, "lights": false},
 	"high": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 1,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "probe": true, "lights": true},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 2, "aniso": 3, "lod": 1.0, "detail": "high", "ssao": true, "probe": true, "lights": true},
 	"ultra": {"render_scale": 1.0, "shadows": true, "glow": true, "effects": 1.0, "upscale": "bilinear", "msaa": 2,
-			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "probe": true, "lights": true},
+			"fxaa": false, "shadow_size": 4096, "soft_shadows": 4, "aniso": 4, "lod": 0.5, "detail": "high", "ssao": true, "probe": true, "lights": true},
 }
 ## Phone-only changes to a preset's extras. The reflection probe costs the
 ## Mi 11X ~0.9 ms of GPU time, so phones leave it off on Medium; desktops
@@ -349,6 +360,74 @@ func quality_preset() -> Dictionary:
 ## screen pass (0.5 ms on the Mi 11X, m4.md); `--aa-bench` measures them
 ## on the device (AaBench).
 const ANTI_ALIASING := ["auto", "off", "fxaa", "msaa_2x", "msaa_4x"]
+## Desktop renderers. "auto_gpu" (the default) is Forward+ on a dedicated
+## GPU, where it adds ambient occlusion (High, Ultra) and FSR upscaling, and
+## Mobile on an integrated one, where Forward+ costs about twice the GPU time
+## (docs/perf/graphics-tiers.md).
+const RENDERERS := ["auto_gpu", "mobile", "forward_plus"]
+## Set for the one restart into the chosen renderer (_sync_renderer).
+const RENDERER_RESTART_ENV := "IONFALL_RENDERER_RESTART"
+## Read at startup (project.godot application/config/project_settings_override):
+## the renderer can't change while the game runs.
+const RENDERER_OVERRIDE := "user://renderer.cfg"
+
+
+## The renderer (rendering method) setting `choice` runs on a GPU of type
+## `adapter` (RenderingDevice.DeviceType).
+static func renderer_for(choice: String, adapter: int) -> String:
+	if choice == "auto_gpu":
+		return "forward_plus" if adapter == RenderingDevice.DEVICE_TYPE_DISCRETE_GPU else "mobile"
+	return choice if choice in RENDERERS else "mobile"
+
+
+## Desktop: when the renderer running isn't the setting's (first start on a
+## dedicated GPU, or the override file lost), writes the override and
+## restarts into it, once.
+func _sync_renderer() -> void:
+	var current := RenderingServer.get_current_rendering_method()
+	if not has_window_modes() or current == "gl_compatibility":
+		return
+	var wanted := renderer_for(str(get_value("video", "renderer")), _adapter_type())
+	write_renderer_override(wanted)
+	# Not under the editor's debugger (a restart would drop its session), nor
+	# for tool scenes and scripts: their callers wait on this process.
+	if wanted != current and OS.get_environment(RENDERER_RESTART_ENV) != "1" and not EngineDebugger.is_active() \
+			and not _runs_other_scene():
+		Log.i("settings", "restarting with the %s renderer (running %s)" % [wanted, current])
+		OS.set_environment(RENDERER_RESTART_ENV, "1")
+		var args := OS.get_cmdline_args()
+		if not OS.get_cmdline_user_args().is_empty():
+			args.append("--")
+			args.append_array(OS.get_cmdline_user_args())
+		OS.set_restart_on_exit(true, args)
+		get_tree().quit.call_deferred()
+
+
+## The GPU type renderer_for decides by; --gpu-type discrete tries the
+## dedicated-GPU path on any PC (dev).
+func _adapter_type() -> int:
+	if Platform.get_user_arg("--gpu-type") == "discrete":
+		return RenderingDevice.DEVICE_TYPE_DISCRETE_GPU
+	return RenderingServer.get_video_adapter_type()
+
+
+## Started on a tool scene or a script rather than the game's main scene.
+static func _runs_other_scene() -> bool:
+	for arg in OS.get_cmdline_args():
+		if arg in ["-s", "--script"] or arg.ends_with(".tscn") or arg.ends_with(".scn"):
+			return true
+	return false
+
+
+## Writes the renderer choice for the next start: Forward+ as an override
+## file, Mobile (project.godot's) as none.
+static func write_renderer_override(renderer: String) -> void:
+	if renderer == "forward_plus":
+		var f := FileAccess.open(RENDERER_OVERRIDE, FileAccess.WRITE)
+		if f != null:
+			f.store_string('[rendering]\n\nrenderer/rendering_method="forward_plus"\n')
+	elif FileAccess.file_exists(RENDERER_OVERRIDE):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(RENDERER_OVERRIDE))
 
 
 ## [MSAA level (0 off, 1 2x, 2 4x), FXAA (1 on)] for anti-aliasing setting
@@ -378,13 +457,19 @@ func load_settings() -> void:
 	var text := AtomicFile.read_text(PATH, func(t: String) -> bool:
 		return ConfigFile.new().parse(t) == OK)
 	if not text.is_empty():
-		_cfg.parse(text)
+		var err := _cfg.parse(text)
+		Log.i("settings", "loaded %s: %s" % [PATH, error_string(err)])
+	else:
+		Log.i("settings", "no saved settings: defaults (%s)" % ("unreadable file" if FileAccess.file_exists(PATH) else "first start"))
 
 
 func save_settings() -> Error:
 	if not Platform.storage_available:
 		return ERR_UNAVAILABLE
-	return AtomicFile.write_text(PATH, _cfg.encode_to_text())
+	var err := AtomicFile.write_text(PATH, _cfg.encode_to_text())
+	if err != OK:
+		Log.e("settings", "saving failed: %s" % error_string(err))
+	return err
 
 
 ## Applies the quality preset's environment parts (glow) and colour grading
@@ -397,6 +482,12 @@ func apply_environment(root: Node) -> void:
 		if env == null:
 			continue
 		env.glow_enabled = bool(video("glow"))
+		# Ambient occlusion grounds the players and the kit's corners
+		# (Forward+ only: the desktop renderer option).
+		env.ssao_enabled = video("ssao") == true and RenderingServer.get_current_rendering_method() == "forward_plus"
+		env.ssao_radius = 1.2
+		env.ssao_intensity = 1.6
+		env.ssao_detail = 0.5
 		env.adjustment_enabled = true
 		env.adjustment_contrast = 1.08
 		env.adjustment_saturation = 1.12

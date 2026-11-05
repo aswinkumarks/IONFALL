@@ -42,12 +42,12 @@ godot --headless --export-release "Linux" build/linux/ionfall.x86_64
 godot --headless --export-release "Linux" build/linux/ionfall.x86_64
 build/linux/ionfall.x86_64 --headless -- --server --smoke-test
 
-# Signed release AAB for Play, with the 16 KB checks (no install):
+# Signed release APK, with the 16 KB checks (no install):
 #   tools/android_release.sh
-# Signed release AAB (loads the upload key from outside the repo)
+# Signed release APK (loads the upload key from outside the repo)
 set -a; source ~/.local/share/ionfall-keys/upload-key.env; set +a
-godot --headless --export-release "Android" build/android/ionfall.aab
-tools/check_16kb.sh build/android/ionfall.aab
+godot --headless --export-release "Android" build/android/ionfall.apk
+tools/check_16kb.sh build/android/ionfall.apk
 ```
 
 ## Installing on the Mi 11X (wireless debugging)
@@ -55,16 +55,7 @@ tools/check_16kb.sh build/android/ionfall.aab
 1. Phone: Developer options → **Wireless debugging** on, **Install via USB** on (MIUI requires it even for wireless installs).
 2. Wireless debugging → *Pair device with pairing code*, then on the PC: `adb pair <ip>:<pairing-port> <code>` (once per PC).
 3. Connect: `adb mdns services` shows the `_adb-tls-connect` address; `adb connect <ip>:<port>`.
-4. Install the signed release AAB with one command: `tools/android_install.sh` (exports, signs with the upload key, installs and launches; `--no-export` reuses the last AAB). Manual equivalent:
-   ```bash
-   set -a; source ~/.local/share/ionfall-keys/upload-key.env; set +a
-   PF=$(mktemp); chmod 600 $PF; printf '%s' "$GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD" > $PF
-   java -jar ~/.local/share/ionfall-toolchain/bundletool.jar build-apks --bundle=build/android/ionfall.aab \
-     --output=build/android/ionfall.apks --connected-device --device-id=<ip>:<port> \
-     --ks="$GODOT_ANDROID_KEYSTORE_RELEASE_PATH" --ks-key-alias="$GODOT_ANDROID_KEYSTORE_RELEASE_USER" \
-     --ks-pass=file:$PF --key-pass=file:$PF; rm -f $PF
-   java -jar ~/.local/share/ionfall-toolchain/bundletool.jar install-apks --apks=build/android/ionfall.apks --device-id=<ip>:<port>
-   ```
+4. Install the signed release APK with one command: `tools/android_install.sh` (exports, installs and launches; `--no-export` reuses the last APK). Manual equivalent: `adb -s <ip>:<port> install -r build/android/ionfall.apk`.
    Approve MIUI's install prompt on the phone. `INSTALL_FAILED_USER_RESTRICTED` means the prompt was declined or "Install via USB" is off.
 5. If the adb server restarts, the wireless connection drops: re-run step 3 (no re-pairing needed). Godot kills adb after every export unless the editor setting `export/android/shutdown_adb_on_exit` is `false` (set on this machine).
 

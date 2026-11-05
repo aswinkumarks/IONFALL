@@ -18,8 +18,7 @@ the version.
    exported game as a server (`--server`) on every map and mode, and creates a **draft** release
    with:
    - `ionfall-<version>-{linux,windows,web}.zip`
-   - `ionfall-<version>-android-arm64.apk` and `ionfall-<version>.aab`
-     (only when the Android upload key secrets are set, see below)
+   - `ionfall-<version>-android-arm64.apk` (only when the Android upload key secrets are set, see below)
    - `SHA256SUMS`
 
    The notes start from `docs/release/notes-template.md` plus GitHub's list
@@ -35,7 +34,7 @@ Re-running CI on the same tag replaces the draft's files.
 
 ## One-time setup: Android signing in CI
 
-Without these secrets a tag's release has no APK or Play bundle (CI warns).
+Without these secrets a tag's release has no APK (CI warns).
 They're the Play **upload key** from `~/.local/share/ionfall-keys/`; set
 them yourself (never commit them):
 
@@ -48,5 +47,5 @@ The EOS secrets (online play) are already set.
 ## Building by hand
 
 `tools/package_release.sh` (desktop and servers) and
-`tools/android_release.sh` (signed AAB) still build locally from
+`tools/android_release.sh` (signed APK) still build locally from
 `project.godot`'s version, for testing a build before tagging.

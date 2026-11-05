@@ -40,6 +40,7 @@ var hud: Hud
 var touch := TouchControls.new()
 
 var _visuals: Dictionary = {}  ## net id -> PlayerVisual
+var _visual_tier := MeshyRig.current_tier()  ## the character tier _visuals were built at
 var _prev: Dictionary = {}  ## host: net id -> PlayerSimState at the previous tick
 var _started: bool = false
 var _paused: bool = false
@@ -107,6 +108,8 @@ func _ready() -> void:
 	MatchConfig.pending = null
 	if not Maps.has(config.map):
 		config.map = Maps.DEFAULT
+	var load_start := Time.get_ticks_msec()
+	Log.i("match", "starting: %s" % Log.describe(config, ["team_plan", "reconnect_token"]))
 	var gameplay := Maps.gameplay(config.map)
 	add_child(gameplay)
 	pickups.spots = gameplay.pickup_spots()
@@ -117,10 +120,18 @@ func _ready() -> void:
 	add_child(presentation)
 	_apply_shadows(presentation)
 	Settings.apply_environment(presentation)
+	var map_tier := [MeshyRig.current_tier()]  ## boxed: the lambda below updates it
+	MapDetail.apply(presentation, config.map, map_tier[0])
 	Events.settings_changed.connect(func(section: String, _key: String, _value: Variant) -> void:
 		if section == "video":
 			_apply_shadows(presentation)
-			Settings.apply_environment(presentation))
+			Settings.apply_environment(presentation)
+			# Only on a tier change: it walks the map and copies its materials,
+			# too slow for every slider step or adaptive step-down.
+			if MeshyRig.current_tier() != map_tier[0]:
+				map_tier[0] = MeshyRig.current_tier()
+				MapDetail.apply(presentation, config.map, map_tier[0])
+			_rebuild_visuals_for_tier())
 	add_child(input)
 	add_child(view)
 	add_child(effects)
@@ -132,6 +143,8 @@ func _ready() -> void:
 	audio.launched.connect(pad_visuals.launched)
 	audio.listener = view.camera
 	_build_ui()
+	Log.i("match", "map %s loaded in %d ms (detail %s)" % [config.map, Time.get_ticks_msec() - load_start,
+			MeshyRig.current_tier()])
 	audio.caption.connect(hud.show_caption)
 	if not Platform.user_args.has("--no-warmup"):  # dev: cold-start comparison
 		_warm_up()
@@ -184,6 +197,7 @@ func _ready() -> void:
 			var hosted: Dictionary = Online.serve() if config.from_lobby \
 					else await Online.host(config.player_name, config.max_combatants(), info)
 			if hosted.has("error"):
+				Log.e("match", "online hosting failed: %s" % hosted.error)
 				_fail(tr("NET_ONLINE_ERROR") % hosted.error)
 				return
 			online_peer = hosted.peer
@@ -231,6 +245,8 @@ func _ready() -> void:
 	if not Platform.is_mobile() and not spectating():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_started = true
+	Log.i("match", "running as %s %d ms after the scene started" % [["offline", "host", "client"][config.mode],
+			Time.get_ticks_msec() - load_start])
 
 
 func _exit_tree() -> void:
@@ -262,6 +278,8 @@ func _start_client(token: int) -> bool:
 	client.joined.connect(func() -> void:
 		# Clients load the map before joining (prediction needs its collision).
 		if client.map_id != config.map:
+			Log.i("match", "the host runs map %s, we loaded %s%s" % [client.map_id, config.map,
+					": reloading with it" if Maps.has(client.map_id) and not config.map_retried else ""])
 			client.leave()
 			if Maps.has(client.map_id) and not config.map_retried:
 				# Load the host's map and join again (manual address joins
@@ -283,6 +301,7 @@ func _start_client(token: int) -> bool:
 		var joined: Dictionary = await Online.connect_to(config.player_name, config.online_host) \
 				if not config.online_host.is_empty() else await Online.join(config.player_name, config.online_code)
 		if joined.has("error"):
+			Log.w("match", "online join failed: %s" % joined.error)
 			match joined.error:
 				"not_found": _fail(tr("NET_ONLINE_NOT_FOUND") % config.online_code)
 				"version": _fail("NET_ONLINE_VERSION")
@@ -305,11 +324,14 @@ func _start_client(token: int) -> bool:
 
 
 func _on_client_lost(reason: String) -> void:
+	Log.w("match", "connection lost: %s (started %s, leaving %s, reconnecting %s)" % [reason, _started, _leaving,
+			_reconnect_until_ms != 0])
 	if _reconnect_until_ms != 0:
 		return  # the reconnect loop retries
 	# Dropped mid-match (our network blipped, or the server timed us out):
 	# rejoin with our token while the server keeps our place.
 	if reason == "disconnected" and _started and not _leaving and client.reconnect_token != 0:
+		Log.i("match", "rejoining with our token for up to %d s" % (ServerSession.RECONNECT_WINDOW_MS / 1000))
 		_reconnect_until_ms = Time.get_ticks_msec() + ServerSession.RECONNECT_WINDOW_MS
 		_reconnect_step.call_deferred()
 		return
@@ -336,9 +358,11 @@ func _on_client_lost(reason: String) -> void:
 func _reconnect_step() -> void:
 	if Time.get_ticks_msec() > _reconnect_until_ms:
 		_reconnect_until_ms = 0
+		Log.w("match", "rejoining failed: the reconnect window closed")
 		_fail("NET_RECONNECT_FAILED")
 		return
 	var token := client.reconnect_token
+	Log.i("match", "rejoin attempt (%.0f s left)" % ((_reconnect_until_ms - Time.get_ticks_msec()) / 1000.0))
 	_start_client(token)
 	get_tree().create_timer(4.0).timeout.connect(func() -> void:
 		if _reconnect_until_ms != 0 and not _leaving and not client.is_live():
@@ -361,7 +385,7 @@ func _warm_up() -> void:
 	warm.finished.connect(func() -> void:
 		_warming = false
 		_kill_feed.clear()
-		Diagnostics.hitch_log = Platform.user_args.has("--perf-log")
+		Diagnostics.hitch_log = true  # frames over 50 ms, with their section times (capped per session)
 		MatchPreload.release()
 		cover.queue_free())
 	var started := Time.get_ticks_msec()
@@ -1111,6 +1135,18 @@ func _visual_for(id: int, display_name: String, is_bot: bool, character: int, co
 	return v
 
 
+## A quality change that moves characters to another tier (MeshyRig.TIERS)
+## rebuilds the players' bodies; the next frame makes them again.
+func _rebuild_visuals_for_tier() -> void:
+	var tier := MeshyRig.current_tier()
+	if tier == _visual_tier:
+		return
+	_visual_tier = tier
+	for id in _visuals:
+		_visuals[id].queue_free()
+	_visuals.clear()
+
+
 func _prune_visuals(seen: Dictionary) -> void:
 	for id in _visuals.keys():
 		if not seen.has(id):
@@ -1475,6 +1511,8 @@ func _make_confirm_panel() -> Control:
 ## Offline, pausing stops the simulation. Online matches can't pause: the
 ## panel only stops local input (PLAN §3.5.1).
 func _set_paused(paused: bool) -> void:
+	if paused != _paused:
+		Log.d("match", "paused" if paused else "resumed")
 	_paused = paused
 	_pause_panel.visible = paused
 	_kill_feed.visible = not paused  # on touch it sits where the pause scoreboard opens
@@ -1531,6 +1569,7 @@ func _leave() -> void:
 	if _leaving:
 		return
 	_leaving = true
+	Log.i("match", "leaving to the main menu%s" % (": %s" % MatchConfig.last_error if not MatchConfig.last_error.is_empty() else ""))
 	_save_partial(MatchConfig.last_error.is_empty())  # host gone: unconfirmed
 	if client != null:
 		client.leave()

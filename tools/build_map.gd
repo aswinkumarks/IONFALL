@@ -14,6 +14,7 @@ const TEXEL_SIZE := 0.2  ## lightmap texel size in metres
 const Kind := StationLayout.Kind
 
 var _panel: Texture2D = load("res://art/textures/panel_grid.png")
+## Hull plating with depth (tools/gen_station_panels.py), MapDetail.station_panels.
 var _hazard: Texture2D = load("res://art/textures/hazard.png")
 
 
@@ -77,14 +78,14 @@ func _merge(boxes: Array, material: Material) -> ArrayMesh:
 func _material(kind: int) -> StandardMaterial3D:
 	match kind:
 		Kind.FLOOR: return _panels(Color(0.2, 0.22, 0.27), 0.25, 0.75, 0.1)
-		Kind.HULL: return _panels(Color(0.8, 0.82, 0.86), 0.25, 0.7, 0.0)
+		Kind.HULL: return _panels(Color(0.6, 0.63, 0.68), 0.25, 0.7, 0.0)
 		Kind.DECK: return _panels(Color(0.6, 0.63, 0.68), 0.5, 0.7, 0.0)
 		Kind.RAMP: return _panels(Color(0.52, 0.55, 0.6), 0.5, 0.7, 0.0)
 		Kind.BRIDGE: return _panels(Color(0.42, 0.47, 0.53), 1.0, 0.5, 0.4)
 		Kind.CRATE: return _panels(Color(0.9, 0.52, 0.18), 1.0, 0.6, 0.0)
 		Kind.COVER: return _panels(Color(0.3, 0.38, 0.48), 1.0, 0.6, 0.1)
 		Kind.CORE: return _panels(Color(0.12, 0.14, 0.18), 0.5, 0.35, 0.6)
-		Kind.MODULE: return _panels(Color(0.88, 0.89, 0.92), 0.5, 0.6, 0.0)
+		Kind.MODULE: return _panels(Color(0.66, 0.68, 0.72), 0.5, 0.6, 0.0)
 		Kind.PILLAR, Kind.RIB: return _panels(Color(0.62, 0.65, 0.7), 1.0, 0.5, 0.3)
 		Kind.BEAM: return _panels(Color(0.25, 0.28, 0.32), 1.0, 0.45, 0.5)
 		Kind.TRIM_CYAN: return _emissive(Color(0.35, 0.9, 1.0), 2.6)
@@ -101,6 +102,7 @@ func _panels(color: Color, scale: float, roughness: float, metallic: float) -> S
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
 	m.albedo_texture = _panel
+	MapDetail.station_panels(m)
 	m.uv1_triplanar = true
 	m.uv1_world_triplanar = true
 	m.uv1_scale = Vector3.ONE * scale

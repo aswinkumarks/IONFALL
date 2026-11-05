@@ -118,6 +118,7 @@ SETTING_ANTI_ALIASING,Anti-aliasing
 SETTING_GLOW,Glow
 SETTING_EFFECTS,Effects density
 SETTING_ADAPTIVE_QUALITY,Adaptive quality (lowers settings when slow or hot)
+SETTING_RENDERER,Renderer (applies after a restart)
 SETTING_VOL_MASTER,Master volume
 SETTING_VOL_MUSIC,Music volume
 SETTING_VOL_SFX,Effects volume
@@ -171,6 +172,9 @@ SETTING_VALUE_LOW,Low
 SETTING_VALUE_MEDIUM,Medium
 SETTING_VALUE_HIGH,High
 SETTING_VALUE_ULTRA,Ultra
+SETTING_VALUE_AUTO_GPU,Auto (Forward+ on dedicated GPUs)
+SETTING_VALUE_MOBILE,Fast (best for integrated graphics)
+SETTING_VALUE_FORWARD_PLUS,"Forward+ (ambient occlusion, FSR; dedicated GPU)"
 SETTING_VALUE_CUSTOM,Custom
 SETTING_VALUE_AUTO,Auto (quality preset)
 SETTING_VALUE_OFF,Off

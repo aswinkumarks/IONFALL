@@ -1,0 +1,19 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://presentation/characters/meshy_character.gdshader" id="1_g260y"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/operative/operative_Image_0.png" id="2_i55xd"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/operative/operative_Image_1.jpg" id="3_nepys"]
+[ext_resource type="Texture2D" path="res://art/characters/meshy/operative/operative_normal.jpg" id="4_h57e1"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_g260y")
+shader_parameter/albedo_tex = ExtResource("2_i55xd")
+shader_parameter/mr_tex = ExtResource("3_nepys")
+shader_parameter/normal_tex = ExtResource("4_h57e1")
+shader_parameter/team_color = Color(0.31, 0.89, 1, 1)
+shader_parameter/plate_tint = 0.6
+shader_parameter/rim = 0.35
+shader_parameter/floor_light = 0.04
+shader_parameter/glow = 0.0
+shader_parameter/flash = 0.0

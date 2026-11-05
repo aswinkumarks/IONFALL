@@ -55,7 +55,7 @@ func _ready() -> void:
 		DirAccess.remove_absolute(path)
 	storage_available = _probe_storage()
 	if not storage_available:
-		push_warning("Platform: user:// is not writable; the profile won't be saved.")
+		Log.w("platform", "user:// is not writable; the profile won't be saved.")
 
 
 ## Android drops immersive fullscreen after calls and some system dialogs:
@@ -101,7 +101,8 @@ func _force_quit_later() -> void:
 		if _quit_finished:
 			return
 		OS.delay_msec(20)
-	printerr("Quit took over %d ms: ending the process" % QUIT_WATCHDOG_MS)
+	Log.e("platform", "quit took over %d ms: ending the process" % QUIT_WATCHDOG_MS)
+	Log.close()
 	OS.kill(OS.get_process_id())
 
 
@@ -216,7 +217,7 @@ var _external_dir: String = ""
 ## perf.log in the external files directory (Android) or user:// (elsewhere),
 ## since Android release builds don't log to logcat.
 func perf_log(line: String) -> void:
-	print(line)
+	Log.i("perf", line)
 	if not user_args.has("--perf-log"):
 		return
 	var dir := external_files_dir()
@@ -326,7 +327,7 @@ func _wifi_lock(factory: String, args: Array) -> Variant:
 		return null
 	lock.call("setReferenceCounted", false)
 	lock.call("acquire")
-	print("Platform: %s acquired" % factory)
+	Log.i("platform", "%s acquired" % factory)
 	return lock
 
 

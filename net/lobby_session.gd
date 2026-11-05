@@ -69,6 +69,8 @@ func host(host_name: String, p_max: int, port: int, peer: MultiplayerPeer = null
 	transport.peer_left.connect(_on_peer_left)
 	transport.message.connect(_on_host_message)
 	var err := transport.host_peer(peer) if peer != null else transport.host(port, max_players)
+	Log.i("lobby", "hosting \"%s\" (%s, max %d players): %s" % [host_name, "online" if peer != null else "LAN port %d" % port,
+			max_players, error_string(err)])
 	if err == OK:
 		_teams[HOST_ID] = clampi(int(team_plan.get(host_uuid, 0)), 0, 1)
 		_update_members()
@@ -83,6 +85,7 @@ func join(address: String, port: int, player_name: String, uuid: String, peer: M
 	transport.disconnected.connect(func() -> void: _finish("disconnected", closed))
 	transport.message.connect(_on_message)
 	var hello := Protocol.encode_hello(BuildInfo.compat_hash, BuildInfo.artifact_id, uuid, player_name)
+	Log.i("lobby", "joining %s as \"%s\"" % ["online" if peer != null else "%s:%d" % [address, port], player_name])
 	return transport.join_peer(peer, hello) if peer != null else transport.join(address, port, hello)
 
 
@@ -95,12 +98,16 @@ func configure(p_map: String, p_mode: int, p_minutes: int, p_bots: int = bots, p
 	bots = clampi(p_bots, 0, Protocol.MAX_PEERS - 1)
 	bot_difficulty = clampi(p_difficulty, 0, BotBrain.DIFFICULTY_IDS.size() - 1)
 	friendly_fire = p_friendly_fire
+	Log.d("lobby", "configured: map %s, mode %s, %d min, %d bots (difficulty %d), friendly fire %s" % [map_id,
+			GameMode.IDS[game_mode], minutes, bots, bot_difficulty, friendly_fire])
 	_broadcast()
 
 
 ## Host: tells everyone to load the map and join the match.
 func start() -> void:
 	var msg := Protocol.encode_start(map_id, game_mode, minutes)
+	Log.i("lobby", "starting: map %s, mode %s, %d min, %d members, %d bots" % [map_id, GameMode.IDS[game_mode], minutes,
+			members.size(), bots])
 	for id in _accepted:
 		transport.send(id, msg, Protocol.CH_CONTROL, true)
 	started.emit({"map": map_id, "mode": game_mode, "minutes": minutes})
@@ -150,6 +157,7 @@ func kick(id: int) -> void:
 	var uuid: String = _uuids.get(id, "")
 	if not uuid.is_empty():
 		_removed[uuid] = true
+	Log.i("lobby", "removing %s (peer %d) from the lobby" % [_accepted.get(id, "?"), id])
 	transport.send(id, Protocol.encode_notice(Protocol.Notice.KICKED), Protocol.CH_CONTROL, true)
 	_on_peer_left(id)
 	var t: WeakRef = weakref(transport)  # the lobby may be gone by then
@@ -201,6 +209,7 @@ func _process(delta: float) -> void:
 
 
 func leave() -> void:
+	Log.i("lobby", "leaving the lobby")
 	transport.close()
 
 
@@ -240,6 +249,7 @@ func _on_peer_joined(id: int) -> void:
 		transport.kick(id)
 		return
 	_accepted[id] = _names[id]
+	Log.i("lobby", "%s joined (peer %d)" % [_names[id], id])
 	# Back on the team of the last match, else the smaller team.
 	var team: int = team_plan.get(_uuids.get(id, ""), -1)
 	if team < 0 or team > 1 or _team_size(team) >= team_cap():
@@ -249,6 +259,8 @@ func _on_peer_joined(id: int) -> void:
 
 
 func _on_peer_left(id: int) -> void:
+	if _accepted.has(id):
+		Log.i("lobby", "%s left (peer %d)" % [_accepted[id], id])
 	_names.erase(id)
 	_uuids.erase(id)
 	_accepted.erase(id)
@@ -308,6 +320,7 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 		Protocol.Msg.START:
 			var s := Protocol.decode_start(data)
 			if not s.is_empty():
+				Log.i("lobby", "the host started: %s" % s)
 				_finish(s, started)
 		Protocol.Msg.PING:
 			var ping := Protocol.decode_ping(data)
@@ -315,9 +328,11 @@ func _on_message(_id: int, data: PackedByteArray) -> void:
 				transport.send(HOST_ID, Protocol.encode_pong(ping.time, 0, 0.0), Protocol.CH_GAME, false)
 		Protocol.Msg.NOTICE:
 			if Protocol.decode_notice(data) == Protocol.Notice.KICKED:
+				Log.i("lobby", "the host removed us from the lobby")
 				_finish("LOBBY_KICKED", closed)
 		Protocol.Msg.WELCOME:
 			# A match server answered: the host has already started.
+			Log.i("lobby", "the host is already in a match")
 			_finish(Protocol.decode_welcome(data).get("map", ""), in_match)
 
 
@@ -326,5 +341,6 @@ func _finish(arg: Variant, sig: Signal) -> void:
 	if _done:
 		return
 	_done = true
+	Log.d("lobby", "client lobby done: %s (%s)" % [sig.get_name(), arg])
 	transport.close.call_deferred()
 	sig.emit(arg)

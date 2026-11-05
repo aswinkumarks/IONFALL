@@ -101,6 +101,7 @@ var waves: WaveDirector
 var view_errors := FrameStats.new(600)
 ## Wall time of the last tick (simulation + snapshots), in microseconds.
 var last_step_usec: int = 0
+var _slow_tick_logged_ms: int = -100000
 var last_sim_usec: int = 0  ## of which world.step()
 
 var _host_events: Array[Dictionary] = []
@@ -186,8 +187,12 @@ func start(port: int, movement_config: MovementConfig, weapons: Array[WeaponData
 		transport.message.connect(_on_message)
 		var err := transport.host_peer(peer) if peer != null else transport.host(port)
 		if err != OK:
+			Log.e("server", "can't start the match server: %s" % error_string(err))
 			return err
 		networked = true
+	Log.i("server", "match %08x: mode %s, map %s, %s, %d spawns, %d pickup spots, friendly fire %s" % [match_id,
+			GameMode.IDS[game_mode], map_id, "networked" if networked else "offline", spawns.size(), spots.size(),
+			world.friendly_fire])
 	_set_phase(MatchPhase.WAITING, 0)
 	return OK
 
@@ -225,6 +230,7 @@ func add_bot(bot_name: String, driver: RefCounted) -> SimPlayer:
 	_join_team(p)
 	p.character = _bot_seq - 1  # bots cycle through the characters
 	stats.add_player(id, bot_name, true, world.tick)
+	Log.d("server", "bot %s added (id %d, %s)" % [bot_name, id, driver.get_script().resource_path.get_file() if driver.get_script() else driver.get_class()])
 	_broadcast_roster()
 	return p
 
@@ -248,6 +254,7 @@ func _unshielded(p: SimPlayer) -> SimPlayer:
 
 
 func remove_bot(id: int) -> void:
+	Log.d("server", "bot %d removed" % id)
 	bots.erase(id)
 	world.remove_player(id)
 	stats.remove_player(id, world.tick)
@@ -410,6 +417,8 @@ func _physics_process(_delta: float) -> void:
 	last_sim_usec = Time.get_ticks_usec() - t_sim
 	var score_changed := false
 	for e in world.drain_events():
+		if e.type in ["death", "flag", "wave"]:
+			Log.d("sim", "tick %d %s" % [world.tick, _event_summary(e)])
 		_host_events.append(e)
 		stats.on_event(e)
 		if e.type == "hit":
@@ -440,6 +449,26 @@ func _physics_process(_delta: float) -> void:
 			for c: Client in clients.values():
 				transport.send(c.id, ping, Protocol.CH_GAME, false)
 	last_step_usec = Time.get_ticks_usec() - t0
+	# A tick over its whole budget delays the next ones (rate-limited log).
+	if last_step_usec > 1000000 / Sim.TICK_RATE and Time.get_ticks_msec() - _slow_tick_logged_ms > 5000:
+		_slow_tick_logged_ms = Time.get_ticks_msec()
+		Log.w("server", "slow tick %d: %.1f ms (simulation %.1f ms), %d players, %d bots" % [world.tick,
+				last_step_usec / 1000.0, last_sim_usec / 1000.0, world.players.size(), bots.size()])
+
+
+## A death, flag or wave event in a few words, for the log.
+func _event_summary(e: Dictionary) -> String:
+	if e.type == "death":
+		var name_of := func(id: int) -> String:
+			var p: SimPlayer = world.players.get(id)
+			return "%s (%d)" % [p.display_name if p != null else "?", id]
+		if e.get("suicide", false) or e.get("environment", false):
+			return "%s died (%s)" % [name_of.call(e.victim), "environment" if e.get("environment", false) else "suicide"]
+		return "%s killed %s with %s%s%s" % [name_of.call(e.killer), name_of.call(e.victim), e.get("weapon", "?"),
+				", headshot" if e.get("headshot", false) else "", ", team kill" if e.get("team_kill", false) else ""]
+	var shown := e.duplicate()
+	shown.erase("position")
+	return "%s %s" % [e.type, shown]
 
 
 ## One command per client per tick (PLAN §3.3.2). A missing command first
@@ -532,6 +561,8 @@ func validate_view_tick(claimed: float, arrived: float, rtt_ms: float, interp_ti
 # --- Phases (PLAN §3.4) ---
 
 func _set_phase(p: int, ends: int) -> void:
+	Log.i("server", "phase %s at tick %d (ends %d), %d clients, %d bots, scores %s" % [MatchPhase.label_key(p), world.tick,
+			ends, clients.size(), bots.size(), world.scores])
 	phase = p
 	phase_seq = (phase_seq + 1) & 0xFF
 	phase_ends_tick = ends
@@ -652,6 +683,11 @@ func _end_match(lead: int) -> void:
 		rows = humans + bots.slice(0, maxi(Protocol.MAX_RESULT_ROWS - humans.size(), 0))
 		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.score > b.score)
 	var result_id := "%08x-%08x" % [_instance_id, match_id]
+	Log.i("server", "match %s over after %.0f s: winner %d, team %d, team scores %s" % [result_id,
+			(world.tick - _play_started_tick) / float(Sim.TICK_RATE), winner, winner_team, world.team_scores])
+	for r: Dictionary in rows:
+		Log.d("server", "  %s%s: score %d, %d kills, %d deaths, %d/%d hits" % [r.name, " (bot)" if r.bot else "", r.score,
+				r.kills, r.deaths, r.hits, r.shots])
 	var msg := Protocol.encode_results(match_id, result_id, winner, world.tick - _play_started_tick, _humans(), rows,
 			game_mode, winner_team, world.team_scores)
 	# The host reads the same decoded form clients get.
@@ -678,6 +714,7 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 	if hello.token != 0:
 		for old: Client in clients.values():
 			if old.token == hello.token and old.id != id:
+				Log.i("server", "peer %d reconnected as peer %d: dropping the stale connection" % [old.id, id])
 				_on_peer_left(old.id)
 				transport.kick(old.id)
 				break
@@ -711,6 +748,8 @@ func _validate_hello(id: int, hello: Dictionary) -> String:
 		c.player_id = _allocate_player_id()
 		c.token = ((_rng.randi() & 0x3FFFFFFF) << 32) | _rng.randi() | 1
 	clients[id] = c
+	Log.i("server", "peer %d is %s: player %d%s%s" % [id, c.name, c.player_id, ", spectator" if c.spectator else "",
+			", back with score %d" % c.restored_score if c.restored_score != 0 else ""])
 	return ""
 
 
@@ -769,6 +808,9 @@ func _on_peer_joined(id: int) -> void:
 
 func _on_peer_left(id: int) -> void:
 	var c: Client = clients.get(id)
+	if c != null:
+		Log.i("server", "%s (player %d) left%s, rtt was %.0f ms" % [c.name, c.player_id,
+				", may reconnect for %d s" % (RECONNECT_WINDOW_MS / 1000) if c.loaded and not c.spectator else "", c.rtt_ms])
 	clients.erase(id)
 	if c != null and not c.spectator:
 		if c.loaded:
@@ -815,8 +857,10 @@ func _on_message(id: int, data: PackedByteArray) -> void:
 			if loaded.is_empty():
 				anomalies += 1
 			elif not c.loaded and c.spectator:
+				Log.i("server", "%s loaded (spectating)" % c.name)
 				c.loaded = true  # snapshots and events from now on; no player
 			elif not c.loaded:
+				Log.i("server", "%s loaded: player %d enters (rtt %.0f ms)" % [c.name, c.player_id, c.rtt_ms])
 				c.loaded = true
 				var joined := world.add_player(c.player_id, _loadout_for(c.primary), c.name, false)
 				_join_team(joined, c.restored_team if c.restored_team >= 0 else team_plan.get(c.uuid, -1))

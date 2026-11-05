@@ -43,11 +43,17 @@ func _enter_tree() -> void:
 	api.peer_disconnected.connect(_on_peer_disconnected)
 	api.peer_authentication_failed.connect(func(id: int) -> void: _authenticating.erase(id))
 	api.peer_packet.connect(_on_peer_packet)
-	api.connected_to_server.connect(func() -> void: connected.emit())
+	api.connected_to_server.connect(func() -> void:
+		Log.i("net", "connected to the server as peer %d" % api.get_unique_id())
+		connected.emit())
 	# Deferred: these come from inside the multiplayer poll, and listeners
 	# close the peer (leaving the lobby), which crashes the engine mid-poll.
-	api.connection_failed.connect(func() -> void: connection_failed.emit.call_deferred("connection failed"))
-	api.server_disconnected.connect(func() -> void: disconnected.emit.call_deferred())
+	api.connection_failed.connect(func() -> void:
+		Log.w("net", "connection failed (no answer from the server)")
+		connection_failed.emit.call_deferred("connection failed"))
+	api.server_disconnected.connect(func() -> void:
+		Log.w("net", "disconnected from the server")
+		disconnected.emit.call_deferred())
 
 
 func _exit_tree() -> void:
@@ -95,6 +101,7 @@ func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_peers, CHANNELS)
 	if err != OK:
+		Log.e("net", "can't host on UDP %d: %s" % [port, error_string(err)])
 		return err
 	# Godot 4.7.2 bug: create_server() passes the channel count as ENet's
 	# incoming bandwidth (bytes/s), so clients throttle their unreliable
@@ -106,10 +113,13 @@ func host(port: int, max_peers: int = Protocol.MAX_PEERS) -> Error:
 		var ws := WebSocketMultiplayerPeer.new()
 		err = ws.create_server(ws_port)
 		if err != OK:
+			Log.e("net", "can't open the browser port TCP %d: %s" % [ws_port, error_string(err)])
 			peer.close()
 			return err
 		var adapters: Array[MultiplayerPeer] = [peer, ws]
+		Log.i("net", "hosting on UDP %d and WebSocket %d (max %d peers)" % [port, ws_port, max_peers])
 		return host_peer(CompositePeer.new(adapters))
+	Log.i("net", "hosting on UDP %d (max %d peers)" % [port, max_peers])
 	return host_peer(peer)
 
 
@@ -120,9 +130,11 @@ func join(address: String, port: int, hello: PackedByteArray) -> Error:
 		var ws := WebSocketMultiplayerPeer.new()
 		var url := "ws://%s:%d" % [address, Protocol.DEFAULT_WEB_PORT if port == Protocol.DEFAULT_PORT else port]
 		var werr := ws.create_client(url)
+		Log.i("net", "joining %s: %s" % [url, error_string(werr)])
 		return werr if werr != OK else join_peer(ws, hello)
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(address, port, CHANNELS)
+	Log.i("net", "joining %s:%d: %s" % [address, port, error_string(err)])
 	if err != OK:
 		return err
 	return join_peer(peer, hello)
@@ -132,6 +144,7 @@ func join(address: String, port: int, hello: PackedByteArray) -> Error:
 ## online backend such as Epic P2P; decision 0005). The handshake, message
 ## whitelist and ingress limits are the same for every backend.
 func host_peer(peer: MultiplayerPeer) -> Error:
+	Log.d("net", "server peer %s" % peer.get_class())
 	is_server = true
 	api.multiplayer_peer = peer
 	return OK
@@ -139,6 +152,7 @@ func host_peer(peer: MultiplayerPeer) -> Error:
 
 ## Any client-mode MultiplayerPeer that is already connecting to a server.
 func join_peer(peer: MultiplayerPeer, hello: PackedByteArray) -> Error:
+	Log.d("net", "client peer %s, hello %d bytes" % [peer.get_class(), hello.size()])
 	is_server = false
 	_hello = hello
 	api.multiplayer_peer = peer
@@ -147,6 +161,7 @@ func join_peer(peer: MultiplayerPeer, hello: PackedByteArray) -> Error:
 
 func close() -> void:
 	if api.multiplayer_peer != null and not api.multiplayer_peer is OfflineMultiplayerPeer:
+		Log.i("net", "closing the %s connection" % ("server" if is_server else "client"))
 		api.multiplayer_peer.close()
 	api.multiplayer_peer = null
 
@@ -158,6 +173,7 @@ func local_id() -> int:
 ## A peer that already left (a rejected client closes on its own) is ignored.
 func kick(id: int) -> void:
 	if api.multiplayer_peer != null and (api.get_peers().has(id) or _authenticating.has(id)):
+		Log.i("net", "disconnecting peer %d" % id)
 		api.disconnect_peer(id)
 
 
@@ -190,6 +206,7 @@ func _process(_delta: float) -> void:
 # --- Handshake ---
 
 func _on_peer_authenticating(id: int) -> void:
+	Log.d("net", "peer %d authenticating%s" % [id, " (%s)" % _peer_address(id) if is_server else ""])
 	_authenticating[id] = true
 	_configure_peer(id)
 	if not is_server:
@@ -223,23 +240,28 @@ func _on_auth(id: int, data: PackedByteArray) -> void:
 			reason = auth_validator.call(id, hello) if auth_validator.is_valid() else ""
 		api.send_auth(id, Protocol.encode_hello_reply(reason == "", reason))
 		if reason == "":
+			Log.i("net", "peer %d accepted: %s" % [id, _hello_summary(hello)])
 			api.complete_auth(id)
 		else:
+			Log.w("net", "peer %d rejected (%s): %s" % [id, reason, _hello_summary(hello)])
 			# Let the rejection reach the client before dropping it.
 			get_tree().create_timer(0.3).timeout.connect(kick.bind(id))
 	else:
 		var reply := Protocol.decode_hello_reply(data)
 		if reply.is_empty() or not reply.accepted:
 			_reject_reason = reply.get("reason", "bad server reply")
+			Log.w("net", "the server rejected us: %s" % _reject_reason)
 			# Out of the auth callback first: a listener closing the peer from
 			# in here crashed the game (rejoining a lobby you were removed from).
 			connection_failed.emit.call_deferred(_reject_reason)
 			close.call_deferred()
 		else:
+			Log.d("net", "the server accepted our handshake")
 			api.complete_auth(id)
 
 
 func _on_peer_connected(id: int) -> void:
+	Log.i("net", "peer %d connected (%d peers)" % [id, api.get_peers().size()])
 	_authenticating.erase(id)
 	_configure_peer(id)
 	if is_server:
@@ -248,6 +270,7 @@ func _on_peer_connected(id: int) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
+	Log.i("net", "peer %d disconnected (%d peers left)" % [id, api.get_peers().size()])
 	_limits.erase(id)
 	if is_server:
 		peer_left.emit(id)
@@ -284,7 +307,8 @@ func _within_limits(id: int, size: int) -> bool:
 		var violated: bool = l[1] > MAX_PACKETS_PER_S or l[2] > MAX_BYTES_PER_S
 		l[3] = l[3] + 1 if violated else 0
 		if l[3] >= VIOLATION_SECONDS_TO_KICK:
-			push_warning("Transport: peer %d exceeded ingress limits for %d s, disconnecting" % [id, l[3]])
+			Log.w("net", "peer %d exceeded ingress limits for %d s (%d packets, %d bytes in the last second), disconnecting"
+					% [id, l[3], l[1], l[2]])
 			kick.call_deferred(id)
 		l[0] = now
 		l[1] = 0
@@ -292,3 +316,21 @@ func _within_limits(id: int, size: int) -> bool:
 	l[1] += 1
 	l[2] += size
 	return l[1] <= MAX_PACKETS_PER_S and l[2] <= MAX_BYTES_PER_S
+
+
+## Peer `id`'s address and port, for the log ("" if unknown).
+func _peer_address(id: int) -> String:
+	var mp := api.multiplayer_peer
+	if mp is CompositePeer:
+		mp = (mp as CompositePeer).adapter_of(id)
+	var peer := (mp as ENetMultiplayerPeer).get_peer(id) if mp is ENetMultiplayerPeer else null
+	return "%s:%d" % [peer.get_remote_address(), peer.get_remote_port()] if peer != null else ""
+
+
+## A handshake for the log: name, version and build.
+static func _hello_summary(hello: Dictionary) -> String:
+	var shown := {}
+	for k: String in hello:
+		if k not in ["uuid", "token", "magic"]:
+			shown[k] = hello[k]
+	return str(shown)
