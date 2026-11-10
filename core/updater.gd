@@ -1,7 +1,7 @@
 extends Node
 ## Keeps the game up to date from its GitHub releases (UpdateLogic).
 ##
-## At start (release builds, at most every CHECK_HOURS) it asks GitHub for the
+## Every start (release builds) it asks GitHub for the
 ## latest release. When it's newer:
 ## - Windows and Linux, Settings "updates/mode" = "install" (the default):
 ##   downloads this platform's zip in the background while in the main menu
@@ -14,7 +14,7 @@ extends Node
 ##   Play, which updates them itself.
 ## - Web: the page always serves the latest build.
 ##
-## Dev: `--update-check` checks in any build and ignores the interval,
+## Dev: `--update-check` checks in any build,
 ## `--update-from <version>` pretends to be that version, `--update-dir <dir>`
 ## installs into that folder instead of the game's (and doesn't restart).
 
@@ -22,8 +22,6 @@ signal changed
 
 enum State { IDLE, CHECKING, AVAILABLE, DOWNLOADING, READY, FAILED }
 
-const CHECK_HOURS := 6.0
-const STATE_PATH := "user://updater.cfg"
 const MENU_SCENE := "res://ui/main_menu/main_menu.tscn"
 
 var state: int = State.IDLE
@@ -111,7 +109,7 @@ func download_page() -> String:
 func retry() -> void:
 	if state == State.FAILED:
 		error = ""
-		_check(true)
+		_check()
 
 
 # --- Steps ---
@@ -131,22 +129,11 @@ func _start() -> void:
 	if mode() == "off":
 		Log.i("update", "update checks are off")
 		return
-	_check(Platform.user_args.has("--update-check"))
+	_check()
 
 
-func _check(force: bool) -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(STATE_PATH)
-	var last := float(cfg.get_value("updater", "last_check", 0.0))
-	var now := Time.get_unix_time_from_system()
-	if not force and now - last < CHECK_HOURS * 3600.0 and not str(cfg.get_value("updater", "latest", "")).is_empty():
-		# Checked recently: act on what that check found.
-		var known: Dictionary = cfg.get_value("updater", "release", {})
-		if not known.is_empty() and UpdateLogic.is_newer(known.get("version", ""), current_version()):
-			_found(known)
-		else:
-			Log.d("update", "checked %.1f h ago: up to date" % ((now - last) / 3600.0))
-		return
+## One request to GitHub's API per start (it allows 60 an hour per address).
+func _check() -> void:
 	_set_state(State.CHECKING)
 	Log.i("update", "checking for a newer version than %s" % current_version())
 	_job = _on_latest
@@ -168,12 +155,6 @@ func _on_latest(result: int, code: int, body: PackedByteArray) -> void:
 	var release := {"version": str(data.tag_name).trim_prefix("v"), "page": str(data.get("html_url", "")),
 			"notes": str(data.get("body", "")).left(2000), "asset": UpdateLogic.asset_for(data, platform()),
 			"sums": UpdateLogic.sums_url(data)}
-	var cfg := ConfigFile.new()
-	cfg.load(STATE_PATH)
-	cfg.set_value("updater", "last_check", Time.get_unix_time_from_system())
-	cfg.set_value("updater", "latest", release.version)
-	cfg.set_value("updater", "release", release)
-	cfg.save(STATE_PATH)
 	if not UpdateLogic.is_newer(release.version, current_version()):
 		Log.i("update", "up to date (latest %s, running %s)" % [release.version, current_version()])
 		_set_state(State.IDLE)
