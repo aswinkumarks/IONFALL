@@ -59,6 +59,7 @@ var _listing: bool = false
 var _profile_panel := ProfilePanel.new()
 var _settings := SettingsMenu.new()
 var _quit_panel: Control  ## "Quit IONFALL?", from Back on the home page
+var _update_notice: UpdateNotice
 
 
 func _ready() -> void:
@@ -85,6 +86,12 @@ func _ready() -> void:
 	add_child(_settings)
 	_quit_panel = _make_quit_panel()
 	add_child(_quit_panel)
+	# "Update available: now or later?" once per start (Updater).
+	var update_dialog := UpdateDialog.new()
+	add_child(update_dialog)
+	_update_notice.dialog = update_dialog
+	update_dialog.visibility_changed.connect(_update_notice._refresh)
+	update_dialog.closed.connect(func() -> void: (_first[Page.HOME] as Control).grab_focus())
 	_settings.closed.connect(func() -> void: (_first[Page.HOME] as Control).grab_focus())
 	_profile_panel.closed.connect(func() -> void:
 		_update_player_card()
@@ -191,7 +198,8 @@ func _build_home() -> void:
 	storage.add_theme_color_override("font_color", UiStyle.WARN)
 	storage.visible = not Platform.storage_available
 	_notices.add_child(storage)
-	_notices.add_child(UpdateNotice.new())
+	_update_notice = UpdateNotice.new()
+	_notices.add_child(_update_notice)
 
 	var cards := HBoxContainer.new()
 	cards.name = "Cards"
@@ -473,7 +481,8 @@ func _go_back() -> void:
 
 ## Escape / Android back: up to the home page, then asks to quit.
 func _unhandled_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("ui_cancel") or _settings.visible or _profile_panel.visible:
+	if not event.is_action_pressed("ui_cancel") or _settings.visible or _profile_panel.visible \
+			or (_update_notice.dialog != null and _update_notice.dialog.visible):
 		return
 	get_viewport().set_input_as_handled()
 	if _quit_panel.visible:

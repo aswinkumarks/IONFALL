@@ -53,7 +53,7 @@ const DEFAULTS := {
 		"show_stats": true,  ## FPS and latency in the top-left corner
 	},
 	"updates": {
-		"mode": "install",  ## desktop: install / notify / off (Updater)
+		"check": true,  ## ask GitHub for a newer version at every start (Updater)
 	},
 	"accessibility": {
 		"hud_scale": 1.0,

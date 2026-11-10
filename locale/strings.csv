@@ -127,14 +127,17 @@ SETTING_VIGNETTE,Low-health vignette
 SETTING_REDUCE_SHAKE,Reduce screen shake
 SETTING_CAPTIONS,Captions for important sounds
 SETTING_SHOW_STATS,Show FPS and latency
-SETTING_UPDATES,Updates
-SETTING_VALUE_INSTALL,Download and install automatically
-SETTING_VALUE_NOTIFY,Only tell me
+SETTING_UPDATES_CHECK,Check for updates at launch
+UPDATE_TITLE,Update available
+UPDATE_BODY,"IONFALL %s is out (you have %s). Players need the same version to play together."
+UPDATE_NOW,Update now
+UPDATE_LATER,Later
+UPDATE_CANCEL,Cancel
 UPDATE_DOWNLOADING,Downloading IONFALL %s… %d%%
-UPDATE_READY,IONFALL %s is ready: it installs the next time you start the game.
-UPDATE_RESTART,Restart now
+UPDATE_INSTALLING,Installing IONFALL %s: the game restarts in a moment.
+UPDATE_BROWSER,The download opens in your browser: install it from there.
 UPDATE_AVAILABLE,IONFALL %s is available.
-UPDATE_GET,Download
+UPDATE_BUTTON,Update
 UPDATE_FAILED,Update failed: %s
 UPDATE_RETRY,Try again
 HUD_STATS_FPS,%d FPS

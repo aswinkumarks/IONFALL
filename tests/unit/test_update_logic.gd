@@ -95,3 +95,13 @@ func test_windows_script_waits_copies_and_restarts() -> void:
 	assert_string_contains(script, "PID eq 4242")
 	assert_string_contains(script, "xcopy \"C:\\Games\\IONFALL\\.update\\ready\" \"C:\\Games\\IONFALL\" /E /I /Y")
 	assert_string_contains(script, "start \"\" \"C:\\Games\\IONFALL\\IONFALL.exe\"")
+
+
+func test_release_notes_preview() -> void:
+	var notes := "IONFALL 0.9.7: intro text.\n\n## What's new\n### Graphics\n- **Sharper** characters, see [the PR](https://x/1).\n* Brighter `maps`\n- " + "long ".repeat(40) + "\n- four\n- five"
+	var preview := UpdateDialog._notes_preview(notes)
+	var lines := preview.split("\n")
+	assert_eq(lines.size(), 4, "the first four bullets only")
+	assert_eq(lines[0], "• Sharper characters, see the PR.")
+	assert_eq(lines[1], "• Brighter maps")
+	assert_true(lines[2].ends_with("…") and lines[2].length() <= 115, "long items cut short")

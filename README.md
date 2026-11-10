@@ -29,11 +29,11 @@ or play with friends over the local network or the internet. Phones and PCs play
 | **Android 10+** (64-bit) | On the phone, download `ionfall-<version>-android-arm64.apk` from the [latest release](https://github.com/aswinkumarks/IONFALL/releases/latest) and open it (allow installs from your browser or file manager). A Google Play release is coming with v1.0. |
 
 Checksums are in each release's `SHA256SUMS`.
-Everyone in a match needs the same version, and you only download once: after
-that, the Windows and Linux builds update themselves (they download a new
-release from the main menu and install it the next time you start the game;
-Settings › Game › Updates can make them only notify, or turn checks off).
-Android shows a download button for each new APK.
+Everyone in a match needs the same version, and you only download once: at
+every start the game checks for a newer release and asks whether to update now
+or later. On Windows and Linux, **Update now** downloads, installs and restarts
+the game; on Android it opens the new APK to install. Settings › Game turns the
+check off.
 
 ### What works where
 
