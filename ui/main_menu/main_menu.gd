@@ -178,7 +178,7 @@ func _build_home() -> void:
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
 	column.add_child(gap)
-	# Errors, the profile warning and the rejoin offer, just above the cards.
+	# Errors, the profile warning, updates and the rejoin offer, just above the cards.
 	_notices = VBoxContainer.new()
 	_notices.add_theme_constant_override("separation", 6)
 	column.add_child(_notices)
@@ -191,6 +191,7 @@ func _build_home() -> void:
 	storage.add_theme_color_override("font_color", UiStyle.WARN)
 	storage.visible = not Platform.storage_available
 	_notices.add_child(storage)
+	_notices.add_child(UpdateNotice.new())
 
 	var cards := HBoxContainer.new()
 	cards.name = "Cards"

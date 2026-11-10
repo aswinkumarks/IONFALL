@@ -127,6 +127,16 @@ SETTING_VIGNETTE,Low-health vignette
 SETTING_REDUCE_SHAKE,Reduce screen shake
 SETTING_CAPTIONS,Captions for important sounds
 SETTING_SHOW_STATS,Show FPS and latency
+SETTING_UPDATES,Updates
+SETTING_VALUE_INSTALL,Download and install automatically
+SETTING_VALUE_NOTIFY,Only tell me
+UPDATE_DOWNLOADING,Downloading IONFALL %s… %d%%
+UPDATE_READY,IONFALL %s is ready: it installs the next time you start the game.
+UPDATE_RESTART,Restart now
+UPDATE_AVAILABLE,IONFALL %s is available.
+UPDATE_GET,Download
+UPDATE_FAILED,Update failed: %s
+UPDATE_RETRY,Try again
 HUD_STATS_FPS,%d FPS
 HUD_STATS_PING,%d ms
 ACTION_MOVE_FORWARD,Move forward

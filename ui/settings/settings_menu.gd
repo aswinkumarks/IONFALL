@@ -10,7 +10,7 @@ signal closed
 ## choice ([..., choices] where choices is an Array or the name of a Settings
 ## method returning one; string choices are shown via "SETTING_VALUE_<X>" keys
 ## or as-is for resolutions), action ([..., method]: a button calling it).
-const DESKTOP_ONLY := ["display_mode", "renderer"]
+const DESKTOP_ONLY := ["display_mode", "renderer", "mode"]  ## "mode": updates (Android only notifies)
 const SCHEMA := {
 	"SETTINGS_TAB_CONTROLS": [
 		["input", "sensitivity_x", "SETTING_SENS_X", "slider", 0.1, 5.0, 0.05],
@@ -41,6 +41,7 @@ const SCHEMA := {
 	"SETTINGS_TAB_GAME": [
 		["profile", "browser_players", "SETTING_BROWSER_PLAYERS", "check"],
 		["hud", "show_stats", "SETTING_SHOW_STATS", "check"],
+		["updates", "mode", "SETTING_UPDATES", "choice", ["install", "notify", "off"]],
 	],
 	"SETTINGS_TAB_AUDIO": [
 		["audio", "master", "SETTING_VOL_MASTER", "percent", 0.0, 1.0, 0.05],

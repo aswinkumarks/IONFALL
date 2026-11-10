@@ -52,6 +52,9 @@ const DEFAULTS := {
 	"hud": {
 		"show_stats": true,  ## FPS and latency in the top-left corner
 	},
+	"updates": {
+		"mode": "install",  ## desktop: install / notify / off (Updater)
+	},
 	"accessibility": {
 		"hud_scale": 1.0,
 		"reduce_screen_shake": false,
