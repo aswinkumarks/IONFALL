@@ -41,6 +41,7 @@ const SCHEMA := {
 	"SETTINGS_TAB_GAME": [
 		["profile", "browser_players", "SETTING_BROWSER_PLAYERS", "check"],
 		["hud", "show_stats", "SETTING_SHOW_STATS", "check"],
+		["updates", "check", "SETTING_UPDATES_CHECK", "check"],
 	],
 	"SETTINGS_TAB_AUDIO": [
 		["audio", "master", "SETTING_VOL_MASTER", "percent", 0.0, 1.0, 0.05],

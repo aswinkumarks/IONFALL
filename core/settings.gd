@@ -52,6 +52,9 @@ const DEFAULTS := {
 	"hud": {
 		"show_stats": true,  ## FPS and latency in the top-left corner
 	},
+	"updates": {
+		"check": true,  ## ask GitHub for a newer version at every start (Updater)
+	},
 	"accessibility": {
 		"hud_scale": 1.0,
 		"reduce_screen_shake": false,
